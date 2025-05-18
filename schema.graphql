@@ -1,0 +1,6 @@
+type ExampleEntity @entity {
+  id: Bytes!
+  count: BigInt!
+  cashPrior: BigInt! # uint256
+  interestAccumulated: BigInt! # uint256
+}
