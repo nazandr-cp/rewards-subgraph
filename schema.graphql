@@ -1,6 +1,93 @@
-type ExampleEntity @entity {
-  id: Bytes!
-  count: BigInt!
-  cashPrior: BigInt! # uint256
-  interestAccumulated: BigInt! # uint256
+type CollectionReward @entity(immutable: false) {
+  id: Bytes! @id
+  collection: Bytes!
+  rewardToken: Bytes!
+  rewardPerSecond: BigInt!
+  totalRewardsPool: BigInt!
+  expiresAt: BigInt
+  totalSecondsAccrued: BigInt!
+  lastUpdate: BigInt!
+  rewardBasis: Int!
+  fnType: Int!
+  p1: BigInt!
+  p2: BigInt!
+  cTokenMarketAddress: Bytes! # Address of the cToken market this reward pertains to
+  rewardActivityType: String! # E.g., "DEPOSIT", "BORROW"
+  accountRewards: [AccountCollectionReward!]! @derivedFrom(field: "collection")
+}
+
+type AccountCollectionReward @entity(immutable: false) {
+  id: Bytes! @id
+  account: Account!
+  collection: CollectionReward!
+  rewardToken: Bytes!
+  lastUpdate: BigInt!
+  balanceNFT: BigInt!
+  seconds: BigInt!
+}
+
+type Account @entity(immutable: false) {
+  id: Bytes! @id
+  collectionRewards: [AccountCollectionReward!]! @derivedFrom(field: "account")
+  claimedRewards: [RewardClaim!]! @derivedFrom(field: "account")
+}
+
+type MarketData @entity(immutable: false)  {
+  id: Bytes! @id
+  totalSupply: BigInt!
+  totalBorrow: BigInt!
+  totalReserves: BigInt!
+  accruedInterest: BigInt!
+  lastInterestUpdate: BigInt!
+}
+
+type RewardClaim @entity(immutable: true) {
+  id: Bytes! @id
+  account: Account!
+  collectionAddress: Bytes!
+  amount: BigInt!
+  timestamp: BigInt!
+  transactionHash: Bytes!
+  nonce: BigInt!
+  secondsUser: BigInt!
+  secondsColl: BigInt!
+  incRPS: BigInt!
+  yieldSlice: BigInt!
+}
+
+type CollectionMarket @entity(immutable: false) {
+  id: Bytes! @id
+  collection: Bytes!
+  market: Bytes!
+  totalNFT: BigInt!
+  totalSeconds: BigInt!
+  principalU: BigInt!
+}
+
+type CTokenMarket @entity(immutable: false) {
+  id: Bytes! @id
+  underlying: Bytes!
+  underlyingSymbol: String!
+  underlyingDecimals: Int!
+  totalSupplyC: BigInt!
+  totalBorrowsU: BigInt!
+  totalReservesU: BigInt!
+  exchangeRate: BigDecimal!
+  collateralFactor: BigDecimal!
+  borrowIndex: BigInt!
+  lastAccrualTimestamp: BigInt!
+  blockTimestamp: BigInt!
+}
+
+type Liquidation @entity(immutable: true) {
+  id: Bytes! @id
+  liquidator: Account!
+  borrower: Account!
+  borrowedCTokenMarket: CTokenMarket!
+  collateralCTokenMarket: CTokenMarket!
+  repayAmountUnderlying: BigInt!
+  seizedAmountCollateralCToken: BigInt!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
 }

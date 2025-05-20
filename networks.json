@@ -3,6 +3,9 @@
     "cMDAI": {
       "address": "0x663702880Ec335BB1fae3ca05915B2D24F2b6A48",
       "startBlock": 17504126
+    },
+    "mNFT": {
+      "address": "0xf97F713c919655636C0cE006f53a5Be03FA8815a"
     }
   }
 }
