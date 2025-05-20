@@ -6,7 +6,7 @@ import {
     getOrCreateAccountCollectionReward,
     getOrCreateAccount,
     HARDCODED_REWARD_TOKEN_ADDRESS // This is the reward token used by RewardsController
-} from "./helpers";
+} from "./utils/rewards";
 
 // This mapping handles NFT transfers for collections that have been whitelisted
 // by the RewardsController. The CollectionReward entity should already exist.

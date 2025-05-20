@@ -26,7 +26,7 @@ import {
     exponentToBigDecimal,
     ADDRESS_ZERO_STR,
     getOrCreateAccount
-} from "./helpers";
+} from "./utils/rewards";
 
 const ADDRESS_ZERO = Address.fromString(ADDRESS_ZERO_STR);
 

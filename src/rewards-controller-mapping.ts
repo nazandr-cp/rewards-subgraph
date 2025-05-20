@@ -14,7 +14,7 @@ import {
     getOrCreateAccountCollectionReward,
     HARDCODED_REWARD_TOKEN_ADDRESS,
     HARDCODED_CTOKEN_MARKET_ADDRESS
-} from "./helpers";
+} from "./utils/rewards";
 import {
     NewCollectionWhitelisted,
     WhitelistCollectionRemoved,

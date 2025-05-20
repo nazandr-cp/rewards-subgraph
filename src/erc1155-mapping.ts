@@ -11,7 +11,7 @@ import {
   HARDCODED_REWARD_TOKEN_ADDRESS,
   ZERO_BI,
   ADDRESS_ZERO_STR
-} from "./helpers";
+} from "./utils/rewards";
 
 const ADDRESS_ZERO = Address.fromString(ADDRESS_ZERO_STR);
 

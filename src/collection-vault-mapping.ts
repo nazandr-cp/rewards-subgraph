@@ -6,7 +6,7 @@ import { CollectionMarket } from "../generated/schema"
 import { cToken } from "../generated/cToken/cToken"
 import { ERC20 } from "../generated/cToken/ERC20"
 import { BigInt, BigDecimal, log, Bytes, Address } from "@graphprotocol/graph-ts"
-import { ZERO_BI, ONE_BI, ZERO_BD } from "./helpers"
+import { ZERO_BI, ONE_BI, ZERO_BD } from "./utils/rewards"
 
 function fetchTokenDecimals(tokenAddress: Address): i32 {
     let contract = ERC20.bind(tokenAddress);
