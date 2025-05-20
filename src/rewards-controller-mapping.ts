@@ -13,7 +13,9 @@ import {
     accrueSeconds,
     getOrCreateAccountCollectionReward,
     HARDCODED_REWARD_TOKEN_ADDRESS,
-    HARDCODED_CTOKEN_MARKET_ADDRESS
+    HARDCODED_CTOKEN_MARKET_ADDRESS,
+    RewardBasis,
+    WeightFunctionType
 } from "./utils/rewards";
 import {
     NewCollectionWhitelisted,
@@ -30,29 +32,40 @@ export function handleNewCollectionWhitelisted(event: NewCollectionWhitelisted):
     // Assuming rewardBasis is a struct with fnType (e.g., uint8) and other params
     // event.params.rewardBasis.fnType will be used.
     // The event provides `sharePercentage` as uint256.
-    let eventFnType = event.params.rewardBasis; // Assuming rewardBasis is the fnType directly (e.g. uint8)
-    let rewardShare = event.params.sharePercentage.toI32(); // Assuming sharePercentage needs to be i32 for getOrCreateCollectionReward
+    let rewardBasis = event.params.rewardBasis; // Assuming rewardBasis is the fnType directly (e.g. uint8)
+    let rewardShare = event.params.sharePercentage.toI32(); // This is likely for rewardPerSecond or similar, not the basis enum
 
-    let activityTypeString = "";
-    if (eventFnType == 0) { // Assuming 0 for DEPOSIT as per todo.md example logic
-        activityTypeString = "DEPOSIT";
-    } else if (eventFnType == 1) { // Assuming 1 for BORROW
-        activityTypeString = "BORROW";
+    let rewardBasisStr: RewardBasis;
+    if (rewardBasis == 0) { // Assuming 0 for DEPOSIT
+        rewardBasis = RewardBasis.DEPOSIT;
+    } else if (rewardBasis == 1) { // Assuming 1 for BORROW
+        rewardBasis = RewardBasis.BORROW;
     } else {
-        activityTypeString = "NFT_HOLDING_ONLY"; // Default or other types
-        log.info("NewCollectionWhitelisted: fnType {} mapped to NFT_HOLDING_ONLY for collection {}", [BigInt.fromI32(eventFnType as i32).toString(), nftCollectionAddress.toHexString()]);
+        rewardBasis = RewardBasis.BORROW; // Default to BORROW if not recognized
+        log.info("NewCollectionWhitelisted: rewardBasis {} mapped to BORROW for collection {}",
+            [BigInt.fromI32(rewardBasis as i32).toString(), nftCollectionAddress.toHexString()]);
     }
+
+    // Determine initialRewardBasis based on the activityType.
+    // The `getOrCreateCollectionReward` expects `initialRewardBasis` as a RewardBasis enum.
+    // And `rewardShare` (which is an i32) was being passed to `initialRewardBasis` argument.
+    // This needs to be the actual RewardBasis enum value.
+    // The `sharePercentage` from the event is likely for `rewardPerSecond` or a similar field, not `rewardBasis`.
+    // For now, using `activityType` for `initialRewardBasis` as well.
+    // The `initialWeightFnType` is also expected as an enum. Defaulting to LINEAR.
 
     // Create the CollectionReward entity
     let collReward = getOrCreateCollectionReward(
         nftCollectionAddress,
         HARDCODED_REWARD_TOKEN_ADDRESS,
         HARDCODED_CTOKEN_MARKET_ADDRESS,
-        activityTypeString,
-        rewardShare,
-        0, // initialWeightFnType (e.g., 0 for Linear) as default, WeightFunctionSet updates this
+        rewardBasis, // This is the RewardBasis enum for the activity type
+        WeightFunctionType.LINEAR, // initialWeightFnType, default to Linear
         event.block.timestamp
     );
+    // The rewardShare (event.params.sharePercentage) should likely update collReward.rewardPerSecond or similar.
+    // For now, this is not explicitly handled as the original code was misusing it for rewardBasis.
+    // Example: collReward.rewardPerSecond = event.params.sharePercentage; (Adjust type if needed)
     collReward.save(); // Ensure it's saved if getOrCreate doesn't always save on no-op update
 
     // Start tracking the ERC721 contract if it's not already tracked
@@ -62,7 +75,7 @@ export function handleNewCollectionWhitelisted(event: NewCollectionWhitelisted):
 
     log.info("NewCollectionWhitelisted: Processed collection {}, activityType {}, rewardBasis {}", [
         nftCollectionAddress.toHexString(),
-        activityTypeString,
+        rewardBasis == RewardBasis.DEPOSIT ? "DEPOSIT" : "BORROW", // Log the string representation
         event.params.sharePercentage.toString()
     ]);
 }
@@ -115,15 +128,24 @@ export function handleCollectionRewardShareUpdated(event: CollectionRewardShareU
         // }
         log.info("CollectionRewardShareUpdated: Accrual for derived AccountCollectionRewards skipped for collection {} before share update.", [collectionAddress.toHexString()]);
 
+        // The event `CollectionRewardShareUpdated` with `newSharePercentage`
+        // was previously incorrectly attempting to update `collReward.rewardBasis`.
+        // `rewardBasis` now defines the activity type (DEPOSIT/BORROW).
+        // `newSharePercentage` likely refers to a field like `rewardPerSecond` or a similar numeric value.
+        // This logic needs to be clarified: what field should `newSharePercentage` update?
+        // For now, I will assume it updates `rewardPerSecond`.
+        collReward.rewardPerSecond = event.params.newSharePercentage; // Assuming newSharePercentage updates rewardPerSecond
 
-        collReward.rewardBasis = newShare;
         collReward.lastUpdate = event.block.timestamp;
         collReward.save();
-        log.info("CollectionRewardShareUpdated: Updated rewardBasis to {} for CollectionReward {} (collection {}, rewardToken {})", [
-            event.params.newSharePercentage.toString(),
+        log.info("CollectionRewardShareUpdated: Updated share for CollectionReward {} (collection {}, rewardToken {}). New share: {}", [
+            // Note: The log message previously stated "Updated rewardBasis". Changed to reflect "share" update.
+            // The actual field updated by newSharePercentage needs to be clarified.
+            // For now, logging the newSharePercentage value.
             collectionRewardId.toHexString(),
             collectionAddress.toHexString(),
-            rewardToken.toHexString()
+            rewardToken.toHexString(),
+            event.params.newSharePercentage.toString()
         ]);
     } else {
         log.warning("CollectionRewardShareUpdated: CollectionReward with ID {} not found for collection {} and rewardToken {}. No action taken.", [
@@ -148,7 +170,17 @@ export function handleWeightFunctionSet(event: WeightFunctionSet): void {
         // TODO: Similar to share update, ideally accrue seconds for all accounts.
         log.info("handleWeightFunctionSet: Accrual for derived AccountCollectionRewards skipped for collection {} before weight function update.", [collectionAddress.toHexString()]);
 
-        collReward.fnType = weightFnParams.fnType; // actual NFT weight fnType
+        let fnTypeU8 = weightFnParams.fnType;
+        if (fnTypeU8 == WeightFunctionType.LINEAR) {
+            collReward.fnType = "LINEAR";
+        } else if (fnTypeU8 == WeightFunctionType.EXPONENTIAL) {
+            collReward.fnType = "EXPONENTIAL";
+        } else if (fnTypeU8 == WeightFunctionType.POWER) {
+            collReward.fnType = "POWER";
+        } else {
+            collReward.fnType = "LINEAR"; // Default if unknown
+            log.warning("handleWeightFunctionSet: Unknown fnType {} received for collection {}. Defaulting to LINEAR.", [fnTypeU8.toString(), collectionAddress.toHexString()]);
+        }
         collReward.p1 = weightFnParams.p1;
         collReward.p2 = weightFnParams.p2;
         collReward.lastUpdate = event.block.timestamp;

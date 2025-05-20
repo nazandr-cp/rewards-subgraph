@@ -1,3 +1,14 @@
+enum RewardBasis {
+  DEPOSIT
+  BORROW
+}
+
+enum WeightFunctionType {
+  LINEAR
+  EXPONENTIAL
+  POWER
+}
+
 type CollectionReward @entity(immutable: false) {
   id: Bytes! @id
   collection: Bytes!
@@ -7,12 +18,11 @@ type CollectionReward @entity(immutable: false) {
   expiresAt: BigInt
   totalSecondsAccrued: BigInt!
   lastUpdate: BigInt!
-  rewardBasis: Int!
-  fnType: Int!
+  fnType: WeightFunctionType!
   p1: BigInt!
   p2: BigInt!
   cTokenMarketAddress: Bytes! # Address of the cToken market this reward pertains to
-  rewardActivityType: String! # E.g., "DEPOSIT", "BORROW"
+  rewardBasis: RewardBasis! # E.g., "DEPOSIT", "BORROW"
   accountRewards: [AccountCollectionReward!]! @derivedFrom(field: "collection")
 }
 

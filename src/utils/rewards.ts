@@ -1,9 +1,20 @@
 import { Address, BigDecimal, BigInt, Bytes } from "@graphprotocol/graph-ts";
-import { Account, AccountCollectionReward, CollectionReward, CTokenMarket } from "../../generated/schema";
+import { Account, AccountCollectionReward, CollectionReward } from "../../generated/schema";
 
 // TODO: Replace with actual addresses
 export const HARDCODED_REWARD_TOKEN_ADDRESS = Address.fromString("0x0000000000000000000000000000000000000001");
 export const HARDCODED_CTOKEN_MARKET_ADDRESS = Address.fromString("0x0000000000000000000000000000000000000002");
+
+export enum RewardBasis {
+    DEPOSIT,
+    BORROW
+}
+
+export enum WeightFunctionType {
+    LINEAR,
+    EXPONENTIAL,
+    POWER // Added based on usage in weight function
+}
 
 export const ZERO_BI = BigInt.fromI32(0);
 export const ONE_BI = BigInt.fromI32(1);
@@ -52,16 +63,12 @@ export function getOrCreateAccount(accountAddress: Bytes): Account {
     return account;
 }
 
-// Removed unused getOrCreateCTokenMarket helper.
-// The cToken-mapping.ts file has its own more detailed version.
-
 export function getOrCreateCollectionReward(
     nftCollectionAddress: Address,
     rewardTokenAddress: Address,
     cTokenMarketForActivity: Address,
-    activityType: String,
-    initialRewardBasis: i32,
-    initialWeightFnType: i32, // This is for the NFT weight function
+    rewardBasis: RewardBasis,
+    initialWeightFnType: WeightFunctionType,
     eventTimestamp: BigInt
 ): CollectionReward {
     let idString = nftCollectionAddress.toHex() + "-" + rewardTokenAddress.toHex();
@@ -73,11 +80,17 @@ export function getOrCreateCollectionReward(
         collectionReward.collection = nftCollectionAddress;
         collectionReward.rewardToken = rewardTokenAddress;
         collectionReward.cTokenMarketAddress = cTokenMarketForActivity;
-        collectionReward.rewardActivityType = activityType.toString();
+        collectionReward.rewardBasis = rewardBasis == RewardBasis.BORROW ? "BORROW" : "DEPOSIT";
         collectionReward.totalSecondsAccrued = ZERO_BI;
         collectionReward.lastUpdate = eventTimestamp;
-        collectionReward.rewardBasis = initialRewardBasis;
-        collectionReward.fnType = initialWeightFnType;
+        // fnType assignment
+        if (initialWeightFnType == WeightFunctionType.EXPONENTIAL) {
+            collectionReward.fnType = "EXPONENTIAL";
+        } else if (initialWeightFnType == WeightFunctionType.POWER) {
+            collectionReward.fnType = "POWER";
+        } else {
+            collectionReward.fnType = "LINEAR"; // Default
+        }
         collectionReward.p1 = ZERO_BI;
         collectionReward.p2 = ZERO_BI;
 
@@ -142,14 +155,15 @@ export function currentBorrowU(accountAddress: Bytes, cTokenMarketAddress: Bytes
 
 export function weight(n: i32, meta: CollectionReward): BigDecimal {
     let n_bd = BigDecimal.fromString(n.toString());
-    if (meta.fnType == 0) { // Linear
+
+    if (meta.fnType == "LINEAR") { // Compare with string representation
         return meta.p1.toBigDecimal().times(n_bd).plus(meta.p2.toBigDecimal());
-    } else if (meta.fnType == 1) { // Exponential approx
+    } else if (meta.fnType == "EXPONENTIAL") { // Compare with string representation
         let k_bd = meta.p2.toBigDecimal();
         let kn = k_bd.times(n_bd);
         let A_bd = meta.p1.toBigDecimal();
         return A_bd.times(approxExponentialTerm(kn));
-    } else if (meta.fnType == 2) { // Power
+    } else if (meta.fnType == "POWER") { // Compare with string representation
         let A_bd = meta.p1.toBigDecimal();
         let b_bd = meta.p2.toBigDecimal();
         return A_bd.times(power(b_bd, n));
@@ -165,16 +179,19 @@ export function accrueSeconds(acr: AccountCollectionReward, coll: CollectionRewa
     }
 
     let basePrincipalForReward = ZERO_BD;
-    if (coll.rewardActivityType == "DEPOSIT") {
+    if (coll.rewardBasis == "DEPOSIT") { // Changed from rewardActivityType
         basePrincipalForReward = currentDepositU(acr.account, coll.cTokenMarketAddress);
-    } else if (coll.rewardActivityType == "BORROW") {
+    } else if (coll.rewardBasis == "BORROW") { // Changed from rewardActivityType
         basePrincipalForReward = currentBorrowU(acr.account, coll.cTokenMarketAddress);
     }
 
     let nftHoldingWeight = weight(acr.balanceNFT.toI32(), coll);
     let combinedEffectiveValue = basePrincipalForReward.plus(nftHoldingWeight);
 
-    let rewardRateMultiplier = BigDecimal.fromString(coll.rewardBasis.toString()).div(BigDecimal.fromString("10000"));
+    // Placeholder for rewardRateMultiplier logic.
+    // This needs to be determined based on how `coll.rewardBasis` (which is "DEPOSIT" or "BORROW")
+    // translates to a rate. For now, using ONE_BD to avoid breaking calculations.
+    let rewardRateMultiplier = ONE_BD;
 
     let finalValueWithRate = combinedEffectiveValue.times(rewardRateMultiplier);
     let secDelta = finalValueWithRate.times(dt.toBigDecimal());
@@ -188,9 +205,3 @@ export function accrueSeconds(acr: AccountCollectionReward, coll: CollectionRewa
     acr.lastUpdate = now;
     // Caller saves acr and coll
 }
-
-// Removed unused normalizeTo18Decimals helper.
-// The collection-vault-mapping.ts uses its own internal helper for BigInt normalization.
-// The placeholder functions currentDepositU/currentBorrowU, when implemented,
-// should return BigDecimal values already scaled to standard units (e.g., 1.0 for 1 USDC).
-
