@@ -1,4 +1,4 @@
-import { BigInt, Address, Bytes, log, BigDecimal, ethereum } from "@graphprotocol/graph-ts";
+import { BigInt, Address, Bytes, log, ethereum } from "@graphprotocol/graph-ts";
 import {
     AccrueInterest as AccrueInterestEvent,
     Borrow as BorrowEvent,
@@ -21,11 +21,10 @@ import {
 } from "../generated/schema";
 import {
     ZERO_BI,
-    ZERO_BD,
-    ONE_BD,
-    exponentToBigDecimal,
+    exponentToBigInt,
     ADDRESS_ZERO_STR,
-    getOrCreateAccount
+    getOrCreateAccount,
+    EXP_SCALE
 } from "./utils/rewards";
 
 const ADDRESS_ZERO = Address.fromString(ADDRESS_ZERO_STR);
@@ -69,7 +68,7 @@ function getOrCreateCTokenMarket(
             }
         } else if (underlyingTry.reverted || underlyingTry.value.equals(ADDRESS_ZERO)) {
             underlyingAddress = ADDRESS_ZERO;
-            underlyingSymbol = "ETH"; // Assuming ETH market if no underlying or call reverts
+            underlyingSymbol = "ETH";
             underlyingDecimals = 18;
             if (underlyingTry.reverted) {
                 log.warning("underlying() call reverted for cToken {}, assuming ETH market", [marketAddress.toHexString()]);
@@ -86,23 +85,21 @@ function getOrCreateCTokenMarket(
 
         let exchangeRateStoredTry = cTokenContract.try_exchangeRateStored();
         if (!exchangeRateStoredTry.reverted) {
-            market.exchangeRate = exchangeRateStoredTry.value.toBigDecimal().div(exponentToBigDecimal(18)); // exchange rate is scaled by 1e18
+            market.exchangeRate = exchangeRateStoredTry.value;
         } else {
             log.warning("exchangeRateStored() call reverted for cToken {}", [marketAddress.toHexString()]);
-            market.exchangeRate = ZERO_BD;
+            market.exchangeRate = ZERO_BI;
         }
 
         // Fetch collateralFactor from Comptroller
         let comptrollerAddressTry = cTokenContract.try_comptroller();
         if (!comptrollerAddressTry.reverted) {
             let comptrollerAddress = comptrollerAddressTry.value;
-            let comptrollerContract = Comptroller.bind(comptrollerAddress);
-            // Attempt to get collateral factor was removed as 'markets' function is not in the Comptroller ABI
             log.warning("Comptroller.markets() function not found in ABI for cToken {}. Setting collateralFactor to 0.", [marketAddress.toHexString()]);
-            market.collateralFactor = ZERO_BD;
+            market.collateralFactor = ZERO_BI;
         } else {
             log.warning("cToken.comptroller() call reverted for cToken {}", [marketAddress.toHexString()]);
-            market.collateralFactor = ZERO_BD;
+            market.collateralFactor = ZERO_BI;
         }
         market.borrowIndex = ZERO_BI; // Initialize borrowIndex
         market.lastAccrualTimestamp = blockTimestamp;
@@ -124,7 +121,7 @@ export function handleAccrueInterest(event: AccrueInterestEvent): void {
 
     let exchangeRateStoredTry = cTokenContract.try_exchangeRateStored();
     if (!exchangeRateStoredTry.reverted) {
-        market.exchangeRate = exchangeRateStoredTry.value.toBigDecimal().div(exponentToBigDecimal(18));
+        market.exchangeRate = exchangeRateStoredTry.value;
     } else {
         log.warning("exchangeRateStored() call reverted in AccrueInterest for cToken {}", [event.address.toHexString()]);
     }

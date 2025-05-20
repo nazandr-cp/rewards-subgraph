@@ -1,7 +1,7 @@
-import { Address, BigDecimal, BigInt, Bytes } from "@graphprotocol/graph-ts";
+import { Address, BigInt, Bytes } from "@graphprotocol/graph-ts";
 import { Account, AccountCollectionReward, CollectionReward } from "../../generated/schema";
+import { cToken } from '../../generated/cToken/cToken';
 
-// TODO: Replace with actual addresses
 export const HARDCODED_REWARD_TOKEN_ADDRESS = Address.fromString("0x0000000000000000000000000000000000000001");
 export const HARDCODED_CTOKEN_MARKET_ADDRESS = Address.fromString("0x0000000000000000000000000000000000000002");
 
@@ -13,44 +13,41 @@ export enum RewardBasis {
 export enum WeightFunctionType {
     LINEAR,
     EXPONENTIAL,
-    POWER // Added based on usage in weight function
+    POWER
 }
 
 export const ZERO_BI = BigInt.fromI32(0);
 export const ONE_BI = BigInt.fromI32(1);
-export const ZERO_BD = BigDecimal.fromString("0");
-export const ONE_BD = BigDecimal.fromString("1");
-const TWO_BD = BigDecimal.fromString("2");
 export const ADDRESS_ZERO_STR = "0x0000000000000000000000000000000000000000";
+export const EXP_SCALE = BigInt.fromString('1000000000000000000'); // 10^18
 
-export function exponentToBigDecimal(decimals: i32): BigDecimal {
-    let bd = BigDecimal.fromString("1");
+export function exponentToBigInt(decimals: i32): BigInt {
+    let bi = BigInt.fromI32(1);
     for (let i = 0; i < decimals; i++) {
-        bd = bd.times(BigDecimal.fromString("10"));
+        bi = bi.times(BigInt.fromI32(10));
     }
-    return bd;
+    return bi;
 }
 
-function power(base: BigDecimal, exponent: i32): BigDecimal {
+function power(base: BigInt, exponent: i32): BigInt {
     if (exponent < 0) {
-        return ZERO_BD;
+        return ZERO_BI;
     }
     if (exponent == 0) {
-        return ONE_BD;
+        return ONE_BI;
     }
-    if (base.equals(ZERO_BD)) {
-        return ZERO_BD;
+    if (base.equals(ZERO_BI)) {
+        return ZERO_BI;
     }
-    let res = ONE_BD;
-    for (let i = 0; i < exponent; i++) {
-        res = res.times(base);
+    if (exponent > 255 || exponent < 0) {
+        return ZERO_BI;
     }
-    return res;
+    return base.pow(exponent as u8);
 }
 
-function approxExponentialTerm(val: BigDecimal): BigDecimal {
+function approxExponentialTerm(val: BigInt): BigInt {
     const term1 = val;
-    const term2 = power(val, 2).div(TWO_BD);
+    const term2 = val.times(val).div(EXP_SCALE).div(BigInt.fromI32(2));
     return term1.plus(term2);
 }
 
@@ -83,13 +80,12 @@ export function getOrCreateCollectionReward(
         collectionReward.rewardBasis = rewardBasis == RewardBasis.BORROW ? "BORROW" : "DEPOSIT";
         collectionReward.totalSecondsAccrued = ZERO_BI;
         collectionReward.lastUpdate = eventTimestamp;
-        // fnType assignment
         if (initialWeightFnType == WeightFunctionType.EXPONENTIAL) {
             collectionReward.fnType = "EXPONENTIAL";
         } else if (initialWeightFnType == WeightFunctionType.POWER) {
             collectionReward.fnType = "POWER";
         } else {
-            collectionReward.fnType = "LINEAR"; // Default
+            collectionReward.fnType = "LINEAR";
         }
         collectionReward.p1 = ZERO_BI;
         collectionReward.p2 = ZERO_BI;
@@ -125,50 +121,69 @@ export function getOrCreateAccountCollectionReward(
     return acr;
 }
 
-// Placeholder implementation, requires actual cToken contract calls
-export function currentDepositU(accountAddress: Bytes, cTokenMarketAddress: Bytes): BigDecimal {
-    // Example:
-    // let cToken = CToken.bind(Address.fromBytes(cTokenMarketAddress));
-    // let balance = cToken.try_balanceOfUnderlying(Address.fromBytes(accountAddress));
-    // if (!balance.reverted) {
-    //     let market = CTokenMarket.load(cTokenMarketAddress);
-    //     if (market) {
-    //         return balance.value.toBigDecimal().div(exponentToBigDecimal(market.underlyingDecimals));
-    //     }
-    // }
-    return ZERO_BD;
+/**
+ * Return the user’s current deposit principal in the underlying asset,
+ * scaled to 1 × 10¹⁸ (WAD).
+ * depositUnderlying = cTokenBalance × exchangeRateStored / 1e18
+ */
+export function currentDepositU(
+    user: Address,
+    cTokenAddr: Address,
+): BigInt {
+    // bind once – this is only a lightweight wrapper around `dataSource.address()`
+    let cTokenInstance = cToken.bind(cTokenAddr);
+
+    // 1. cToken balance
+    let balRes = cTokenInstance.try_balanceOf(user);
+    if (balRes.reverted) return BigInt.zero();
+    let cBal = balRes.value;                         // 8-dec scale for Compound
+
+    // 2. Exchange-rate (underlying / cToken), 18-dec scale
+    let rateRes = cTokenInstance.try_exchangeRateStored();   // ↳ no accrue here – cheap & deterministic
+    if (rateRes.reverted) return BigInt.zero();
+    let rate = rateRes.value;
+
+    // 3. Convert to underlying (still 18-dec after the division)
+    return cBal.times(rate).div(EXP_SCALE);
 }
 
-// Placeholder implementation, requires actual cToken contract calls
-export function currentBorrowU(accountAddress: Bytes, cTokenMarketAddress: Bytes): BigDecimal {
-    // Example:
-    // let cToken = CToken.bind(Address.fromBytes(cTokenMarketAddress));
-    // let balance = cToken.try_borrowBalanceCurrent(Address.fromBytes(accountAddress));
-    // if (!balance.reverted) {
-    //     let market = CTokenMarket.load(cTokenMarketAddress);
-    //     if (market) {
-    //         return balance.value.toBigDecimal().div(exponentToBigDecimal(market.underlyingDecimals));
-    //     }
-    // }
-    return ZERO_BD;
+/**
+ * Return the user’s borrow principal in the underlying asset,
+ * scaled to 1 × 10¹⁸ (WAD).
+ * Compound’s borrowBalanceStored() already returns the figure in
+ * underlying-units × 1e18, so we can forward it directly.
+ */
+export function currentBorrowU(
+    user: Address,
+    cTokenAddr: Address,
+): BigInt {
+    let cTokenInstance = cToken.bind(cTokenAddr);
+
+    let borrowRes = cTokenInstance.try_borrowBalanceStored(user);
+    if (borrowRes.reverted) return BigInt.zero();
+
+    // value is already 18-dec scaled
+    return borrowRes.value;
 }
 
-export function weight(n: i32, meta: CollectionReward): BigDecimal {
-    let n_bd = BigDecimal.fromString(n.toString());
+// Calculates weight, result is scaled by EXP_SCALE
+export function weight(n: i32, meta: CollectionReward): BigInt {
+    let n_bi = BigInt.fromI32(n);
 
-    if (meta.fnType == "LINEAR") { // Compare with string representation
-        return meta.p1.toBigDecimal().times(n_bd).plus(meta.p2.toBigDecimal());
-    } else if (meta.fnType == "EXPONENTIAL") { // Compare with string representation
-        let k_bd = meta.p2.toBigDecimal();
-        let kn = k_bd.times(n_bd);
-        let A_bd = meta.p1.toBigDecimal();
-        return A_bd.times(approxExponentialTerm(kn));
-    } else if (meta.fnType == "POWER") { // Compare with string representation
-        let A_bd = meta.p1.toBigDecimal();
-        let b_bd = meta.p2.toBigDecimal();
-        return A_bd.times(power(b_bd, n));
+    if (meta.fnType == "LINEAR") {
+        return meta.p1.times(n_bi).plus(meta.p2);
+    } else if (meta.fnType == "EXPONENTIAL") {
+        let k_bi = meta.p2;
+        let A_bi = meta.p1;
+        let kn_scaled = k_bi.times(n_bi);
+        return A_bi.times(approxExponentialTerm(kn_scaled)).div(EXP_SCALE);
+    } else if (meta.fnType == "POWER") {
+        let A_bi = meta.p1;
+        let b_bi = meta.p2;
+        let b_actual = b_bi.div(EXP_SCALE);
+        return A_bi.times(power(b_actual, n));
     } else {
-        return ZERO_BD;
+        return ZERO_BI;
     }
 }
 
@@ -178,30 +193,26 @@ export function accrueSeconds(acr: AccountCollectionReward, coll: CollectionRewa
         return;
     }
 
-    let basePrincipalForReward = ZERO_BD;
-    if (coll.rewardBasis == "DEPOSIT") { // Changed from rewardActivityType
-        basePrincipalForReward = currentDepositU(acr.account, coll.cTokenMarketAddress);
-    } else if (coll.rewardBasis == "BORROW") { // Changed from rewardActivityType
-        basePrincipalForReward = currentBorrowU(acr.account, coll.cTokenMarketAddress);
+    let basePrincipalForReward = ZERO_BI;
+    if (coll.rewardBasis == "DEPOSIT") {
+        basePrincipalForReward = currentDepositU(Address.fromBytes(acr.account), Address.fromBytes(coll.cTokenMarketAddress));
+    } else if (coll.rewardBasis == "BORROW") {
+        basePrincipalForReward = currentBorrowU(Address.fromBytes(acr.account), Address.fromBytes(coll.cTokenMarketAddress));
     }
 
     let nftHoldingWeight = weight(acr.balanceNFT.toI32(), coll);
     let combinedEffectiveValue = basePrincipalForReward.plus(nftHoldingWeight);
 
-    // Placeholder for rewardRateMultiplier logic.
-    // This needs to be determined based on how `coll.rewardBasis` (which is "DEPOSIT" or "BORROW")
-    // translates to a rate. For now, using ONE_BD to avoid breaking calculations.
-    let rewardRateMultiplier = ONE_BD;
+    let rewardRateMultiplier = EXP_SCALE;
 
-    let finalValueWithRate = combinedEffectiveValue.times(rewardRateMultiplier);
-    let secDelta = finalValueWithRate.times(dt.toBigDecimal());
+    let finalValueWithRate = combinedEffectiveValue.times(rewardRateMultiplier).div(EXP_SCALE);
+    let rewardAccruedScaled = finalValueWithRate.times(dt);
 
-    if (secDelta.lt(ZERO_BD)) {
-        secDelta = ZERO_BD;
+    if (rewardAccruedScaled.lt(ZERO_BI)) {
+        rewardAccruedScaled = ZERO_BI;
     }
 
-    acr.seconds = acr.seconds.plus(BigInt.fromString(secDelta.truncate(0).toString()));
-    coll.totalSecondsAccrued = coll.totalSecondsAccrued.plus(BigInt.fromString(secDelta.truncate(0).toString()));
+    acr.seconds = acr.seconds.plus(rewardAccruedScaled.div(EXP_SCALE));
+    coll.totalSecondsAccrued = coll.totalSecondsAccrued.plus(rewardAccruedScaled.div(EXP_SCALE));
     acr.lastUpdate = now;
-    // Caller saves acr and coll
 }

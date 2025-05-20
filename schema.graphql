@@ -82,8 +82,8 @@ type CTokenMarket @entity(immutable: false) {
   totalSupplyC: BigInt!
   totalBorrowsU: BigInt!
   totalReservesU: BigInt!
-  exchangeRate: BigDecimal!
-  collateralFactor: BigDecimal!
+  exchangeRate: BigInt!
+  collateralFactor: BigInt!
   borrowIndex: BigInt!
   lastAccrualTimestamp: BigInt!
   blockTimestamp: BigInt!

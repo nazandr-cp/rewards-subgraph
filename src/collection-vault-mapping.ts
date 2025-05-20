@@ -5,8 +5,8 @@ import {
 import { CollectionMarket } from "../generated/schema"
 import { cToken } from "../generated/cToken/cToken"
 import { ERC20 } from "../generated/cToken/ERC20"
-import { BigInt, BigDecimal, log, Bytes, Address } from "@graphprotocol/graph-ts"
-import { ZERO_BI, ONE_BI, ZERO_BD } from "./utils/rewards"
+import { BigInt, log, Bytes, Address } from "@graphprotocol/graph-ts"
+import { ZERO_BI, ONE_BI } from "./utils/rewards"
 
 function fetchTokenDecimals(tokenAddress: Address): i32 {
     let contract = ERC20.bind(tokenAddress);
@@ -48,9 +48,9 @@ export function handleCollectionDeposit(event: CollectionDepositEvent): void {
     if (!entity) {
         entity = new CollectionMarket(id);
         entity.collection = event.params.collectionAddress;
-        entity.market = event.address; // This is the cToken address (market)
+        entity.market = event.address;
         entity.totalNFT = ZERO_BI;
-        entity.totalSeconds = ZERO_BI; // Initialize, actual usage TBD
+        entity.totalSeconds = ZERO_BI;
         entity.principalU = ZERO_BI;
     }
 
