@@ -1,4 +1,4 @@
-import { Address, BigInt, Bytes } from "@graphprotocol/graph-ts";
+import { Address, BigInt, Bytes, log } from "@graphprotocol/graph-ts";
 import { Account, AccountCollectionReward, CollectionReward } from "../../generated/schema";
 import { cToken } from '../../generated/cToken/cToken';
 
@@ -26,22 +26,6 @@ export function exponentToBigInt(decimals: i32): BigInt {
         bi = bi.times(BigInt.fromI32(10));
     }
     return bi;
-}
-
-function power(base: BigInt, exponent: i32): BigInt {
-    if (exponent < 0) {
-        return ZERO_BI;
-    }
-    if (exponent == 0) {
-        return ONE_BI;
-    }
-    if (base.equals(ZERO_BI)) {
-        return ZERO_BI;
-    }
-    if (exponent > 255 || exponent < 0) {
-        return ZERO_BI;
-    }
-    return base.pow(exponent as u8);
 }
 
 function approxExponentialTerm(val: BigInt): BigInt {
@@ -163,9 +147,10 @@ export function currentBorrowU(
     return borrowRes.value;
 }
 
-// Calculates weight, result is scaled by EXP_SCALE
-export function weight(n: i32, meta: CollectionReward): BigInt {
-    let n_bi = BigInt.fromI32(n);
+const MAX_NFT_COUNT_FOR_WEIGHT_CALC = BigInt.fromI32(1000000);
+
+export function weight(nftCount: BigInt, meta: CollectionReward): BigInt {
+    let n_bi = nftCount.gt(MAX_NFT_COUNT_FOR_WEIGHT_CALC) ? MAX_NFT_COUNT_FOR_WEIGHT_CALC : nftCount;
 
     if (meta.fnType == "LINEAR") {
         return meta.p1.times(n_bi).plus(meta.p2);
@@ -174,11 +159,6 @@ export function weight(n: i32, meta: CollectionReward): BigInt {
         let A_bi = meta.p1;
         let kn_scaled = k_bi.times(n_bi);
         return A_bi.times(approxExponentialTerm(kn_scaled)).div(EXP_SCALE);
-    } else if (meta.fnType == "POWER") {
-        let A_bi = meta.p1;
-        let b_bi = meta.p2;
-        let b_actual = b_bi.div(EXP_SCALE);
-        return A_bi.times(power(b_actual, n));
     } else {
         return ZERO_BI;
     }
@@ -197,7 +177,7 @@ export function accrueSeconds(acr: AccountCollectionReward, coll: CollectionRewa
         basePrincipalForReward = currentBorrowU(Address.fromBytes(acr.account), Address.fromBytes(coll.cTokenMarketAddress));
     }
 
-    let nftHoldingWeight = weight(acr.balanceNFT.toI32(), coll);
+    let nftHoldingWeight = weight(acr.balanceNFT, coll);
     let combinedEffectiveValue = basePrincipalForReward.plus(nftHoldingWeight);
 
     let rewardRateMultiplier = EXP_SCALE;
@@ -206,7 +186,18 @@ export function accrueSeconds(acr: AccountCollectionReward, coll: CollectionRewa
     let rewardAccruedScaled = finalValueWithRate.times(dt);
 
     if (rewardAccruedScaled.lt(ZERO_BI)) {
-        rewardAccruedScaled = ZERO_BI;
+        log.critical(
+            "Negative rewardAccruedScaled for account {}, collection {}. Values: rewardAccruedScaled = {}, basePrincipalForReward = {}, nftHoldingWeight = {}, dt = {}. Reverting.",
+            [
+                acr.account.toHexString(),
+                coll.collection.toHexString(),
+                rewardAccruedScaled.toString(),
+                basePrincipalForReward.toString(),
+                nftHoldingWeight.toString(),
+                dt.toString()
+            ]
+        );
+        assert(false);
     }
 
     acr.seconds = acr.seconds.plus(rewardAccruedScaled.div(EXP_SCALE));

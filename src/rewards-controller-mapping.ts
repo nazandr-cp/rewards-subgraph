@@ -54,6 +54,7 @@ export function handleNewCollectionWhitelisted(event: NewCollectionWhitelisted):
         WeightFunctionType.LINEAR,
         event.block.timestamp
     );
+    collReward.rewardPerSecond = event.params.sharePercentage;
     collReward.save();
 
     ERC721.create(nftCollectionAddress);
@@ -95,7 +96,6 @@ export function handleCollectionRewardShareUpdated(event: CollectionRewardShareU
     let collReward = CollectionReward.load(collectionRewardId);
 
     if (collReward != null) {
-        log.info("CollectionRewardShareUpdated: Accrual for derived AccountCollectionRewards skipped for collection {} before share update.", [collectionAddress.toHexString()]);
         collReward.rewardPerSecond = event.params.newSharePercentage;
         collReward.lastUpdate = event.block.timestamp;
         collReward.save();
@@ -124,8 +124,6 @@ export function handleWeightFunctionSet(event: WeightFunctionSet): void {
     let collReward = CollectionReward.load(collectionRewardId);
 
     if (collReward != null) {
-        log.info("handleWeightFunctionSet: Accrual for derived AccountCollectionRewards skipped for collection {} before weight function update.", [collectionAddress.toHexString()]);
-
         let fnTypeU8 = weightFnParams.fnType;
         if (fnTypeU8 == WeightFunctionType.LINEAR) {
             collReward.fnType = "LINEAR";
@@ -157,20 +155,23 @@ export function handleWeightFunctionSet(event: WeightFunctionSet): void {
 }
 
 export function handleRewardsClaimedForLazy(event: RewardsClaimedForLazy): void {
-    log.warning(
-        "handleRewardsClaimedForLazy: Event for account {}, collection {} with dueAmount {} " +
-        "does not provide 'rewardToken'. Cannot uniquely identify CollectionReward or AccountCollectionReward. " +
-        "RewardClaim and AccountCollectionReward entities will NOT be created/updated with full context.",
-        [
-            event.params.account.toHexString(),
-            event.params.collection.toHexString(),
-            event.params.dueAmount.toString()
-        ]
-    );
-
     let userAddress = event.params.account;
     let collectionAddress = event.params.collection;
-    let rewardTokenAddress = HARDCODED_REWARD_TOKEN_ADDRESS;
+    let rewardTokenAddress: Address;
+
+    let contract = RewardsController.bind(event.address);
+    let vaultInfoTry = contract.try_vaultInfo();
+
+    if (!vaultInfoTry.reverted) {
+        rewardTokenAddress = vaultInfoTry.value.cToken;
+        log.info("handleRewardsClaimedForLazy: rewardToken (cToken) {} successfully derived from vaultInfo for controller {}", [rewardTokenAddress.toHexString(), event.address.toHexString()]);
+    } else {
+        log.critical(
+            "handleRewardsClaimedForLazy: try_vaultInfo() reverted for controller {}. Cannot determine rewardToken. Aborting processing for event in tx {}.",
+            [event.address.toHexString(), event.transaction.hash.toHexString()]
+        );
+        return; // Prevent partial entity creation if rewardToken is missing
+    }
 
     let userAccount = getOrCreateAccount(userAddress);
 
@@ -243,10 +244,7 @@ export function handleRewardsClaimedForLazy(event: RewardsClaimedForLazy): void 
 
 export function handleBatchRewardsClaimedForLazy(event: BatchRewardsClaimedForLazy): void {
     log.warning(
-        "handleBatchRewardsClaimedForLazy: Event for caller {} with totalDue {} (numClaims: {}) " +
-        "lacks individual claim details (collection, rewardToken, specific amounts). " +
-        "Cannot create specific RewardClaim entities or update AccountCollectionReward entities accurately. " +
-        "A general Account entity for the caller will be ensured.",
+        "handleBatchRewardsClaimedForLazy: Event for caller {} with totalDue {} (numClaims: {}) lacks individual claim details.",
         [
             event.params.caller.toHexString(),
             event.params.totalDue.toString(),
@@ -306,7 +304,6 @@ export function handleRewardClaimed(event: RewardClaimedEvent): void {
         let vaultInfo = rewardsController.try_vaultInfo();
         if (vaultInfo.reverted) {
             log.error("handleRewardClaimed: contract.try_vault reverted for vault {} (during vault creation)", [vaultAddress.toHex()]);
-            // Decide if we should return or proceed with a partially initialized vault
             return;
         }
         vault.rewardPerBlock = vaultInfo.value.rewardPerBlock;
@@ -323,7 +320,6 @@ export function handleRewardClaimed(event: RewardClaimedEvent): void {
         let vaultInfoTry = contract.try_vaultInfo();
         if (vaultInfoTry.reverted) {
             log.error("handleRewardClaimed: contract.try_vault reverted for vault {} (during vault update)", [vaultAddress.toHex()]);
-            // Decide if we should return or proceed with a partially initialized vault
             return;
         }
         vault.globalRPW = vaultInfoTry.value.globalRPW;

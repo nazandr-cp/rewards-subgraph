@@ -90,17 +90,14 @@ function getOrCreateCTokenMarket(
             market.exchangeRate = ZERO_BI;
         }
 
-        // Fetch collateralFactor from Comptroller
         let comptrollerAddressTry = cTokenContract.try_comptroller();
         if (!comptrollerAddressTry.reverted) {
             let comptrollerAddress = comptrollerAddressTry.value;
-            log.warning("Comptroller.markets() function not found in ABI for cToken {}. Setting collateralFactor to 0.", [marketAddress.toHexString()]);
             market.collateralFactor = ZERO_BI;
         } else {
-            log.warning("cToken.comptroller() call reverted for cToken {}", [marketAddress.toHexString()]);
             market.collateralFactor = ZERO_BI;
         }
-        market.borrowIndex = ZERO_BI; // Initialize borrowIndex
+        market.borrowIndex = ZERO_BI;
         market.lastAccrualTimestamp = blockTimestamp;
         market.blockTimestamp = blockTimestamp;
         market.save();
@@ -115,7 +112,7 @@ export function handleAccrueInterest(event: AccrueInterestEvent): void {
 
     market.totalBorrowsU = event.params.totalBorrows;
     market.borrowIndex = event.params.borrowIndex;
-    market.totalReservesU = cTokenContract.totalReserves(); // Fetches the latest total reserves
+    market.totalReservesU = cTokenContract.totalReserves();
     market.lastAccrualTimestamp = event.block.timestamp;
 
     let exchangeRateStoredTry = cTokenContract.try_exchangeRateStored();
@@ -127,12 +124,11 @@ export function handleAccrueInterest(event: AccrueInterestEvent): void {
     market.blockTimestamp = event.block.timestamp;
     market.save();
 
-    // Optionally update MarketData entity
     let md = MarketData.load(event.address);
     if (md == null) {
-        md = new MarketData(event.address);
+        md = new MarketData(Bytes.fromHexString(event.address.toHexString()));
     }
-    md.totalSupply = cTokenContract.totalSupply(); // Fetch latest totalSupply
+    md.totalSupply = cTokenContract.totalSupply();
     md.totalBorrow = event.params.totalBorrows;
     md.totalReserves = market.totalReservesU;
     md.accruedInterest = event.params.interestAccumulated;
@@ -215,14 +211,28 @@ export function handleTransfer(event: TransferEvent): void {
 
     let market = getOrCreateCTokenMarket(event.address, event.block.timestamp);
 
-    if (event.params.from == ADDRESS_ZERO) {
-        let cTokenContract = cToken.bind(event.address);
-        market.totalSupplyC = cTokenContract.totalSupply();
-        log.info("Transfer from ZERO_ADDRESS detected for market {} (cToken {}), amount {}. Assuming mint-like.", [market.id.toHexString(), event.address.toHexString(), event.params.amount.toString()]);
-    } else if (event.params.to == ADDRESS_ZERO) {
-        let cTokenContract = cToken.bind(event.address);
-        market.totalSupplyC = cTokenContract.totalSupply();
-        log.info("Transfer to ZERO_ADDRESS detected for market {} (cToken {}), amount {}. Assuming burn-like.", [market.id.toHexString(), event.address.toHexString(), event.params.amount.toString()]);
+    let cTokenContract = cToken.bind(event.address);
+
+    market.totalSupplyC = cTokenContract.totalSupply();
+
+    if (event.params.from.equals(ADDRESS_ZERO)) {
+        log.info(
+            "Mint-like transfer (from ZERO_ADDRESS) detected for cToken {}. Amount: {}. New totalSupplyC: {}.",
+            [
+                event.address.toHexString(),
+                event.params.amount.toString(),
+                market.totalSupplyC.toString()
+            ]
+        );
+    } else if (event.params.to.equals(ADDRESS_ZERO)) {
+        log.info(
+            "Burn-like transfer (to ZERO_ADDRESS) detected for cToken {}. Amount: {}. New totalSupplyC: {}.",
+            [
+                event.address.toHexString(),
+                event.params.amount.toString(),
+                market.totalSupplyC.toString()
+            ]
+        );
     }
 
     market.blockTimestamp = event.block.timestamp;

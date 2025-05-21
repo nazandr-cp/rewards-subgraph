@@ -1,8 +1,8 @@
 specVersion: 1.2.0
-indexerHints:
-  prune: auto
 schema:
   file: ./schema.graphql
+indexerHints:
+  prune: auto
 dataSources:
   - kind: ethereum
     name: cToken
@@ -143,6 +143,7 @@ templates:
           handler: handleTransferSingle
         - event: TransferBatch(indexed address,indexed address,indexed address,uint256[],uint256[])
           handler: handleTransferBatch
+
   - kind: ethereum/contract
     name: ERC721
     network: apechain-curtis

@@ -54,7 +54,7 @@ export function handleCollectionDeposit(event: CollectionDepositEvent): void {
         entity.principalU = ZERO_BI;
     }
 
-    entity.totalNFT = entity.totalNFT.plus(ONE_BI);
+    entity.totalNFT = entity.totalNFT.plus(event.params.shares);
 
     let assetDecimals = 18;
     let cTokenAddress = event.address;
@@ -93,7 +93,7 @@ export function handleCollectionWithdraw(event: CollectionWithdrawEvent): void {
     let entity = CollectionMarket.load(id);
 
     if (entity) {
-        entity.totalNFT = entity.totalNFT.minus(ONE_BI);
+        entity.totalNFT = entity.totalNFT.minus(event.params.shares);
 
         let assetDecimals = 18;
         let cTokenAddress = event.address;
