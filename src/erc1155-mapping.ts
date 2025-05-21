@@ -2,7 +2,7 @@ import { BigInt, Bytes, log, Address } from "@graphprotocol/graph-ts";
 import {
   TransferSingle as TransferSingleEvent,
   TransferBatch as TransferBatchEvent,
-} from "../generated/templates/ERC1155/ERC1155"; // Correct path from subgraph.yaml template
+} from "../generated/templates/ERC1155/ERC1155";
 import { AccountCollectionReward, CollectionReward } from "../generated/schema";
 import {
   accrueSeconds,

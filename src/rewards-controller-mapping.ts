@@ -15,7 +15,6 @@ import {
     getOrCreateAccountCollectionReward,
     HARDCODED_REWARD_TOKEN_ADDRESS,
     HARDCODED_CTOKEN_MARKET_ADDRESS,
-    RewardBasis,
     WeightFunctionType
 } from "./utils/rewards";
 import {
@@ -35,15 +34,15 @@ export function handleNewCollectionWhitelisted(event: NewCollectionWhitelisted):
     const rewardBasisParam = event.params.rewardBasis;
     const collectionTypeParam = event.params.collectionType;
 
-    let rewardBasisEnum: RewardBasis;
-    if (rewardBasisParam == 0) {
-        rewardBasisEnum = RewardBasis.DEPOSIT;
-    } else if (rewardBasisParam == 1) {
-        rewardBasisEnum = RewardBasis.BORROW;
-    } else {
-        rewardBasisEnum = RewardBasis.BORROW;
+    let isBorrowBased: boolean;
+    if (rewardBasisParam == 0) { // DEPOSIT
+        isBorrowBased = false;
+    } else if (rewardBasisParam == 1) { // BORROW
+        isBorrowBased = true;
+    } else { // Default to BORROW
+        isBorrowBased = true;
         log.info(
-            "NewCollectionWhitelisted: Unknown rewardBasisParam u8 {} for collection {}. Defaulting to BORROW.",
+            "NewCollectionWhitelisted: Unknown rewardBasisParam u8 {} for collection {}. Defaulting to isBorrowBased = true.",
             [rewardBasisParam.toString(), nftCollectionAddress.toHexString()]
         );
     }
@@ -52,7 +51,7 @@ export function handleNewCollectionWhitelisted(event: NewCollectionWhitelisted):
         nftCollectionAddress,
         HARDCODED_REWARD_TOKEN_ADDRESS,
         HARDCODED_CTOKEN_MARKET_ADDRESS,
-        rewardBasisEnum,
+        isBorrowBased,
         WeightFunctionType.LINEAR,
         event.block.timestamp
     );
@@ -112,7 +111,6 @@ export function handleWhitelistCollectionRemoved(event: WhitelistCollectionRemov
 export function handleCollectionRewardShareUpdated(event: CollectionRewardShareUpdated): void {
     const collectionAddress = event.params.collection;
     const rewardToken = HARDCODED_REWARD_TOKEN_ADDRESS;
-    // const newShare = event.params.newSharePercentage.toI32(); // Unused
 
     const collectionRewardIdString = collectionAddress.toHex() + "-" + rewardToken.toHex();
     const collectionRewardId = Bytes.fromHexString(collectionRewardIdString);

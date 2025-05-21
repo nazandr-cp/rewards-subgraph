@@ -5,11 +5,6 @@ import { cToken } from '../../generated/cToken/cToken';
 export const HARDCODED_REWARD_TOKEN_ADDRESS = Address.fromString("0x0000000000000000000000000000000000000001");
 export const HARDCODED_CTOKEN_MARKET_ADDRESS = Address.fromString("0x0000000000000000000000000000000000000002");
 
-export enum RewardBasis {
-    DEPOSIT,
-    BORROW
-}
-
 export enum WeightFunctionType {
     LINEAR,
     EXPONENTIAL,
@@ -18,7 +13,7 @@ export enum WeightFunctionType {
 export const ZERO_BI = BigInt.fromI32(0);
 export const ONE_BI = BigInt.fromI32(1);
 export const ADDRESS_ZERO_STR = "0x0000000000000000000000000000000000000000";
-export const EXP_SCALE = BigInt.fromString('1000000000000000000'); // 10^18
+export const EXP_SCALE = BigInt.fromString('1000000000000000000');
 
 export function exponentToBigInt(decimals: i32): BigInt {
     let bi = BigInt.fromI32(1);
@@ -47,7 +42,7 @@ export function getOrCreateCollectionReward(
     nftCollectionAddress: Address,
     rewardTokenAddress: Address,
     cTokenMarketForActivity: Address,
-    rewardBasis: RewardBasis,
+    isBorrowBased: boolean,
     initialWeightFnType: WeightFunctionType,
     eventTimestamp: BigInt
 ): CollectionReward {
@@ -60,7 +55,7 @@ export function getOrCreateCollectionReward(
         collectionReward.collection = nftCollectionAddress;
         collectionReward.rewardToken = rewardTokenAddress;
         collectionReward.cTokenMarketAddress = cTokenMarketForActivity;
-        collectionReward.rewardBasis = rewardBasis == RewardBasis.BORROW ? "BORROW" : "DEPOSIT";
+        collectionReward.isBorrowBased = isBorrowBased;
         collectionReward.totalSecondsAccrued = ZERO_BI;
         collectionReward.lastUpdate = eventTimestamp;
         if (initialWeightFnType == WeightFunctionType.EXPONENTIAL) {
@@ -102,38 +97,23 @@ export function getOrCreateAccountCollectionReward(
     return acr;
 }
 
-/**
- * Return the user’s current deposit principal in the underlying asset,
- * scaled to 1 × 10¹⁸ (WAD).
- * depositUnderlying = cTokenBalance × exchangeRateStored / 1e18
- */
 export function currentDepositU(
     user: Address,
     cTokenAddr: Address,
 ): BigInt {
-    // bind once – this is only a lightweight wrapper around `dataSource.address()`
     const cTokenInstance = cToken.bind(cTokenAddr);
 
-    // 1. cToken balance
     const balRes = cTokenInstance.try_balanceOf(user);
     if (balRes.reverted) return BigInt.zero();
-    const cBal = balRes.value;                         // 8-dec scale for Compound
+    const cBal = balRes.value;
 
-    // 2. Exchange-rate (underlying / cToken), 18-dec scale
-    const rateRes = cTokenInstance.try_exchangeRateStored();   // ↳ no accrue here – cheap & deterministic
+    const rateRes = cTokenInstance.try_exchangeRateStored();
     if (rateRes.reverted) return BigInt.zero();
     const rate = rateRes.value;
 
-    // 3. Convert to underlying (still 18-dec after the division)
     return cBal.times(rate).div(EXP_SCALE);
 }
 
-/**
- * Return the user’s borrow principal in the underlying asset,
- * scaled to 1 × 10¹⁸ (WAD).
- * Compound’s borrowBalanceStored() already returns the figure in
- * underlying-units × 1e18, so we can forward it directly.
- */
 export function currentBorrowU(
     user: Address,
     cTokenAddr: Address,
@@ -143,7 +123,6 @@ export function currentBorrowU(
     const borrowRes = cTokenInstance.try_borrowBalanceStored(user);
     if (borrowRes.reverted) return BigInt.zero();
 
-    // value is already 18-dec scaled
     return borrowRes.value;
 }
 
@@ -171,9 +150,9 @@ export function accrueSeconds(acr: AccountCollectionReward, coll: CollectionRewa
     }
 
     let basePrincipalForReward = ZERO_BI;
-    if (coll.rewardBasis == "DEPOSIT") {
+    if (!coll.isBorrowBased) {
         basePrincipalForReward = currentDepositU(Address.fromBytes(acr.account), Address.fromBytes(coll.cTokenMarketAddress));
-    } else if (coll.rewardBasis == "BORROW") {
+    } else {
         basePrincipalForReward = currentBorrowU(Address.fromBytes(acr.account), Address.fromBytes(coll.cTokenMarketAddress));
     }
 

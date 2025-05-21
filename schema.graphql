@@ -1,19 +1,14 @@
-enum RewardBasis {
-  DEPOSIT
-  BORROW
-}
-
 enum WeightFunctionType {
   LINEAR
   EXPONENTIAL
 }
 
 enum CollectionType {
-  ERC721,
+  ERC721
   ERC1155
 }
 
-type Vault @entity {
+type Vault @entity(immutable: false) {
   id: ID!
   rewardPerBlock: BigInt!
   globalRPW: BigInt!
@@ -26,7 +21,7 @@ type Vault @entity {
   accountVaults: [AccountVault!]! @derivedFrom(field: "vault")
 }
 
-type AccountVault @entity {
+type AccountVault @entity(immutable: false) {
   id: ID!
   vault: Vault!
   account: Account!
@@ -37,8 +32,8 @@ type AccountVault @entity {
 }
 type CollectionReward @entity(immutable: false) {
   id: Bytes! @id
-  collection: Bytes!
-  rewardToken: Bytes!
+  collection: Bytes! @index
+  rewardToken: Bytes! @index
   rewardPerSecond: BigInt!
   totalRewardsPool: BigInt!
   expiresAt: BigInt
@@ -48,7 +43,7 @@ type CollectionReward @entity(immutable: false) {
   p1: BigInt!
   p2: BigInt!
   cTokenMarketAddress: Bytes!
-  rewardBasis: RewardBasis!
+  isBorrowBased: Boolean!
   collectionType: CollectionType!
   accountRewards: [AccountCollectionReward!]! @derivedFrom(field: "collection")
 }
@@ -70,7 +65,7 @@ type Account @entity(immutable: false) {
   vaults: [AccountVault!]! @derivedFrom(field: "account")
 }
 
-type MarketData @entity(immutable: false)  {
+type MarketData @entity(immutable: false) {
   id: Bytes! @id
   totalSupply: BigInt!
   totalBorrow: BigInt!
