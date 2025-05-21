@@ -51,8 +51,8 @@ export function getOrCreateCollectionReward(
     initialWeightFnType: WeightFunctionType,
     eventTimestamp: BigInt
 ): CollectionReward {
-    let idString = nftCollectionAddress.toHex() + "-" + rewardTokenAddress.toHex();
-    let id = Bytes.fromHexString(idString);
+    const idString = nftCollectionAddress.toHex() + "-" + rewardTokenAddress.toHex();
+    const id = Bytes.fromHexString(idString);
     let collectionReward = CollectionReward.load(id);
 
     if (collectionReward == null) {
@@ -85,8 +85,8 @@ export function getOrCreateAccountCollectionReward(
     collectionReward: CollectionReward,
     eventTimestamp: BigInt
 ): AccountCollectionReward {
-    let idString = account.id.toHexString() + "-" + collectionReward.id.toHexString();
-    let id = Bytes.fromHexString(idString);
+    const idString = account.id.toHexString() + "-" + collectionReward.id.toHexString();
+    const id = Bytes.fromHexString(idString);
 
     let acr = AccountCollectionReward.load(id);
     if (acr == null) {
@@ -112,17 +112,17 @@ export function currentDepositU(
     cTokenAddr: Address,
 ): BigInt {
     // bind once – this is only a lightweight wrapper around `dataSource.address()`
-    let cTokenInstance = cToken.bind(cTokenAddr);
+    const cTokenInstance = cToken.bind(cTokenAddr);
 
     // 1. cToken balance
-    let balRes = cTokenInstance.try_balanceOf(user);
+    const balRes = cTokenInstance.try_balanceOf(user);
     if (balRes.reverted) return BigInt.zero();
-    let cBal = balRes.value;                         // 8-dec scale for Compound
+    const cBal = balRes.value;                         // 8-dec scale for Compound
 
     // 2. Exchange-rate (underlying / cToken), 18-dec scale
-    let rateRes = cTokenInstance.try_exchangeRateStored();   // ↳ no accrue here – cheap & deterministic
+    const rateRes = cTokenInstance.try_exchangeRateStored();   // ↳ no accrue here – cheap & deterministic
     if (rateRes.reverted) return BigInt.zero();
-    let rate = rateRes.value;
+    const rate = rateRes.value;
 
     // 3. Convert to underlying (still 18-dec after the division)
     return cBal.times(rate).div(EXP_SCALE);
@@ -138,9 +138,9 @@ export function currentBorrowU(
     user: Address,
     cTokenAddr: Address,
 ): BigInt {
-    let cTokenInstance = cToken.bind(cTokenAddr);
+    const cTokenInstance = cToken.bind(cTokenAddr);
 
-    let borrowRes = cTokenInstance.try_borrowBalanceStored(user);
+    const borrowRes = cTokenInstance.try_borrowBalanceStored(user);
     if (borrowRes.reverted) return BigInt.zero();
 
     // value is already 18-dec scaled
@@ -150,14 +150,14 @@ export function currentBorrowU(
 const MAX_NFT_COUNT_FOR_WEIGHT_CALC = BigInt.fromI32(1000000);
 
 export function weight(nftCount: BigInt, meta: CollectionReward): BigInt {
-    let n_bi = nftCount.gt(MAX_NFT_COUNT_FOR_WEIGHT_CALC) ? MAX_NFT_COUNT_FOR_WEIGHT_CALC : nftCount;
+    const n_bi = nftCount.gt(MAX_NFT_COUNT_FOR_WEIGHT_CALC) ? MAX_NFT_COUNT_FOR_WEIGHT_CALC : nftCount;
 
     if (meta.fnType == "LINEAR") {
         return meta.p1.times(n_bi).plus(meta.p2);
     } else if (meta.fnType == "EXPONENTIAL") {
-        let k_bi = meta.p2;
-        let A_bi = meta.p1;
-        let kn_scaled = k_bi.times(n_bi);
+        const k_bi = meta.p2;
+        const A_bi = meta.p1;
+        const kn_scaled = k_bi.times(n_bi);
         return A_bi.times(approxExponentialTerm(kn_scaled)).div(EXP_SCALE);
     } else {
         return ZERO_BI;
@@ -165,7 +165,7 @@ export function weight(nftCount: BigInt, meta: CollectionReward): BigInt {
 }
 
 export function accrueSeconds(acr: AccountCollectionReward, coll: CollectionReward, now: BigInt): void {
-    let dt = now.minus(acr.lastUpdate);
+    const dt = now.minus(acr.lastUpdate);
     if (dt.isZero() || dt.lt(ZERO_BI)) {
         return;
     }
@@ -177,13 +177,13 @@ export function accrueSeconds(acr: AccountCollectionReward, coll: CollectionRewa
         basePrincipalForReward = currentBorrowU(Address.fromBytes(acr.account), Address.fromBytes(coll.cTokenMarketAddress));
     }
 
-    let nftHoldingWeight = weight(acr.balanceNFT, coll);
-    let combinedEffectiveValue = basePrincipalForReward.plus(nftHoldingWeight);
+    const nftHoldingWeight = weight(acr.balanceNFT, coll);
+    const combinedEffectiveValue = basePrincipalForReward.plus(nftHoldingWeight);
 
-    let rewardRateMultiplier = EXP_SCALE;
+    const rewardRateMultiplier = EXP_SCALE;
 
-    let finalValueWithRate = combinedEffectiveValue.times(rewardRateMultiplier).div(EXP_SCALE);
-    let rewardAccruedScaled = finalValueWithRate.times(dt);
+    const finalValueWithRate = combinedEffectiveValue.times(rewardRateMultiplier).div(EXP_SCALE);
+    const rewardAccruedScaled = finalValueWithRate.times(dt);
 
     if (rewardAccruedScaled.lt(ZERO_BI)) {
         log.critical(

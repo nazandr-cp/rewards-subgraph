@@ -1,6 +1,6 @@
-import { BigInt, Bytes, log, Address } from "@graphprotocol/graph-ts";
+import { BigInt, Bytes, log } from "@graphprotocol/graph-ts";
 import { Transfer as TransferEvent } from "../generated/IERC721/IERC721"; // Assuming this is from a generic IERC721 template source
-import { Account, AccountCollectionReward, CollectionReward } from "../generated/schema";
+import { CollectionReward } from "../generated/schema";
 import {
     accrueSeconds,
     getOrCreateAccountCollectionReward,
@@ -11,11 +11,11 @@ import {
 // This mapping handles NFT transfers for collections that have been whitelisted
 // by the RewardsController. The CollectionReward entity should already exist.
 export function handleTransfer(event: TransferEvent): void {
-    let collectionAddress = event.address; // The NFT contract address
-    let fromAddress = event.params.from;
-    let toAddress = event.params.to;
-    let tokenId = event.params.tokenId; // Not directly used in reward logic here, but good for logging
-    let timestamp = event.block.timestamp;
+    const collectionAddress = event.address; // The NFT contract address
+    const fromAddress = event.params.from;
+    const toAddress = event.params.to;
+    const tokenId = event.params.tokenId; // Not directly used in reward logic here, but good for logging
+    const timestamp = event.block.timestamp;
 
     log.info(
         "handleTransfer (IERC721): collection {}, from {}, to {}, tokenId {}",
@@ -29,8 +29,8 @@ export function handleTransfer(event: TransferEvent): void {
 
     // Load the CollectionReward entity. It should have been created by RewardsController
     // using the HARDCODED_REWARD_TOKEN_ADDRESS.
-    let collectionRewardIdString = collectionAddress.toHex() + "-" + HARDCODED_REWARD_TOKEN_ADDRESS.toHex();
-    let collectionRewardEntity = CollectionReward.load(Bytes.fromHexString(collectionRewardIdString));
+    const collectionRewardIdString = collectionAddress.toHex() + "-" + HARDCODED_REWARD_TOKEN_ADDRESS.toHex();
+    const collectionRewardEntity = CollectionReward.load(Bytes.fromHexString(collectionRewardIdString));
 
     if (collectionRewardEntity == null) {
         log.info(
@@ -42,8 +42,8 @@ export function handleTransfer(event: TransferEvent): void {
 
     // Update for the 'from' account (if not a mint)
     if (fromAddress.toHexString() != "0x0000000000000000000000000000000000000000") {
-        let fromAccountEntity = getOrCreateAccount(fromAddress);
-        let fromAcr = getOrCreateAccountCollectionReward(fromAccountEntity, collectionRewardEntity, timestamp);
+        const fromAccountEntity = getOrCreateAccount(fromAddress);
+        const fromAcr = getOrCreateAccountCollectionReward(fromAccountEntity, collectionRewardEntity, timestamp);
 
         accrueSeconds(fromAcr, collectionRewardEntity, timestamp);
 
@@ -58,8 +58,8 @@ export function handleTransfer(event: TransferEvent): void {
 
     // Update for the 'to' account (if not a burn)
     if (toAddress.toHexString() != "0x0000000000000000000000000000000000000000") {
-        let toAccountEntity = getOrCreateAccount(toAddress);
-        let toAcr = getOrCreateAccountCollectionReward(toAccountEntity, collectionRewardEntity, timestamp);
+        const toAccountEntity = getOrCreateAccount(toAddress);
+        const toAcr = getOrCreateAccountCollectionReward(toAccountEntity, collectionRewardEntity, timestamp);
 
         accrueSeconds(toAcr, collectionRewardEntity, timestamp);
 
