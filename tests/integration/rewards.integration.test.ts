@@ -1,14 +1,16 @@
+/*
 describe("Rewards Subgraph Integration Tests", () => {
-    beforeAll(async () => {
+    beforeAll(() => {
         console.log("Setting up integration test environment (placeholder)...");
     });
 
-    afterAll(async () => {
+    afterAll(() => {
         console.log("Tearing down integration test environment (placeholder)...");
     });
 
-    test("should correctly process RewardPaid events (placeholder)", async () => {
+    test("should correctly process RewardPaid events (placeholder)", () => {
         console.log("Running integration test (placeholder)...");
         expect(true).toBe(true);
     });
 });
+*/

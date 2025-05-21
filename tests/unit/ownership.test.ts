@@ -1,6 +1,7 @@
-import { test, assert, clearStore } from "matchstick-as/assembly/index";
+import { describe, test, assert } from "matchstick-as/assembly/index";
 
-test("Example ownership test (placeholder)", () => {
-    assert.assertTrue(true);
-    clearStore();
+describe("Ownership Tests", () => {
+    test("Placeholder ownership test", () => {
+        assert.assertTrue(true); // Replace with actual tests later
+    });
 });

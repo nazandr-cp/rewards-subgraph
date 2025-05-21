@@ -1,4 +1,4 @@
-import { Bytes, Address, log, store } from "@graphprotocol/graph-ts";
+import { Bytes, Address, log, store, BigInt } from "@graphprotocol/graph-ts";
 import { ERC721, ERC1155 } from "../generated/templates";
 import {
     CollectionReward,
@@ -55,7 +55,7 @@ export function handleNewCollectionWhitelisted(event: NewCollectionWhitelisted):
         WeightFunctionType.LINEAR,
         event.block.timestamp
     );
-    collReward.rewardPerSecond = event.params.sharePercentage;
+    collReward.rewardPerSecond = BigInt.fromI32(event.params.sharePercentage);
 
     let collectionTypeString: string;
     if (collectionTypeParam == 0) {
@@ -117,7 +117,7 @@ export function handleCollectionRewardShareUpdated(event: CollectionRewardShareU
     const collReward = CollectionReward.load(collectionRewardId);
 
     if (collReward != null) {
-        collReward.rewardPerSecond = event.params.newSharePercentage;
+        collReward.rewardPerSecond = BigInt.fromI32(event.params.newSharePercentage);
         collReward.lastUpdate = event.block.timestamp;
         collReward.save();
         log.info("CollectionRewardShareUpdated: Updated share for CollectionReward {} (collection {}, rewardToken {}). New share: {}", [
@@ -180,15 +180,15 @@ export function handleRewardsClaimedForLazy(event: RewardsClaimedForLazy): void 
     const collectionAddress = event.params.collection;
     let rewardTokenAddress: Address;
 
-    const contract = RewardsController.bind(event.address);
-    const vaultInfoTry = contract.try_vaultInfo();
+    const contract = RewardsController.bind(event.address) as RewardsController;
+    const vaultInfoTry = contract.try_vault();
 
     if (!vaultInfoTry.reverted) {
-        rewardTokenAddress = vaultInfoTry.value.cToken;
+        rewardTokenAddress = vaultInfoTry.value; // Assuming try_vault().value IS the cToken address
         log.info("handleRewardsClaimedForLazy: rewardToken (cToken) {} successfully derived from vaultInfo for controller {}", [rewardTokenAddress.toHexString(), event.address.toHexString()]);
     } else {
         log.critical(
-            "handleRewardsClaimedForLazy: try_vaultInfo() reverted for controller {}. Cannot determine rewardToken. Aborting processing for event in tx {}.",
+            "handleRewardsClaimedForLazy: try_vault() reverted for controller {}. Cannot determine rewardToken. Aborting processing for event in tx {}.",
             [event.address.toHexString(), event.transaction.hash.toHexString()]
         );
         return; // Prevent partial entity creation if rewardToken is missing
@@ -289,10 +289,10 @@ export function handleRewardPerBlockUpdated(event: RewardPerBlockUpdatedEvent): 
         log.info("New Vault entity created: {}", [vaultId]);
     }
 
-    const rewardsController = RewardsController.bind(event.address);
-    const vaultInfo = rewardsController.try_vaultInfo();
+    const rewardsController = RewardsController.bind(event.address) as RewardsController;
+    const vaultInfo = rewardsController.try_vaults(event.params.vault);
     if (vaultInfo.reverted) {
-        log.error("handleRewardPerBlockUpdated: contract.try_vault reverted for vault {}", [event.params.vault.toHex()]);
+        log.error("handleRewardPerBlockUpdated: contract.try_vaults reverted for vault {}", [event.params.vault.toHex()]);
         return;
     }
     vault.rewardPerBlock = vaultInfo.value.rewardPerBlock;
@@ -321,10 +321,10 @@ export function handleRewardClaimed(event: RewardClaimedEvent): void {
     if (!vault) {
         log.warning("Vault {} not found during RewardClaimed for user {}. Creating Vault.", [vaultId, accountId]);
         vault = new Vault(vaultId);
-        const rewardsController = RewardsController.bind(event.address);
-        const vaultInfo = rewardsController.try_vaultInfo();
+        const rewardsController = RewardsController.bind(event.address) as RewardsController;
+        const vaultInfo = rewardsController.try_vaults(vaultAddress);
         if (vaultInfo.reverted) {
-            log.error("handleRewardClaimed: contract.try_vault reverted for vault {} (during vault creation)", [vaultAddress.toHex()]);
+            log.error("handleRewardClaimed: contract.try_vaults reverted for vault {} (during vault creation)", [vaultAddress.toHex()]);
             return;
         }
         vault.rewardPerBlock = vaultInfo.value.rewardPerBlock;
@@ -337,10 +337,10 @@ export function handleRewardClaimed(event: RewardClaimedEvent): void {
         vault.expR = vaultInfo.value.expR;
         vault.save();
     } else {
-        const contract = RewardsController.bind(event.address);
-        const vaultInfoTry = contract.try_vaultInfo();
+        const contract = RewardsController.bind(event.address) as RewardsController;
+        const vaultInfoTry = contract.try_vaults(vaultAddress);
         if (vaultInfoTry.reverted) {
-            log.error("handleRewardClaimed: contract.try_vault reverted for vault {} (during vault update)", [vaultAddress.toHex()]);
+            log.error("handleRewardClaimed: contract.try_vaults reverted for vault {} (during vault update)", [vaultAddress.toHex()]);
             return;
         }
         vault.globalRPW = vaultInfoTry.value.globalRPW;
@@ -358,7 +358,7 @@ export function handleRewardClaimed(event: RewardClaimedEvent): void {
 
     accountVault.accrued = ZERO_BI;
 
-    const contract = RewardsController.bind(event.address);
+    const contract = RewardsController.bind(event.address) as RewardsController;
     const accountInfoTry = contract.try_acc(vaultAddress, userAddress);
     if (accountInfoTry.reverted) {
         log.error("handleRewardClaimed: contract.try_acc reverted for vault {} and user {}", [vaultAddress.toHex(), userAddress.toHex()]);

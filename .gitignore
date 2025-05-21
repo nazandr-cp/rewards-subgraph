@@ -34,3 +34,5 @@ typechain-types
 cache
 
 .vscode
+tests/.bin/*
+
