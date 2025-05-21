@@ -8,6 +8,11 @@ enum WeightFunctionType {
   EXPONENTIAL
 }
 
+enum CollectionType {
+  ERC721,
+  ERC1155
+}
+
 type Vault @entity {
   id: ID!
   rewardPerBlock: BigInt!
@@ -44,6 +49,7 @@ type CollectionReward @entity(immutable: false) {
   p2: BigInt!
   cTokenMarketAddress: Bytes!
   rewardBasis: RewardBasis!
+  collectionType: CollectionType!
   accountRewards: [AccountCollectionReward!]! @derivedFrom(field: "collection")
 }
 

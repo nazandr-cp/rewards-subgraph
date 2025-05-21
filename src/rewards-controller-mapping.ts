@@ -1,5 +1,5 @@
 import { BigInt, Bytes, Address, log, store } from "@graphprotocol/graph-ts";
-import { ERC721 } from "../generated/templates";
+import { ERC721, ERC1155 } from "../generated/templates";
 import {
     CollectionReward,
     AccountCollectionReward,
@@ -33,35 +33,59 @@ import {
 
 export function handleNewCollectionWhitelisted(event: NewCollectionWhitelisted): void {
     let nftCollectionAddress = event.params.collection;
-    let rewardBasis = event.params.rewardBasis;
-    let rewardShare = event.params.sharePercentage.toI32();
+    let rewardBasisParam = event.params.rewardBasis;
+    let collectionTypeParam = event.params.collectionType;
 
-    if (rewardBasis == 0) {
-        rewardBasis = RewardBasis.DEPOSIT;
-    } else if (rewardBasis == 1) {
-        rewardBasis = RewardBasis.BORROW;
+    let rewardBasisEnum: RewardBasis;
+    if (rewardBasisParam == 0) {
+        rewardBasisEnum = RewardBasis.DEPOSIT;
+    } else if (rewardBasisParam == 1) {
+        rewardBasisEnum = RewardBasis.BORROW;
     } else {
-        rewardBasis = RewardBasis.BORROW;
-        log.info("NewCollectionWhitelisted: rewardBasis {} mapped to BORROW for collection {}",
-            [BigInt.fromI32(rewardBasis as i32).toString(), nftCollectionAddress.toHexString()]);
+        rewardBasisEnum = RewardBasis.BORROW;
+        log.info(
+            "NewCollectionWhitelisted: Unknown rewardBasisParam u8 {} for collection {}. Defaulting to BORROW.",
+            [rewardBasisParam.toString(), nftCollectionAddress.toHexString()]
+        );
     }
 
     let collReward = getOrCreateCollectionReward(
         nftCollectionAddress,
         HARDCODED_REWARD_TOKEN_ADDRESS,
         HARDCODED_CTOKEN_MARKET_ADDRESS,
-        rewardBasis,
+        rewardBasisEnum,
         WeightFunctionType.LINEAR,
         event.block.timestamp
     );
     collReward.rewardPerSecond = event.params.sharePercentage;
+
+    let collectionTypeString: string;
+    if (collectionTypeParam == 0) {
+        collectionTypeString = "ERC721";
+    } else if (collectionTypeParam == 1) {
+        collectionTypeString = "ERC1155";
+    } else {
+        collectionTypeString = "ERC721";
+        log.warning(
+            "NewCollectionWhitelisted: Unknown collectionTypeParam u8 {} for collection {}. Defaulting to ERC721.",
+            [collectionTypeParam.toString(), nftCollectionAddress.toHexString()]
+        );
+    }
+    collReward.collectionType = collectionTypeString;
     collReward.save();
 
-    ERC721.create(nftCollectionAddress);
+    if (collectionTypeString == "ERC721") {
+        ERC721.create(nftCollectionAddress);
+        log.info("NewCollectionWhitelisted: Created ERC721 data source for collection {}", [nftCollectionAddress.toHexString()]);
+    } else if (collectionTypeString == "ERC1155") {
+        ERC1155.create(nftCollectionAddress);
+        log.info("NewCollectionWhitelisted: Created ERC1155 data source for collection {}", [nftCollectionAddress.toHexString()]);
+    }
 
-    log.info("NewCollectionWhitelisted: Processed collection {}, activityType {}, rewardBasis {}", [
+    log.info("NewCollectionWhitelisted: Processed collection {}, type {}, rewardBasis (from event u8) {}, sharePercentage {}", [
         nftCollectionAddress.toHexString(),
-        rewardBasis == RewardBasis.DEPOSIT ? "DEPOSIT" : "BORROW",
+        collectionTypeString,
+        rewardBasisParam.toString(), // Log the original u8 from event
         event.params.sharePercentage.toString()
     ]);
 }
