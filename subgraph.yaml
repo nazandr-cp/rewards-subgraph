@@ -67,7 +67,7 @@ dataSources:
         - CollectionMarket
       abis:
         - name: CollectionVault
-          file: ./abis/CollectionsVault.json
+          file: ./abis/ICollectionsVault.json
       eventHandlers:
         - event: CollectionDeposit(indexed address,indexed address,indexed address,uint256,uint256)
           handler: handleCollectionDeposit
@@ -95,6 +95,8 @@ dataSources:
         - WeightFunctionSet
         - CollectionReward
         - RewardClaim
+        - Vault
+        - AccountVault
       abis:
         - name: RewardsController
           file: ./abis/IRewardsController.json
@@ -111,6 +113,10 @@ dataSources:
           handler: handleRewardsClaimedForLazy
         - event: BatchRewardsClaimedForLazy(indexed address,uint256,uint256)
           handler: handleBatchRewardsClaimedForLazy
+        - event: RewardPerBlockUpdated(indexed address,uint128)
+          handler: handleRewardPerBlockUpdated
+        - event: RewardClaimed(address,indexed address,uint256)
+          handler: handleRewardClaimed
       file: ./src/rewards-controller-mapping.ts
 
 templates:

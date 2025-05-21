@@ -4,7 +4,9 @@ import {
     CollectionReward,
     AccountCollectionReward,
     Account,
-    RewardClaim
+    RewardClaim,
+    Vault,
+    AccountVault
 } from "../generated/schema";
 import {
     ZERO_BI,
@@ -24,65 +26,47 @@ import {
     WeightFunctionSet,
     RewardsClaimedForLazy,
     BatchRewardsClaimedForLazy,
-    RewardsController
+    RewardsController,
+    RewardPerBlockUpdated as RewardPerBlockUpdatedEvent,
+    RewardClaimed as RewardClaimedEvent
 } from '../generated/RewardsController/RewardsController';
 
 export function handleNewCollectionWhitelisted(event: NewCollectionWhitelisted): void {
     let nftCollectionAddress = event.params.collection;
-    // Assuming rewardBasis is a struct with fnType (e.g., uint8) and other params
-    // event.params.rewardBasis.fnType will be used.
-    // The event provides `sharePercentage` as uint256.
-    let rewardBasis = event.params.rewardBasis; // Assuming rewardBasis is the fnType directly (e.g. uint8)
-    let rewardShare = event.params.sharePercentage.toI32(); // This is likely for rewardPerSecond or similar, not the basis enum
+    let rewardBasis = event.params.rewardBasis;
+    let rewardShare = event.params.sharePercentage.toI32();
 
-    let rewardBasisStr: RewardBasis;
-    if (rewardBasis == 0) { // Assuming 0 for DEPOSIT
+    if (rewardBasis == 0) {
         rewardBasis = RewardBasis.DEPOSIT;
-    } else if (rewardBasis == 1) { // Assuming 1 for BORROW
+    } else if (rewardBasis == 1) {
         rewardBasis = RewardBasis.BORROW;
     } else {
-        rewardBasis = RewardBasis.BORROW; // Default to BORROW if not recognized
+        rewardBasis = RewardBasis.BORROW;
         log.info("NewCollectionWhitelisted: rewardBasis {} mapped to BORROW for collection {}",
             [BigInt.fromI32(rewardBasis as i32).toString(), nftCollectionAddress.toHexString()]);
     }
 
-    // Determine initialRewardBasis based on the activityType.
-    // The `getOrCreateCollectionReward` expects `initialRewardBasis` as a RewardBasis enum.
-    // And `rewardShare` (which is an i32) was being passed to `initialRewardBasis` argument.
-    // This needs to be the actual RewardBasis enum value.
-    // The `sharePercentage` from the event is likely for `rewardPerSecond` or a similar field, not `rewardBasis`.
-    // For now, using `activityType` for `initialRewardBasis` as well.
-    // The `initialWeightFnType` is also expected as an enum. Defaulting to LINEAR.
-
-    // Create the CollectionReward entity
     let collReward = getOrCreateCollectionReward(
         nftCollectionAddress,
         HARDCODED_REWARD_TOKEN_ADDRESS,
         HARDCODED_CTOKEN_MARKET_ADDRESS,
-        rewardBasis, // This is the RewardBasis enum for the activity type
-        WeightFunctionType.LINEAR, // initialWeightFnType, default to Linear
+        rewardBasis,
+        WeightFunctionType.LINEAR,
         event.block.timestamp
     );
-    // The rewardShare (event.params.sharePercentage) should likely update collReward.rewardPerSecond or similar.
-    // For now, this is not explicitly handled as the original code was misusing it for rewardBasis.
-    // Example: collReward.rewardPerSecond = event.params.sharePercentage; (Adjust type if needed)
-    collReward.save(); // Ensure it's saved if getOrCreate doesn't always save on no-op update
+    collReward.save();
 
-    // Start tracking the ERC721 contract if it's not already tracked
-    // This assumes that CollectionReward implies we need to track transfers for this NFT.
-    // Check if a template for this address already exists could be added, but create is idempotent.
     ERC721.create(nftCollectionAddress);
 
     log.info("NewCollectionWhitelisted: Processed collection {}, activityType {}, rewardBasis {}", [
         nftCollectionAddress.toHexString(),
-        rewardBasis == RewardBasis.DEPOSIT ? "DEPOSIT" : "BORROW", // Log the string representation
+        rewardBasis == RewardBasis.DEPOSIT ? "DEPOSIT" : "BORROW",
         event.params.sharePercentage.toString()
     ]);
 }
 
 export function handleWhitelistCollectionRemoved(event: WhitelistCollectionRemoved): void {
     let collectionAddress = event.params.collection;
-    // Assuming reward token is the hardcoded one for rewards managed by this controller
     let collectionRewardIdString = collectionAddress.toHex() + "-" + HARDCODED_REWARD_TOKEN_ADDRESS.toHex();
     let collectionRewardId = Bytes.fromHexString(collectionRewardIdString);
 
@@ -99,49 +83,23 @@ export function handleWhitelistCollectionRemoved(event: WhitelistCollectionRemov
             collectionAddress.toHexString()
         ]);
     }
-    // Note: This does not automatically remove associated AccountCollectionReward entities.
-    // Those would become orphaned or might need a cleanup mechanism if desired.
 }
 
 export function handleCollectionRewardShareUpdated(event: CollectionRewardShareUpdated): void {
     let collectionAddress = event.params.collection;
-    // rewardToken is not in event, using hardcoded address
     let rewardToken = HARDCODED_REWARD_TOKEN_ADDRESS;
-    let newShare = event.params.newSharePercentage.toI32(); // Assuming newSharePercentage needs to be i32 for collReward.rewardBasis
+    let newShare = event.params.newSharePercentage.toI32();
 
     let collectionRewardIdString = collectionAddress.toHex() + "-" + rewardToken.toHex();
     let collectionRewardId = Bytes.fromHexString(collectionRewardIdString);
     let collReward = CollectionReward.load(collectionRewardId);
 
     if (collReward != null) {
-        // TODO: As per todo.md, ideally accrue for all accounts under this collection reward before changing share.
-        // This is complex with derived fields. For now, directly updating the share.
-        // Example:
-        // let acrs = collReward.accountRewards; // This is a derived field, direct iteration not simple.
-        // for (let i = 0; i < acrs.length; i++) {
-        //   let acrId = acrs[i];
-        //   let acr = AccountCollectionReward.load(acrId);
-        //   if (acr != null) {
-        //     accrueSeconds(acr, collReward, event.block.timestamp);
-        //     acr.save();
-        //   }
-        // }
         log.info("CollectionRewardShareUpdated: Accrual for derived AccountCollectionRewards skipped for collection {} before share update.", [collectionAddress.toHexString()]);
-
-        // The event `CollectionRewardShareUpdated` with `newSharePercentage`
-        // was previously incorrectly attempting to update `collReward.rewardBasis`.
-        // `rewardBasis` now defines the activity type (DEPOSIT/BORROW).
-        // `newSharePercentage` likely refers to a field like `rewardPerSecond` or a similar numeric value.
-        // This logic needs to be clarified: what field should `newSharePercentage` update?
-        // For now, I will assume it updates `rewardPerSecond`.
-        collReward.rewardPerSecond = event.params.newSharePercentage; // Assuming newSharePercentage updates rewardPerSecond
-
+        collReward.rewardPerSecond = event.params.newSharePercentage;
         collReward.lastUpdate = event.block.timestamp;
         collReward.save();
         log.info("CollectionRewardShareUpdated: Updated share for CollectionReward {} (collection {}, rewardToken {}). New share: {}", [
-            // Note: The log message previously stated "Updated rewardBasis". Changed to reflect "share" update.
-            // The actual field updated by newSharePercentage needs to be clarified.
-            // For now, logging the newSharePercentage value.
             collectionRewardId.toHexString(),
             collectionAddress.toHexString(),
             rewardToken.toHexString(),
@@ -158,16 +116,14 @@ export function handleCollectionRewardShareUpdated(event: CollectionRewardShareU
 
 export function handleWeightFunctionSet(event: WeightFunctionSet): void {
     let collectionAddress = event.params.collection;
-    // rewardToken is not in event, using hardcoded address
     let rewardToken = HARDCODED_REWARD_TOKEN_ADDRESS;
-    let weightFnParams = event.params.fn; // struct (uint8 fnType, int256 p1, int256 p2)
+    let weightFnParams = event.params.fn;
 
     let collectionRewardIdString = collectionAddress.toHex() + "-" + rewardToken.toHex();
     let collectionRewardId = Bytes.fromHexString(collectionRewardIdString);
     let collReward = CollectionReward.load(collectionRewardId);
 
     if (collReward != null) {
-        // TODO: Similar to share update, ideally accrue seconds for all accounts.
         log.info("handleWeightFunctionSet: Accrual for derived AccountCollectionRewards skipped for collection {} before weight function update.", [collectionAddress.toHexString()]);
 
         let fnTypeU8 = weightFnParams.fnType;
@@ -178,7 +134,7 @@ export function handleWeightFunctionSet(event: WeightFunctionSet): void {
         } else if (fnTypeU8 == WeightFunctionType.POWER) {
             collReward.fnType = "POWER";
         } else {
-            collReward.fnType = "LINEAR"; // Default if unknown
+            collReward.fnType = "LINEAR";
             log.warning("handleWeightFunctionSet: Unknown fnType {} received for collection {}. Defaulting to LINEAR.", [fnTypeU8.toString(), collectionAddress.toHexString()]);
         }
         collReward.p1 = weightFnParams.p1;
@@ -189,11 +145,9 @@ export function handleWeightFunctionSet(event: WeightFunctionSet): void {
             collectionRewardId.toHexString(),
             collectionAddress.toHexString(),
             rewardToken.toHexString(),
-            // Corrected log parameters for handleWeightFunctionSet (Original had collectionRewardId.toHexString() twice and missed collectionAddress)
-            // The order should be: ID, collectionAddr, rewardTokenAddr, fnType, p1, p2
-            weightFnParams.fnType.toString(),  // Corrected: Was collectionRewardId.toHexString()
-            weightFnParams.p1.toString(),      // Corrected: Was collectionAddress.toHexString()
-            weightFnParams.p2.toString()       // Corrected: Was rewardToken.toHexString()
+            weightFnParams.fnType.toString(),
+            weightFnParams.p1.toString(),
+            weightFnParams.p2.toString()
         ]);
     } else {
         log.warning("handleWeightFunctionSet: CollectionReward with ID {} not found for collection {} and rewardToken {}. No action taken.", [
@@ -210,15 +164,15 @@ export function handleRewardsClaimedForLazy(event: RewardsClaimedForLazy): void 
         "does not provide 'rewardToken'. Cannot uniquely identify CollectionReward or AccountCollectionReward. " +
         "RewardClaim and AccountCollectionReward entities will NOT be created/updated with full context.",
         [
-            event.params.account.toHexString(), // user is now account
+            event.params.account.toHexString(),
             event.params.collection.toHexString(),
-            event.params.dueAmount.toString() // rewardAmount is now dueAmount
+            event.params.dueAmount.toString()
         ]
     );
 
-    let userAddress = event.params.account; // Changed from _user to account
+    let userAddress = event.params.account;
     let collectionAddress = event.params.collection;
-    let rewardTokenAddress = HARDCODED_REWARD_TOKEN_ADDRESS; // rewardToken not in event
+    let rewardTokenAddress = HARDCODED_REWARD_TOKEN_ADDRESS;
 
     let userAccount = getOrCreateAccount(userAddress);
 
@@ -229,46 +183,24 @@ export function handleRewardsClaimedForLazy(event: RewardsClaimedForLazy): void 
     if (collReward != null) {
         let acr = getOrCreateAccountCollectionReward(userAccount, collReward, event.block.timestamp);
 
-        // Accrue seconds before claim
         accrueSeconds(acr, collReward, event.block.timestamp);
 
-        // Create RewardClaim entity
         let claimId = event.transaction.hash.concatI32(event.logIndex.toI32());
         let claim = new RewardClaim(claimId);
         claim.account = userAccount.id;
-        // The schema for RewardClaim has `collectionAddress: Bytes!`.
-        // todo.md suggests `collection = collReward.id` for RewardClaim.
-        // The schema has `collectionAddress: Bytes!`. Let's stick to schema for now.
-        // If `collection` field was meant to be a link to `CollectionReward` entity, schema needs update.
-        // For now, using `event.params.collection` as `collectionAddress`.
-        claim.collectionAddress = collectionAddress; // This is Bytes! as per schema
-        // If you intended to link to CollectionReward entity, the schema should be:
-        // claim.collection = collReward.id; // And type CollectionReward!
-
-        claim.amount = event.params.dueAmount; // from event, not dueAmount (changed from _rewardAmount)
+        claim.collectionAddress = collectionAddress;
+        claim.amount = event.params.dueAmount;
         claim.timestamp = event.block.timestamp;
         claim.transactionHash = event.transaction.hash;
-
-        // Fields from event, ensure they match schema for RewardClaim
-        claim.nonce = event.params.nonce; // Assuming this is part of your schema for RewardClaim
-        claim.secondsUser = event.params.secondsUser; // Changed from _secondsClaimed
-        claim.secondsColl = collReward.totalSecondsAccrued; // Snapshot after accrual, or specific value if event provides it for the claim context
-
-        // These fields are in the event but might not be in the RewardClaim schema from todo.md
-        // Check your schema.graphql for RewardClaim to confirm these fields.
-        // claim.incRPS = event.params.incRPS;
-        // claim.yieldSlice = event.params.yieldSlice;
-        // For now, assuming they are in the schema as per current code.
-        // incRPS and yieldSlice are now directly in the event
+        claim.nonce = event.params.nonce;
+        claim.secondsUser = event.params.secondsUser;
+        claim.secondsColl = collReward.totalSecondsAccrued;
         claim.incRPS = event.params.incRPS;
         claim.yieldSlice = event.params.yieldSlice;
-        // Removed try_getClaimData block as data is in event
-
 
         claim.save();
 
-        // Update AccountCollectionReward
-        acr.seconds = acr.seconds.minus(event.params.secondsUser); // Deduct claimed seconds (changed from _secondsClaimed)
+        acr.seconds = acr.seconds.minus(event.params.secondsUser);
         if (acr.seconds.lt(ZERO_BI)) {
             log.warning("ACR seconds for user {} collection {} rewardToken {} went negative after claim. Clamping to zero.", [userAddress.toHexString(), collectionAddress.toHexString(), rewardTokenAddress.toHexString()]);
             acr.seconds = ZERO_BI;
@@ -276,16 +208,15 @@ export function handleRewardsClaimedForLazy(event: RewardsClaimedForLazy): void 
         acr.lastUpdate = event.block.timestamp;
         acr.save();
 
-        // Save CollectionReward as totalSecondsAccrued and lastUpdate might have changed in accrueSeconds
-        collReward.lastUpdate = event.block.timestamp; // Ensure collReward's lastUpdate is also set
+        collReward.lastUpdate = event.block.timestamp;
         collReward.save();
 
         log.info("RewardsClaimedForLazy: Processed claim for user {}, collection {}, rewardToken {}. Amount: {}, Seconds Claimed: {}", [
             userAddress.toHexString(),
             collectionAddress.toHexString(),
             rewardTokenAddress.toHexString(),
-            event.params.dueAmount.toString(), // Changed from _rewardAmount
-            event.params.secondsUser.toString() // Changed from _secondsClaimed
+            event.params.dueAmount.toString(),
+            event.params.secondsUser.toString()
         ]);
 
     } else {
@@ -294,20 +225,19 @@ export function handleRewardsClaimedForLazy(event: RewardsClaimedForLazy): void 
             rewardTokenAddress.toHexString(),
             userAddress.toHexString()
         ]);
-        // Still create a basic RewardClaim if that's desired partial behavior
-        let accountEntity = getOrCreateAccount(userAddress); // Ensure account exists
+        let accountEntity = getOrCreateAccount(userAddress);
         let claimId = event.transaction.hash.concatI32(event.logIndex.toI32());
         let claim = new RewardClaim(claimId);
         claim.account = accountEntity.id;
         claim.collectionAddress = collectionAddress;
-        claim.amount = event.params.dueAmount; // Changed from _rewardAmount
+        claim.amount = event.params.dueAmount;
         claim.timestamp = event.block.timestamp;
         claim.transactionHash = event.transaction.hash;
         claim.nonce = event.params.nonce;
-        claim.secondsUser = event.params.secondsUser; // Changed from _secondsClaimed
-        claim.secondsColl = ZERO_BI; // Cannot determine without CollectionReward
-        claim.incRPS = ZERO_BI; // Cannot determine
-        claim.yieldSlice = ZERO_BI; // Cannot determine
+        claim.secondsUser = event.params.secondsUser;
+        claim.secondsColl = ZERO_BI;
+        claim.incRPS = ZERO_BI;
+        claim.yieldSlice = ZERO_BI;
         claim.save();
         log.info("RewardsClaimedForLazy: Saved partial RewardClaim for user {} due to missing CollectionReward.", [userAddress.toHexString()]);
     }
@@ -331,4 +261,107 @@ export function handleBatchRewardsClaimedForLazy(event: BatchRewardsClaimedForLa
         callerAccount = new Account(event.params.caller);
         callerAccount.save();
     }
+}
+
+export function handleRewardPerBlockUpdated(event: RewardPerBlockUpdatedEvent): void {
+    let vaultId = event.params.vault.toHex();
+    let vault = Vault.load(vaultId);
+
+    if (!vault) {
+        vault = new Vault(vaultId);
+        log.info("New Vault entity created: {}", [vaultId]);
+    }
+
+    let rewardsController = RewardsController.bind(event.address);
+    let vaultInfo = rewardsController.try_vaultInfo();
+    if (vaultInfo.reverted) {
+        log.error("handleRewardPerBlockUpdated: contract.try_vault reverted for vault {}", [event.params.vault.toHex()]);
+        return;
+    }
+    vault.rewardPerBlock = vaultInfo.value.rewardPerBlock;
+    vault.globalRPW = vaultInfo.value.globalRPW;
+    vault.totalWeight = vaultInfo.value.totalWeight;
+    vault.lastUpdateBlock = vaultInfo.value.lastUpdateBlock;
+    vault.weightByBorrow = vaultInfo.value.weightByBorrow;
+    vault.useExp = vaultInfo.value.useExp;
+    vault.linK = vaultInfo.value.linK;
+    vault.expR = vaultInfo.value.expR;
+
+    vault.save();
+    log.info("Vault {} rewardPerBlock updated to {}", [vaultId, event.params.rewardPerBlock.toString()]);
+}
+
+export function handleRewardClaimed(event: RewardClaimedEvent): void {
+    let vaultAddress = event.params.vault;
+    let userAddress = event.params.user;
+    let amountClaimed = event.params.amount;
+
+    let vaultId = vaultAddress.toHex();
+    let accountId = userAddress.toHex();
+    let accountVaultId = vaultId + "-" + accountId;
+
+    let vault = Vault.load(vaultId);
+    if (!vault) {
+        log.warning("Vault {} not found during RewardClaimed for user {}. Creating Vault.", [vaultId, accountId]);
+        vault = new Vault(vaultId);
+        let rewardsController = RewardsController.bind(event.address);
+        let vaultInfo = rewardsController.try_vaultInfo();
+        if (vaultInfo.reverted) {
+            log.error("handleRewardClaimed: contract.try_vault reverted for vault {} (during vault creation)", [vaultAddress.toHex()]);
+            // Decide if we should return or proceed with a partially initialized vault
+            return;
+        }
+        vault.rewardPerBlock = vaultInfo.value.rewardPerBlock;
+        vault.globalRPW = vaultInfo.value.globalRPW;
+        vault.totalWeight = vaultInfo.value.totalWeight;
+        vault.lastUpdateBlock = vaultInfo.value.lastUpdateBlock;
+        vault.weightByBorrow = vaultInfo.value.weightByBorrow;
+        vault.useExp = vaultInfo.value.useExp;
+        vault.linK = vaultInfo.value.linK;
+        vault.expR = vaultInfo.value.expR;
+        vault.save();
+    } else {
+        let contract = RewardsController.bind(event.address);
+        let vaultInfoTry = contract.try_vaultInfo();
+        if (vaultInfoTry.reverted) {
+            log.error("handleRewardClaimed: contract.try_vault reverted for vault {} (during vault update)", [vaultAddress.toHex()]);
+            // Decide if we should return or proceed with a partially initialized vault
+            return;
+        }
+        vault.globalRPW = vaultInfoTry.value.globalRPW;
+        vault.lastUpdateBlock = vaultInfoTry.value.lastUpdateBlock;
+        vault.totalWeight = vaultInfoTry.value.totalWeight;
+        vault.save();
+    }
+
+    let accountVault = AccountVault.load(accountVaultId);
+    if (!accountVault) {
+        accountVault = new AccountVault(accountVaultId);
+        accountVault.vault = vaultId;
+        accountVault.account = userAddress;
+    }
+
+    accountVault.accrued = ZERO_BI;
+
+    let contract = RewardsController.bind(event.address);
+    let accountInfoTry = contract.try_acc(vaultAddress, userAddress);
+    if (accountInfoTry.reverted) {
+        log.error("handleRewardClaimed: contract.try_acc reverted for vault {} and user {}", [vaultAddress.toHex(), userAddress.toHex()]);
+        return;
+    }
+    let accountInfoFromCall = accountInfoTry.value;
+
+    accountVault.weight = accountInfoFromCall.weight;
+    accountVault.rewardDebt = accountInfoFromCall.rewardDebt;
+
+    accountVault.claimable = ZERO_BI;
+
+    accountVault.save();
+
+    log.info("AccountVault {} updated after claim. Amount: {}. New weight: {}, New rewardDebt: {}", [
+        accountVaultId,
+        amountClaimed.toString(),
+        accountVault.weight.toString(),
+        accountVault.rewardDebt.toString()
+    ]);
 }

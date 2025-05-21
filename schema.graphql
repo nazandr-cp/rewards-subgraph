@@ -9,6 +9,28 @@ enum WeightFunctionType {
   POWER
 }
 
+type Vault @entity {
+  id: ID!
+  rewardPerBlock: BigInt!
+  globalRPW: BigInt!
+  totalWeight: BigInt!
+  lastUpdateBlock: BigInt!
+  weightByBorrow: Boolean!
+  useExp: Boolean!
+  linK: BigInt
+  expR: BigInt
+  accountVaults: [AccountVault!]! @derivedFrom(field: "vault")
+}
+
+type AccountVault @entity {
+  id: ID!
+  vault: Vault!
+  account: Account!
+  weight: BigInt!
+  rewardDebt: BigInt!
+  accrued: BigInt!
+  claimable: BigInt!
+}
 type CollectionReward @entity(immutable: false) {
   id: Bytes! @id
   collection: Bytes!
@@ -21,8 +43,8 @@ type CollectionReward @entity(immutable: false) {
   fnType: WeightFunctionType!
   p1: BigInt!
   p2: BigInt!
-  cTokenMarketAddress: Bytes! # Address of the cToken market this reward pertains to
-  rewardBasis: RewardBasis! # E.g., "DEPOSIT", "BORROW"
+  cTokenMarketAddress: Bytes!
+  rewardBasis: RewardBasis!
   accountRewards: [AccountCollectionReward!]! @derivedFrom(field: "collection")
 }
 
@@ -40,6 +62,7 @@ type Account @entity(immutable: false) {
   id: Bytes! @id
   collectionRewards: [AccountCollectionReward!]! @derivedFrom(field: "account")
   claimedRewards: [RewardClaim!]! @derivedFrom(field: "account")
+  vaults: [AccountVault!]! @derivedFrom(field: "account")
 }
 
 type MarketData @entity(immutable: false)  {

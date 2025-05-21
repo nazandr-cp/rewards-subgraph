@@ -11,7 +11,6 @@ import {
 } from "../generated/cToken/cToken";
 import { ERC20 } from "../generated/cToken/ERC20";
 import { ERC20SymbolBytes } from "../generated/cToken/ERC20SymbolBytes";
-import { Comptroller } from "../generated/cToken/Comptroller";
 
 import {
     CTokenMarket,
