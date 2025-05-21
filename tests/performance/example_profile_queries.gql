@@ -1,0 +1,13 @@
+query GetFirstFiveEntities {
+  entities(first: 5) {
+    id
+  }
+}
+
+query GetMetaBlock {
+  _meta {
+    block {
+      number
+    }
+  }
+}

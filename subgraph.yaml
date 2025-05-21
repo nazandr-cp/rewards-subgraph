@@ -101,11 +101,11 @@ dataSources:
         - name: RewardsController
           file: ./abis/IRewardsController.json
       eventHandlers:
-        - event: NewCollectionWhitelisted(indexed address,uint8,uint8,uint256)
+        - event: NewCollectionWhitelisted(indexed address,uint8,uint8,uint16)
           handler: handleNewCollectionWhitelisted
         - event: WhitelistCollectionRemoved(indexed address)
           handler: handleWhitelistCollectionRemoved
-        - event: CollectionRewardShareUpdated(indexed address,uint256,uint256)
+        - event: CollectionRewardShareUpdated(indexed address,uint16,uint16)
           handler: handleCollectionRewardShareUpdated
         - event: WeightFunctionSet(indexed address,(uint8,int256,int256))
           handler: handleWeightFunctionSet
