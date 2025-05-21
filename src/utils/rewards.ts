@@ -13,7 +13,6 @@ export enum RewardBasis {
 export enum WeightFunctionType {
     LINEAR,
     EXPONENTIAL,
-    POWER
 }
 
 export const ZERO_BI = BigInt.fromI32(0);
@@ -82,8 +81,6 @@ export function getOrCreateCollectionReward(
         collectionReward.lastUpdate = eventTimestamp;
         if (initialWeightFnType == WeightFunctionType.EXPONENTIAL) {
             collectionReward.fnType = "EXPONENTIAL";
-        } else if (initialWeightFnType == WeightFunctionType.POWER) {
-            collectionReward.fnType = "POWER";
         } else {
             collectionReward.fnType = "LINEAR";
         }

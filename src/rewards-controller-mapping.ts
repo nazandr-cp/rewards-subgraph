@@ -131,8 +131,6 @@ export function handleWeightFunctionSet(event: WeightFunctionSet): void {
             collReward.fnType = "LINEAR";
         } else if (fnTypeU8 == WeightFunctionType.EXPONENTIAL) {
             collReward.fnType = "EXPONENTIAL";
-        } else if (fnTypeU8 == WeightFunctionType.POWER) {
-            collReward.fnType = "POWER";
         } else {
             collReward.fnType = "LINEAR";
             log.warning("handleWeightFunctionSet: Unknown fnType {} received for collection {}. Defaulting to LINEAR.", [fnTypeU8.toString(), collectionAddress.toHexString()]);

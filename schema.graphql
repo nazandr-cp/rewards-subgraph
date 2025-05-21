@@ -6,7 +6,6 @@ enum RewardBasis {
 enum WeightFunctionType {
   LINEAR
   EXPONENTIAL
-  POWER
 }
 
 type Vault @entity {
