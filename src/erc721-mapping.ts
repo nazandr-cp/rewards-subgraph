@@ -1,5 +1,5 @@
 import { BigInt, Bytes, log } from "@graphprotocol/graph-ts";
-import { Transfer as TransferEvent } from "../generated/IERC721/IERC721"; // Assuming this is from a generic IERC721 template source
+import { Transfer as TransferEvent } from "../generated/templates/ERC721/ERC721";
 import { CollectionReward } from "../generated/schema";
 import {
     accrueSeconds,

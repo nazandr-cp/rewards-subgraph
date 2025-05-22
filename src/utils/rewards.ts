@@ -2,8 +2,8 @@ import { Address, BigInt, Bytes, log } from "@graphprotocol/graph-ts";
 import { Account, AccountCollectionReward, CollectionReward } from "../../generated/schema";
 import { cToken } from '../../generated/cToken/cToken';
 
-export const HARDCODED_REWARD_TOKEN_ADDRESS = Address.fromString("0x0000000000000000000000000000000000000001");
-export const HARDCODED_CTOKEN_MARKET_ADDRESS = Address.fromString("0x0000000000000000000000000000000000000002");
+export const HARDCODED_REWARD_TOKEN_ADDRESS = Address.fromString("0xf43EE9653ff96AB50C270eC3D9f0A8e015Df4065");
+export const HARDCODED_CTOKEN_MARKET_ADDRESS = Address.fromString("0x663702880Ec335BB1fae3ca05915B2D24F2b6A48");
 
 export enum WeightFunctionType {
     LINEAR,
