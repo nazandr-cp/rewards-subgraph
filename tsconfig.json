@@ -5,6 +5,10 @@
   },
   "include": [
     "src",
+    "hardhat_scripts"
+  ],
+  "exclude": [
+    "node_modules",
     "tests"
   ]
 }

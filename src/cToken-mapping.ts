@@ -29,9 +29,10 @@ function getOrCreateCTokenMarket(
     marketAddress: Address,
     blockTimestamp: BigInt
 ): CTokenMarket {
-    let market = CTokenMarket.load(marketAddress);
+    const marketId = Bytes.fromUTF8("CTM-" + marketAddress.toHexString()); // Prefixed ID
+    let market = CTokenMarket.load(marketId);
     if (market == null) {
-        market = new CTokenMarket(marketAddress);
+        market = new CTokenMarket(marketId);
         const cTokenContract = cToken.bind(marketAddress);
 
         let underlyingAddress: Address = ADDRESS_ZERO;
@@ -121,9 +122,10 @@ export function handleAccrueInterest(event: AccrueInterestEvent): void {
     market.blockTimestamp = event.block.timestamp;
     market.save();
 
-    let md = MarketData.load(event.address);
+    const marketDataId = Bytes.fromUTF8("MD-" + event.address.toHexString()); // Prefixed ID
+    let md = MarketData.load(marketDataId);
     if (md == null) {
-        md = new MarketData(Bytes.fromHexString(event.address.toHexString()));
+        md = new MarketData(marketDataId);
     }
     md.totalSupply = cTokenContract.totalSupply();
     md.totalBorrow = event.params.totalBorrows;

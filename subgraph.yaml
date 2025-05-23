@@ -6,7 +6,7 @@ indexerHints:
 dataSources:
   - kind: ethereum
     name: cToken
-    network: apechain-curtis
+    network: mainnet
     source:
       address: "0x663702880Ec335BB1fae3ca05915B2D24F2b6A48"
       abi: cToken
@@ -24,7 +24,6 @@ dataSources:
         - CTokenMarket
         - CollectionMarket
         - MarketData
-        - Account
         - Liquidation
       abis:
         - name: cToken
@@ -54,7 +53,7 @@ dataSources:
 
   - kind: ethereum
     name: CollectionVault
-    network: apechain-curtis
+    network: mainnet
     source:
       address: "0xCc7eadE99a0D2A0075ADA98b1b238d9f46DE2495"
       abi: CollectionVault
@@ -77,7 +76,7 @@ dataSources:
 
   - kind: ethereum
     name: RewardsController
-    network: apechain-curtis
+    network: mainnet
     source:
       address: "0xAc7d4e419DDC2E021a795d0598D9366bDD84323F"
       abi: RewardsController
@@ -118,7 +117,7 @@ dataSources:
 templates:
   - kind: ethereum/contract
     name: ERC1155
-    network: apechain-curtis
+    network: mainnet
     source:
       abi: ERC1155
     mapping:
@@ -141,7 +140,7 @@ templates:
 
   - kind: ethereum/contract
     name: ERC721
-    network: apechain-curtis
+    network: mainnet
     source:
       abi: ERC721
     mapping:
