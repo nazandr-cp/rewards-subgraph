@@ -30,9 +30,9 @@ function approxExponentialTerm(val: BigInt): BigInt {
 }
 
 export function getOrCreateAccount(accountAddress: Bytes): Account {
-    let account = Account.load(accountAddress);
+    let account = Account.load(accountAddress.toHexString());
     if (account == null) {
-        account = new Account(accountAddress);
+        account = new Account(accountAddress.toHexString());
         account.save();
     }
     return account;
@@ -46,8 +46,8 @@ export function getOrCreateCollectionReward(
     initialWeightFnType: WeightFunctionType,
     eventTimestamp: BigInt
 ): CollectionReward {
-    const idString = nftCollectionAddress.toHex() + "-" + rewardTokenAddress.toHex();
-    const id = Bytes.fromHexString(idString);
+    // Create a composite ID for the collection reward
+    const id = nftCollectionAddress.concat(rewardTokenAddress);
     let collectionReward = CollectionReward.load(id);
 
     if (collectionReward == null) {
@@ -56,6 +56,7 @@ export function getOrCreateCollectionReward(
         collectionReward.rewardToken = rewardTokenAddress;
         collectionReward.cTokenMarketAddress = cTokenMarketForActivity;
         collectionReward.isBorrowBased = isBorrowBased;
+        collectionReward.collectionType = "ERC721";
         collectionReward.totalSecondsAccrued = ZERO_BI;
         collectionReward.lastUpdate = eventTimestamp;
         if (initialWeightFnType == WeightFunctionType.EXPONENTIAL) {
@@ -80,8 +81,8 @@ export function getOrCreateAccountCollectionReward(
     collectionReward: CollectionReward,
     eventTimestamp: BigInt
 ): AccountCollectionReward {
-    const idString = account.id.toHexString() + "-" + collectionReward.id.toHexString();
-    const id = Bytes.fromHexString(idString);
+    // Create a composite ID using concatenation instead of string operations
+    const id = Bytes.fromHexString(account.id + "-" + collectionReward.id.toHexString());
 
     let acr = AccountCollectionReward.load(id);
     if (acr == null) {
@@ -150,10 +151,21 @@ export function accrueSeconds(acr: AccountCollectionReward, coll: CollectionRewa
     }
 
     let basePrincipalForReward = ZERO_BI;
+
+    if (acr.account.length != 20 || coll.cTokenMarketAddress.length != 20) {
+        log.warning("Invalid address bytes length for accrueSeconds. Account: {}, cToken: {}", [
+            acr.account,
+            coll.cTokenMarketAddress.toHexString()
+        ]);
+        return;
+    }
+
+    // Skip byte-by-byte validation which might cause memory issues
+
     if (!coll.isBorrowBased) {
-        basePrincipalForReward = currentDepositU(Address.fromBytes(acr.account), Address.fromBytes(coll.cTokenMarketAddress));
+        basePrincipalForReward = currentDepositU(Address.fromString(acr.account), Address.fromBytes(coll.cTokenMarketAddress));
     } else {
-        basePrincipalForReward = currentBorrowU(Address.fromBytes(acr.account), Address.fromBytes(coll.cTokenMarketAddress));
+        basePrincipalForReward = currentBorrowU(Address.fromString(acr.account), Address.fromBytes(coll.cTokenMarketAddress));
     }
 
     const nftHoldingWeight = weight(acr.balanceNFT, coll);
@@ -168,7 +180,7 @@ export function accrueSeconds(acr: AccountCollectionReward, coll: CollectionRewa
         log.critical(
             "Negative rewardAccruedScaled for account {}, collection {}. Values: rewardAccruedScaled = {}, basePrincipalForReward = {}, nftHoldingWeight = {}, dt = {}. Reverting.",
             [
-                acr.account.toHexString(),
+                acr.account,
                 coll.collection.toHexString(),
                 rewardAccruedScaled.toString(),
                 basePrincipalForReward.toString(),

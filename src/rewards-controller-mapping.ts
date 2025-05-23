@@ -2,7 +2,6 @@ import { Bytes, Address, log, store, BigInt } from "@graphprotocol/graph-ts";
 import { ERC721, ERC1155 } from "../generated/templates";
 import {
     CollectionReward,
-    Account,
     RewardClaim,
     Vault,
     AccountVault
@@ -273,11 +272,7 @@ export function handleBatchRewardsClaimedForLazy(event: BatchRewardsClaimedForLa
         ]
     );
 
-    let callerAccount = Account.load(event.params.caller);
-    if (callerAccount == null) {
-        callerAccount = new Account(event.params.caller);
-        callerAccount.save();
-    }
+    getOrCreateAccount(event.params.caller);
 }
 
 export function handleRewardPerBlockUpdated(event: RewardPerBlockUpdatedEvent): void {
@@ -352,8 +347,8 @@ export function handleRewardClaimed(event: RewardClaimedEvent): void {
     let accountVault = AccountVault.load(accountVaultId);
     if (!accountVault) {
         accountVault = new AccountVault(accountVaultId);
-        accountVault.vault = vaultId;
-        accountVault.account = userAddress;
+        accountVault.vault = vault.id; // Changed: Use vault.id (which is a string) instead of vaultId (Bytes)
+        accountVault.account = userAddress.toHexString();
     }
 
     accountVault.accrued = ZERO_BI;

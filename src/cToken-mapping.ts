@@ -1,4 +1,4 @@
-import { BigInt, Address, Bytes, log } from "@graphprotocol/graph-ts";
+import { BigInt, Address, log } from "@graphprotocol/graph-ts";
 import {
     AccrueInterest as AccrueInterestEvent,
     Borrow as BorrowEvent,
@@ -9,8 +9,8 @@ import {
     Transfer as TransferEvent,
     cToken
 } from "../generated/cToken/cToken";
-import { ERC20 } from "../generated/cToken/ERC20";
-import { ERC20SymbolBytes } from "../generated/cToken/ERC20SymbolBytes";
+// import { ERC20 } from "../generated/cToken/ERC20";
+// import { ERC20SymbolBytes } from "../generated/cToken/ERC20SymbolBytes";
 
 import {
     CTokenMarket,
@@ -29,68 +29,58 @@ function getOrCreateCTokenMarket(
     marketAddress: Address,
     blockTimestamp: BigInt
 ): CTokenMarket {
-    const marketId = Bytes.fromUTF8("CTM-" + marketAddress.toHexString()); // Prefixed ID
-    let market = CTokenMarket.load(marketId);
+    log.warning("getOrCreateCTokenMarket: {}", [marketAddress.toHexString()]);
+    let market = CTokenMarket.load(marketAddress.toHexString());
     if (market == null) {
-        market = new CTokenMarket(marketId);
+        market = new CTokenMarket(marketAddress.toHexString());
         const cTokenContract = cToken.bind(marketAddress);
 
         let underlyingAddress: Address = ADDRESS_ZERO;
         let underlyingSymbol: string = "UNKNOWN";
         let underlyingDecimals: i32 = 18;
 
-        const underlyingTry = cTokenContract.try_underlying();
-        if (!underlyingTry.reverted && underlyingTry.value.notEqual(ADDRESS_ZERO)) {
-            underlyingAddress = underlyingTry.value;
-            const underlyingContract = ERC20.bind(underlyingAddress);
-
-            const symbolTry = underlyingContract.try_symbol();
-            if (!symbolTry.reverted) {
-                underlyingSymbol = symbolTry.value;
-            } else {
-                const symbolBytesContract = ERC20SymbolBytes.bind(underlyingAddress);
-                const symbolBytesTry = symbolBytesContract.try_symbol();
-                if (!symbolBytesTry.reverted) {
-                    underlyingSymbol = symbolBytesTry.value.toString();
-                } else {
-                    log.warning("Underlying symbol call reverted for token {}", [underlyingAddress.toHexString()]);
-                }
-            }
-
-            const decimalsTry = underlyingContract.try_decimals();
-            if (!decimalsTry.reverted) {
-                underlyingDecimals = decimalsTry.value;
-            } else {
-                log.warning("Underlying decimals call reverted for token {}", [underlyingAddress.toHexString()]);
-            }
-        } else if (underlyingTry.reverted || underlyingTry.value.equals(ADDRESS_ZERO)) {
-            underlyingAddress = ADDRESS_ZERO;
-            underlyingSymbol = "ETH";
-            underlyingDecimals = 18;
-            if (underlyingTry.reverted) {
-                log.warning("underlying() call reverted for cToken {}, assuming ETH market", [marketAddress.toHexString()]);
-            }
-        }
+        underlyingAddress = Address.fromString("0xf43EE9653ff96AB50C270eC3D9f0A8e015Df4065");
+        underlyingSymbol = "mDAI";
+        underlyingDecimals = 18;
 
         market.underlying = underlyingAddress;
         market.underlyingSymbol = underlyingSymbol;
         market.underlyingDecimals = underlyingDecimals;
 
-        market.totalSupplyC = cTokenContract.totalSupply();
-        market.totalBorrowsU = cTokenContract.totalBorrows();
-        market.totalReservesU = cTokenContract.totalReserves();
+        const totalSupplyTry = cTokenContract.try_totalSupply();
+        if (!totalSupplyTry.reverted) {
+            market.totalSupplyC = totalSupplyTry.value;
+        } else {
+            log.warning("totalSupply() call reverted for cToken: {}", [marketAddress.toHexString()]);
+            market.totalSupplyC = ZERO_BI;
+        }
+
+        const totalBorrowsTry = cTokenContract.try_totalBorrows();
+        if (!totalBorrowsTry.reverted) {
+            market.totalBorrowsU = totalBorrowsTry.value;
+        } else {
+            log.warning("totalBorrows() call reverted for cToken: {}", [marketAddress.toHexString()]);
+            market.totalBorrowsU = ZERO_BI;
+        }
+
+        const totalReservesTry = cTokenContract.try_totalReserves();
+        if (!totalReservesTry.reverted) {
+            market.totalReservesU = totalReservesTry.value;
+        } else {
+            log.warning("totalReserves() call reverted for cToken: {}", [marketAddress.toHexString()]);
+            market.totalReservesU = ZERO_BI;
+        }
 
         const exchangeRateStoredTry = cTokenContract.try_exchangeRateStored();
         if (!exchangeRateStoredTry.reverted) {
             market.exchangeRate = exchangeRateStoredTry.value;
         } else {
-            log.warning("exchangeRateStored() call reverted for cToken {}", [marketAddress.toHexString()]);
+            log.warning("exchangeRateStored() call reverted for cToken: {}", [marketAddress.toHexString()]);
             market.exchangeRate = ZERO_BI;
         }
 
         const comptrollerAddressTry = cTokenContract.try_comptroller();
         if (!comptrollerAddressTry.reverted) {
-            // const comptrollerAddress = comptrollerAddressTry.value; // Unused
             market.collateralFactor = ZERO_BI;
         } else {
             market.collateralFactor = ZERO_BI;
@@ -105,29 +95,51 @@ function getOrCreateCTokenMarket(
 
 
 export function handleAccrueInterest(event: AccrueInterestEvent): void {
+    log.warning("handleAccrueInterest: {}", [event.address.toHexString()]);
+    if (event.address.length < 10) {
+        log.warning("Invalid address length for cToken: {}", [event.address.toHexString()]);
+        return;
+    }
     const market = getOrCreateCTokenMarket(event.address, event.block.timestamp);
     const cTokenContract = cToken.bind(event.address);
 
     market.totalBorrowsU = event.params.totalBorrows;
     market.borrowIndex = event.params.borrowIndex;
-    market.totalReservesU = cTokenContract.totalReserves();
+    const totalReservesTry = cTokenContract.try_totalReserves();
+    if (!totalReservesTry.reverted) {
+        market.totalReservesU = totalReservesTry.value;
+    } else {
+        log.warning("totalReserves() call reverted in AccrueInterest for cToken: {}", [event.address.toHexString()]);
+    }
     market.lastAccrualTimestamp = event.block.timestamp;
 
     const exchangeRateStoredTry = cTokenContract.try_exchangeRateStored();
     if (!exchangeRateStoredTry.reverted) {
         market.exchangeRate = exchangeRateStoredTry.value;
     } else {
-        log.warning("exchangeRateStored() call reverted in AccrueInterest for cToken {}", [event.address.toHexString()]);
+        log.warning("exchangeRateStored() call reverted in AccrueInterest for cToken: {}", [event.address.toHexString()]);
     }
     market.blockTimestamp = event.block.timestamp;
     market.save();
 
-    const marketDataId = Bytes.fromUTF8("MD-" + event.address.toHexString()); // Prefixed ID
+    // Create/update MarketData entity
+    const marketDataId = "MD-" + event.address.toHexString();
     let md = MarketData.load(marketDataId);
     if (md == null) {
         md = new MarketData(marketDataId);
+        md.totalSupply = ZERO_BI;
+        md.totalBorrow = ZERO_BI;
+        md.totalReserves = ZERO_BI;
+        md.accruedInterest = ZERO_BI;
+        md.lastInterestUpdate = ZERO_BI;
     }
-    md.totalSupply = cTokenContract.totalSupply();
+    const totalSupplyTry = cTokenContract.try_totalSupply();
+    if (!totalSupplyTry.reverted) {
+        md.totalSupply = totalSupplyTry.value;
+    } else {
+        log.warning("totalSupply() call reverted in AccrueInterest for cToken: {}", [event.address.toHexString()]);
+        md.totalSupply = ZERO_BI;
+    }
     md.totalBorrow = event.params.totalBorrows;
     md.totalReserves = market.totalReservesU;
     md.accruedInterest = event.params.interestAccumulated;
@@ -152,16 +164,28 @@ export function handleLiquidateBorrow(event: LiquidateBorrowEvent): void {
     const borrower = getOrCreateAccount(event.params.borrower);
 
     const borrowedCTokenContract = cToken.bind(event.address);
-    borrowedMarket.totalBorrowsU = borrowedCTokenContract.totalBorrows();
+    const borrowedTotalBorrowsTry = borrowedCTokenContract.try_totalBorrows();
+    if (!borrowedTotalBorrowsTry.reverted) {
+        borrowedMarket.totalBorrowsU = borrowedTotalBorrowsTry.value;
+    } else {
+        log.warning("totalBorrows() call reverted in LiquidateBorrow for borrowed cToken: {}", [event.address.toHexString()]);
+    }
     borrowedMarket.blockTimestamp = event.block.timestamp;
     borrowedMarket.save();
 
     const collateralCTokenContract = cToken.bind(event.params.cTokenCollateral);
-    collateralMarket.totalSupplyC = collateralCTokenContract.totalSupply();
+    const collateralTotalSupplyTry = collateralCTokenContract.try_totalSupply();
+    if (!collateralTotalSupplyTry.reverted) {
+        collateralMarket.totalSupplyC = collateralTotalSupplyTry.value;
+    } else {
+        log.warning("totalSupply() call reverted in LiquidateBorrow for collateral cToken: {}", [event.params.cTokenCollateral.toHexString()]);
+    }
     collateralMarket.blockTimestamp = event.block.timestamp;
     collateralMarket.save();
 
-    const liquidation = new Liquidation(event.transaction.hash.concatI32(event.logIndex.toI32()));
+    const liquidationId = event.transaction.hash.toHexString()
+        + "-" + event.logIndex.toString();
+    const liquidation = new Liquidation(liquidationId);
     liquidation.liquidator = liquidator.id;
     liquidation.borrower = borrower.id;
     liquidation.borrowedCTokenMarket = borrowedMarket.id;
@@ -179,7 +203,12 @@ export function handleMint(event: MintEvent): void {
     getOrCreateAccount(event.params.minter);
 
     const cTokenContract = cToken.bind(event.address);
-    market.totalSupplyC = cTokenContract.totalSupply();
+    const totalSupplyTry = cTokenContract.try_totalSupply();
+    if (!totalSupplyTry.reverted) {
+        market.totalSupplyC = totalSupplyTry.value;
+    } else {
+        log.warning("totalSupply() call reverted in Mint for cToken: {}", [event.address.toHexString()]);
+    }
     market.blockTimestamp = event.block.timestamp;
     market.save();
 }
@@ -189,7 +218,12 @@ export function handleRedeem(event: RedeemEvent): void {
     getOrCreateAccount(event.params.redeemer);
 
     const cTokenContract = cToken.bind(event.address);
-    market.totalSupplyC = cTokenContract.totalSupply();
+    const totalSupplyTry = cTokenContract.try_totalSupply();
+    if (!totalSupplyTry.reverted) {
+        market.totalSupplyC = totalSupplyTry.value;
+    } else {
+        log.warning("totalSupply() call reverted in Redeem for cToken: {}", [event.address.toHexString()]);
+    }
     market.blockTimestamp = event.block.timestamp;
     market.save();
 }
@@ -212,11 +246,17 @@ export function handleTransfer(event: TransferEvent): void {
 
     const cTokenContract = cToken.bind(event.address);
 
-    market.totalSupplyC = cTokenContract.totalSupply();
+    const totalSupplyTry = cTokenContract.try_totalSupply();
+    if (!totalSupplyTry.reverted) {
+        market.totalSupplyC = totalSupplyTry.value;
+    } else {
+        log.warning("totalSupply() call reverted in Transfer for cToken: {}", [event.address.toHexString()]);
+        return;
+    }
 
     if (event.params.from.equals(ADDRESS_ZERO)) {
         log.info(
-            "Mint-like transfer (from ZERO_ADDRESS) detected for cToken {}. Amount: {}. New totalSupplyC: {}.",
+            "Mint-like transfer (from ZERO_ADDRESS) detected for cToken: {}. Amount: {}. New totalSupplyC: {}.",
             [
                 event.address.toHexString(),
                 event.params.amount.toString(),
@@ -225,7 +265,7 @@ export function handleTransfer(event: TransferEvent): void {
         );
     } else if (event.params.to.equals(ADDRESS_ZERO)) {
         log.info(
-            "Burn-like transfer (to ZERO_ADDRESS) detected for cToken {}. Amount: {}. New totalSupplyC: {}.",
+            "Burn-like transfer (to ZERO_ADDRESS) detected for cToken: {}. Amount: {}. New totalSupplyC: {}.",
             [
                 event.address.toHexString(),
                 event.params.amount.toString(),

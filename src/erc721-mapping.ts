@@ -30,6 +30,26 @@ export function handleTransfer(event: TransferEvent): void {
     // Load the CollectionReward entity. It should have been created by RewardsController
     // using the HARDCODED_REWARD_TOKEN_ADDRESS.
     const collectionRewardIdString = collectionAddress.toHex() + "-" + HARDCODED_REWARD_TOKEN_ADDRESS.toHex();
+    if (collectionRewardIdString.length < 4 || !collectionRewardIdString.startsWith("0x") || collectionRewardIdString.length != 85) {
+        log.warning("Invalid hex string for CollectionReward lookup: {} (expected length 85, got {})", [collectionRewardIdString, BigInt.fromI32(collectionRewardIdString.length).toString()]);
+        return;
+    }
+
+    // Additional validation for hex characters
+    let isValidHex = true;
+    for (let i = 2; i < collectionRewardIdString.length; i++) {
+        const char = collectionRewardIdString.charAt(i);
+        if (!(char >= '0' && char <= '9') && !(char >= 'a' && char <= 'f') && !(char >= 'A' && char <= 'F')) {
+            isValidHex = false;
+            break;
+        }
+    }
+
+    if (!isValidHex) {
+        log.warning("Invalid hex characters in CollectionReward lookup string: {}", [collectionRewardIdString]);
+        return;
+    }
+
     const collectionRewardEntity = CollectionReward.load(Bytes.fromHexString(collectionRewardIdString));
 
     if (collectionRewardEntity == null) {

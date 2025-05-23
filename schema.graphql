@@ -9,7 +9,7 @@ enum CollectionType {
 }
 
 type Vault @entity(immutable: false) {
-  id: ID!
+  id: ID! @id
   rewardPerBlock: BigInt!
   globalRPW: BigInt!
   totalWeight: BigInt!
@@ -22,7 +22,7 @@ type Vault @entity(immutable: false) {
 }
 
 type AccountVault @entity(immutable: false) {
-  id: ID!
+  id: ID! @id
   vault: Vault!
   account: Account!
   weight: BigInt!
@@ -59,14 +59,14 @@ type AccountCollectionReward @entity(immutable: false) {
 }
 
 type Account @entity(immutable: false) {
-  id: Bytes! @id
+  id: ID! @id
   collectionRewards: [AccountCollectionReward!]! @derivedFrom(field: "account")
   claimedRewards: [RewardClaim!]! @derivedFrom(field: "account")
   vaults: [AccountVault!]! @derivedFrom(field: "account")
 }
 
 type MarketData @entity(immutable: false) {
-  id: Bytes! @id
+  id: ID!
   totalSupply: BigInt!
   totalBorrow: BigInt!
   totalReserves: BigInt!
@@ -98,7 +98,7 @@ type CollectionMarket @entity(immutable: false) {
 }
 
 type CTokenMarket @entity(immutable: false) {
-  id: Bytes! @id
+  id: ID! @id
   underlying: Bytes!
   underlyingSymbol: String!
   underlyingDecimals: Int!
@@ -113,7 +113,7 @@ type CTokenMarket @entity(immutable: false) {
 }
 
 type Liquidation @entity(immutable: true) {
-  id: Bytes! @id
+  id: ID!
   liquidator: Account!
   borrower: Account!
   borrowedCTokenMarket: CTokenMarket!
