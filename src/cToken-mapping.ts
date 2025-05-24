@@ -9,9 +9,6 @@ import {
     Transfer as TransferEvent,
     cToken
 } from "../generated/cToken/cToken";
-// import { ERC20 } from "../generated/cToken/ERC20";
-// import { ERC20SymbolBytes } from "../generated/cToken/ERC20SymbolBytes";
-
 import {
     CTokenMarket,
     Liquidation,
@@ -29,10 +26,11 @@ function getOrCreateCTokenMarket(
     marketAddress: Address,
     blockTimestamp: BigInt
 ): CTokenMarket {
-    log.warning("getOrCreateCTokenMarket: {}", [marketAddress.toHexString()]);
-    let market = CTokenMarket.load(marketAddress.toHexString());
+    log.debug("getOrCreateCTokenMarket: {}", [marketAddress.toHexString()]);
+    const marketId = marketAddress.toHexString();
+    let market = CTokenMarket.load(marketId);
     if (market == null) {
-        market = new CTokenMarket(marketAddress.toHexString());
+        market = new CTokenMarket(marketId);
         const cTokenContract = cToken.bind(marketAddress);
 
         let underlyingAddress: Address = ADDRESS_ZERO;
@@ -95,23 +93,35 @@ function getOrCreateCTokenMarket(
 
 
 export function handleAccrueInterest(event: AccrueInterestEvent): void {
-    log.warning("handleAccrueInterest: {}", [event.address.toHexString()]);
-    if (event.address.length < 10) {
-        log.warning("Invalid address length for cToken: {}", [event.address.toHexString()]);
+    log.debug("handleAccrueInterest: {}", [event.address.toHexString()]);
+
+    if (event.address.equals(ADDRESS_ZERO)) {
+        log.warning("Zero address detected for cToken in AccrueInterest", []);
         return;
     }
+
     const market = getOrCreateCTokenMarket(event.address, event.block.timestamp);
+    if (market == null) {
+        log.error("Failed to load or create CTokenMarket entity", []);
+        return;
+    }
+
     const cTokenContract = cToken.bind(event.address);
 
-    market.totalBorrowsU = event.params.totalBorrows;
-    market.borrowIndex = event.params.borrowIndex;
+    if (event.params.totalBorrows) {
+        market.totalBorrowsU = event.params.totalBorrows;
+    }
+
+    if (event.params.borrowIndex) {
+        market.borrowIndex = event.params.borrowIndex;
+    }
+
     const totalReservesTry = cTokenContract.try_totalReserves();
     if (!totalReservesTry.reverted) {
         market.totalReservesU = totalReservesTry.value;
     } else {
         log.warning("totalReserves() call reverted in AccrueInterest for cToken: {}", [event.address.toHexString()]);
     }
-    market.lastAccrualTimestamp = event.block.timestamp;
 
     const exchangeRateStoredTry = cTokenContract.try_exchangeRateStored();
     if (!exchangeRateStoredTry.reverted) {
@@ -119,10 +129,11 @@ export function handleAccrueInterest(event: AccrueInterestEvent): void {
     } else {
         log.warning("exchangeRateStored() call reverted in AccrueInterest for cToken: {}", [event.address.toHexString()]);
     }
+
+    market.lastAccrualTimestamp = event.block.timestamp;
     market.blockTimestamp = event.block.timestamp;
     market.save();
 
-    // Create/update MarketData entity
     const marketDataId = "MD-" + event.address.toHexString();
     let md = MarketData.load(marketDataId);
     if (md == null) {
@@ -133,6 +144,7 @@ export function handleAccrueInterest(event: AccrueInterestEvent): void {
         md.accruedInterest = ZERO_BI;
         md.lastInterestUpdate = ZERO_BI;
     }
+
     const totalSupplyTry = cTokenContract.try_totalSupply();
     if (!totalSupplyTry.reverted) {
         md.totalSupply = totalSupplyTry.value;
@@ -140,6 +152,7 @@ export function handleAccrueInterest(event: AccrueInterestEvent): void {
         log.warning("totalSupply() call reverted in AccrueInterest for cToken: {}", [event.address.toHexString()]);
         md.totalSupply = ZERO_BI;
     }
+
     md.totalBorrow = event.params.totalBorrows;
     md.totalReserves = market.totalReservesU;
     md.accruedInterest = event.params.interestAccumulated;

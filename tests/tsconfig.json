@@ -12,7 +12,8 @@
         "rootDir": "./",
         "types": [
             "jest",
-            "node"
+            "node",
+            "@graphprotocol/graph-ts"
         ],
         "lib": [
             "esnext",

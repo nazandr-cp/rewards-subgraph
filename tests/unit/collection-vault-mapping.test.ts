@@ -7,6 +7,7 @@ import {
     afterEach,
     mockFunction,
     logStore,
+    newMockEvent
 } from "matchstick-as/assembly/index";
 import { Address, BigInt, Bytes, ethereum } from "@graphprotocol/graph-ts";
 import { CollectionMarket } from "../../generated/schema";
@@ -17,7 +18,7 @@ import { ERC20 } from "../../generated/cToken/ERC20";
 import { cToken } from "../../generated/cToken/cToken";
 
 // Mock contract addresses
-const COLLECTION_VAULT_ADDRESS = Address.fromString("0x0000000000000000000000000000000000000001");
+// const COLLECTION_VAULT_ADDRESS = Address.fromString("0x0000000000000000000000000000000000000001"); // Commented out as unused
 const CTOKEN_ADDRESS = Address.fromString("0x0000000000000000000000000000000000000002"); // Market address
 const COLLECTION_ADDRESS = Address.fromString("0x0000000000000000000000000000000000000003");
 const UNDERLYING_ASSET_ADDRESS = Address.fromString("0x0000000000000000000000000000000000000004");
@@ -25,6 +26,23 @@ const CALLER_ADDRESS = Address.fromString("0x00000000000000000000000000000000000
 const RECEIVER_ADDRESS = Address.fromString("0x0000000000000000000000000000000000000006");
 const OWNER_ADDRESS = Address.fromString("0x0000000000000000000000000000000000000007");
 
+// Constants for the handleCollectionWithdraw tests
+// Ensure COLLECTION_ADDRESS and CTOKEN_ADDRESS are defined before these lines (they are, around line 18)
+const WITHDRAW_INITIAL_ASSETS = BigInt.fromI32(200).times(BigInt.fromI32(10).pow(18));
+const WITHDRAW_INITIAL_SHARES = BigInt.fromI32(20);
+const withdrawIdString = COLLECTION_ADDRESS.concat(CTOKEN_ADDRESS).toHexString(); // COLLECTION_ADDRESS and CTOKEN_ADDRESS are global
+const WITHDRAW_ID_BYTES = Bytes.fromHexString(withdrawIdString);
+
+function setupWithdrawTestEntity(): void {
+    const existingEntity = new CollectionMarket(WITHDRAW_ID_BYTES);
+    existingEntity.collection = COLLECTION_ADDRESS;
+    existingEntity.market = CTOKEN_ADDRESS;
+    existingEntity.totalNFT = WITHDRAW_INITIAL_SHARES;
+    existingEntity.principalU = WITHDRAW_INITIAL_ASSETS;
+    existingEntity.totalSeconds = ZERO_BI; // ZERO_BI is global
+    existingEntity.save();
+    assert.entityCount("CollectionMarket", 1);
+}
 
 function createCollectionDepositEvent(
     collectionAddress: Address,
@@ -101,9 +119,10 @@ function mockCTokenCalls(underlyingAddress: Address, underlyingReverts: boolean)
     if (underlyingReverts) {
         mockFunction(CTOKEN_ADDRESS, "underlying", "underlying():(address)", [], [], true);
     } else {
-        mockFunction(CTOKEN_ADDRESS, "underlying", "underlying():(address)", [
-            ethereum.Value.fromAddress(underlyingAddress)
-        ]);
+        mockFunction(CTOKEN_ADDRESS, "underlying", "underlying():(address)", [],
+            [ethereum.Value.fromAddress(underlyingAddress)],
+            false
+        );
     }
 }
 
@@ -111,14 +130,16 @@ function mockERC20Calls(tokenAddress: Address, decimals: i32, decimalsReverts: b
     if (decimalsReverts) {
         mockFunction(tokenAddress, "decimals", "decimals():(uint8)", [], [], true);
     } else if (decimalsReturnsZero) {
-        mockFunction(tokenAddress, "decimals", "decimals():(uint8)", [
-            ethereum.Value.fromI32(0)
-        ]);
+        mockFunction(tokenAddress, "decimals", "decimals():(uint8)", [],
+            [ethereum.Value.fromI32(0)],
+            false
+        );
     }
     else {
-        mockFunction(tokenAddress, "decimals", "decimals():(uint8)", [
-            ethereum.Value.fromI32(decimals)
-        ]);
+        mockFunction(tokenAddress, "decimals", "decimals():(uint8)", [],
+            [ethereum.Value.fromI32(decimals as i32)], // Ensure decimals is treated as i32 if it's not already typed explicitly
+            false
+        );
     }
 }
 
@@ -140,12 +161,13 @@ describe("CollectionVault Handlers", () => {
             const shares = BigInt.fromI32(10);
             const event = createCollectionDepositEvent(COLLECTION_ADDRESS, CALLER_ADDRESS, RECEIVER_ADDRESS, assets, shares);
             const id = COLLECTION_ADDRESS.concat(CTOKEN_ADDRESS).toHexString();
+            const idBytes = Bytes.fromHexString(id);
 
             assert.entityCount("CollectionMarket", 0);
             handleCollectionDeposit(event);
             assert.entityCount("CollectionMarket", 1);
 
-            const entity = CollectionMarket.load(id);
+            const entity = CollectionMarket.load(idBytes);
             assert.assertNotNull(entity);
             if (entity) {
                 assert.bytesEquals(COLLECTION_ADDRESS, entity.collection);
@@ -160,8 +182,9 @@ describe("CollectionVault Handlers", () => {
             const initialAssets = BigInt.fromI32(50).times(BigInt.fromI32(10).pow(18));
             const initialShares = BigInt.fromI32(5);
             const id = COLLECTION_ADDRESS.concat(CTOKEN_ADDRESS).toHexString();
+            const idBytes = Bytes.fromHexString(id);
 
-            let existingEntity = new CollectionMarket(id);
+            const existingEntity = new CollectionMarket(idBytes); // Changed let to const
             existingEntity.collection = COLLECTION_ADDRESS;
             existingEntity.market = CTOKEN_ADDRESS;
             existingEntity.totalNFT = initialShares;
@@ -178,7 +201,7 @@ describe("CollectionVault Handlers", () => {
             handleCollectionDeposit(event);
             assert.entityCount("CollectionMarket", 1);
 
-            const entity = CollectionMarket.load(id);
+            const entity = CollectionMarket.load(idBytes);
             assert.assertNotNull(entity);
             if (entity) {
                 assert.bigIntEquals(initialShares.plus(newShares), entity.totalNFT);
@@ -193,10 +216,11 @@ describe("CollectionVault Handlers", () => {
             const shares = BigInt.fromI32(10);
             const event = createCollectionDepositEvent(COLLECTION_ADDRESS, CALLER_ADDRESS, RECEIVER_ADDRESS, assets6Decimals, shares);
             const id = COLLECTION_ADDRESS.concat(CTOKEN_ADDRESS).toHexString();
+            const idBytes = Bytes.fromHexString(id);
 
             handleCollectionDeposit(event);
 
-            const entity = CollectionMarket.load(id);
+            const entity = CollectionMarket.load(idBytes);
             assert.assertNotNull(entity);
             if (entity) {
                 // principalU should be converted to 18 decimals
@@ -212,10 +236,11 @@ describe("CollectionVault Handlers", () => {
             const shares = BigInt.fromI32(10);
             const event = createCollectionDepositEvent(COLLECTION_ADDRESS, CALLER_ADDRESS, RECEIVER_ADDRESS, assets20Decimals, shares);
             const id = COLLECTION_ADDRESS.concat(CTOKEN_ADDRESS).toHexString();
+            const idBytes = Bytes.fromHexString(id);
 
             handleCollectionDeposit(event);
 
-            const entity = CollectionMarket.load(id);
+            const entity = CollectionMarket.load(idBytes);
             assert.assertNotNull(entity);
             if (entity) {
                 // principalU should be converted to 18 decimals
@@ -231,10 +256,11 @@ describe("CollectionVault Handlers", () => {
             const shares = BigInt.fromI32(10);
             const event = createCollectionDepositEvent(COLLECTION_ADDRESS, CALLER_ADDRESS, RECEIVER_ADDRESS, assets, shares);
             const id = COLLECTION_ADDRESS.concat(CTOKEN_ADDRESS).toHexString();
+            const idBytes = Bytes.fromHexString(id);
 
             handleCollectionDeposit(event);
 
-            const entity = CollectionMarket.load(id);
+            const entity = CollectionMarket.load(idBytes);
             assert.assertNotNull(entity);
             if (entity) {
                 // Should default to 18 decimals for assets if underlying() reverts
@@ -249,10 +275,11 @@ describe("CollectionVault Handlers", () => {
             const shares = BigInt.fromI32(10);
             const event = createCollectionDepositEvent(COLLECTION_ADDRESS, CALLER_ADDRESS, RECEIVER_ADDRESS, assets, shares);
             const id = COLLECTION_ADDRESS.concat(CTOKEN_ADDRESS).toHexString();
+            const idBytes = Bytes.fromHexString(id);
 
             handleCollectionDeposit(event);
 
-            const entity = CollectionMarket.load(id);
+            const entity = CollectionMarket.load(idBytes);
             assert.assertNotNull(entity);
             if (entity) {
                 // Should default to 18 decimals for assets if decimals() reverts
@@ -267,10 +294,11 @@ describe("CollectionVault Handlers", () => {
             const shares = BigInt.fromI32(10);
             const event = createCollectionDepositEvent(COLLECTION_ADDRESS, CALLER_ADDRESS, RECEIVER_ADDRESS, assets, shares);
             const id = COLLECTION_ADDRESS.concat(CTOKEN_ADDRESS).toHexString();
+            const idBytes = Bytes.fromHexString(id);
 
             handleCollectionDeposit(event);
 
-            const entity = CollectionMarket.load(id);
+            const entity = CollectionMarket.load(idBytes);
             assert.assertNotNull(entity);
             if (entity) {
                 // Should default to 18 decimals for assets if decimals() returns 0
@@ -280,21 +308,18 @@ describe("CollectionVault Handlers", () => {
     });
 
     describe("handleCollectionWithdraw", () => {
-        const initialAssets = BigInt.fromI32(200).times(BigInt.fromI32(10).pow(18));
-        const initialShares = BigInt.fromI32(20);
-        const id = COLLECTION_ADDRESS.concat(CTOKEN_ADDRESS).toHexString();
+        // const initialAssets = BigInt.fromI32(200).times(BigInt.fromI32(10).pow(18)); // Moved to global WITHDRAW_INITIAL_ASSETS
+        // const initialShares = BigInt.fromI32(20); // Moved to global WITHDRAW_INITIAL_SHARES
+        // const id = COLLECTION_ADDRESS.concat(CTOKEN_ADDRESS).toHexString(); // Logic moved to global withdrawIdString
+        // const idBytes = Bytes.fromHexString(id); // Moved to global WITHDRAW_ID_BYTES
 
-        beforeEach(() => {
-            // Setup an existing entity for withdrawal tests
-            let existingEntity = new CollectionMarket(id);
-            existingEntity.collection = COLLECTION_ADDRESS;
-            existingEntity.market = CTOKEN_ADDRESS;
-            existingEntity.totalNFT = initialShares;
-            existingEntity.principalU = initialAssets;
-            existingEntity.totalSeconds = ZERO_BI;
-            existingEntity.save();
-            assert.entityCount("CollectionMarket", 1);
+        // Helper function setupInitialEntity is now top-level: setupWithdrawTestEntity
+        // function setupInitialEntity(): void { ... } // Moved to top-level setupWithdrawTestEntity
+
+        beforeEach(() => { 
+            setupWithdrawTestEntity(); // Call the top-level setup function
         });
+
 
         test("should update an existing CollectionMarket entity on withdraw", () => {
             const withdrawnAssets = BigInt.fromI32(50).times(BigInt.fromI32(10).pow(18));
@@ -304,16 +329,16 @@ describe("CollectionVault Handlers", () => {
             handleCollectionWithdraw(event);
             assert.entityCount("CollectionMarket", 1);
 
-            const entity = CollectionMarket.load(id);
+            const entity = CollectionMarket.load(WITHDRAW_ID_BYTES); // Use global constant
             assert.assertNotNull(entity);
             if (entity) {
-                assert.bigIntEquals(initialShares.minus(withdrawnShares), entity.totalNFT);
-                assert.bigIntEquals(initialAssets.minus(withdrawnAssets), entity.principalU);
+                assert.bigIntEquals(WITHDRAW_INITIAL_SHARES.minus(withdrawnShares), entity.totalNFT); // Use global constant
+                assert.bigIntEquals(WITHDRAW_INITIAL_ASSETS.minus(withdrawnAssets), entity.principalU); // Use global constant
             }
         });
 
         test("should handle withdraw if CollectionMarket entity does not exist (logs warning)", () => {
-            clearStore(); // Ensure no entity exists
+            clearStore(); // Ensure no entity exists for this specific test
             assert.entityCount("CollectionMarket", 0);
 
             const withdrawnAssets = BigInt.fromI32(50).times(BigInt.fromI32(10).pow(18));
@@ -337,11 +362,11 @@ describe("CollectionVault Handlers", () => {
 
             handleCollectionWithdraw(event);
 
-            const entity = CollectionMarket.load(id);
+            const entity = CollectionMarket.load(WITHDRAW_ID_BYTES); // Use global constant
             assert.assertNotNull(entity);
             if (entity) {
                 const expectedWithdrawnPrincipalU = withdrawnAssets6Decimals.times(BigInt.fromI32(10).pow(12)); // 50e6 * 10e12 = 50e18
-                assert.bigIntEquals(initialAssets.minus(expectedWithdrawnPrincipalU), entity.principalU);
+                assert.bigIntEquals(WITHDRAW_INITIAL_ASSETS.minus(expectedWithdrawnPrincipalU), entity.principalU); // Use global constant
             }
         });
 
@@ -354,11 +379,11 @@ describe("CollectionVault Handlers", () => {
 
             handleCollectionWithdraw(event);
 
-            const entity = CollectionMarket.load(id);
+            const entity = CollectionMarket.load(WITHDRAW_ID_BYTES); // Use global constant
             assert.assertNotNull(entity);
             if (entity) {
                 const expectedWithdrawnPrincipalU = withdrawnAssets20Decimals.div(BigInt.fromI32(10).pow(2)); // 50e20 / 10e2 = 50e18
-                assert.bigIntEquals(initialAssets.minus(expectedWithdrawnPrincipalU), entity.principalU);
+                assert.bigIntEquals(WITHDRAW_INITIAL_ASSETS.minus(expectedWithdrawnPrincipalU), entity.principalU); // Use global constant
             }
         });
 
@@ -372,11 +397,11 @@ describe("CollectionVault Handlers", () => {
 
             handleCollectionWithdraw(event);
 
-            const entity = CollectionMarket.load(id);
+            const entity = CollectionMarket.load(WITHDRAW_ID_BYTES); // Use global constant
             assert.assertNotNull(entity);
             if (entity) {
                 // Should default to 18 decimals for assets if underlying() reverts
-                assert.bigIntEquals(initialAssets.minus(withdrawnAssets), entity.principalU);
+                assert.bigIntEquals(WITHDRAW_INITIAL_ASSETS.minus(withdrawnAssets), entity.principalU); // Use global constant
             }
         });
 
@@ -389,11 +414,11 @@ describe("CollectionVault Handlers", () => {
 
             handleCollectionWithdraw(event);
 
-            const entity = CollectionMarket.load(id);
+            const entity = CollectionMarket.load(WITHDRAW_ID_BYTES); // Use global constant
             assert.assertNotNull(entity);
             if (entity) {
                 // Should default to 18 decimals for assets if decimals() reverts
-                assert.bigIntEquals(initialAssets.minus(withdrawnAssets), entity.principalU);
+                assert.bigIntEquals(WITHDRAW_INITIAL_ASSETS.minus(withdrawnAssets), entity.principalU); // Use global constant
             }
         });
 
@@ -406,22 +431,22 @@ describe("CollectionVault Handlers", () => {
 
             handleCollectionWithdraw(event);
 
-            const entity = CollectionMarket.load(id);
+            const entity = CollectionMarket.load(WITHDRAW_ID_BYTES); // Use global constant
             assert.assertNotNull(entity);
             if (entity) {
                 // Should default to 18 decimals for assets if decimals() returns 0
-                assert.bigIntEquals(initialAssets.minus(withdrawnAssets), entity.principalU);
+                assert.bigIntEquals(WITHDRAW_INITIAL_ASSETS.minus(withdrawnAssets), entity.principalU); // Use global constant
             }
         });
 
         test("should reset principalU to zero if it goes negative", () => {
-            const withdrawnAssets = initialAssets.plus(BigInt.fromI32(100)); // Withdraw more than available
+            const withdrawnAssets = WITHDRAW_INITIAL_ASSETS.plus(BigInt.fromI32(100)); // Withdraw more than available // Use global constant
             const withdrawnShares = BigInt.fromI32(5);
             const event = createCollectionWithdrawEvent(COLLECTION_ADDRESS, CALLER_ADDRESS, RECEIVER_ADDRESS, OWNER_ADDRESS, withdrawnAssets, withdrawnShares);
 
             handleCollectionWithdraw(event);
 
-            const entity = CollectionMarket.load(id);
+            const entity = CollectionMarket.load(WITHDRAW_ID_BYTES); // Use global constant
             assert.assertNotNull(entity);
             if (entity) {
                 assert.bigIntEquals(ZERO_BI, entity.principalU);
@@ -430,12 +455,12 @@ describe("CollectionVault Handlers", () => {
 
         test("should reset totalNFT to zero if it goes negative", () => {
             const withdrawnAssets = BigInt.fromI32(50).times(BigInt.fromI32(10).pow(18));
-            const withdrawnShares = initialShares.plus(BigInt.fromI32(10)); // Withdraw more shares than available
+            const withdrawnShares = WITHDRAW_INITIAL_SHARES.plus(BigInt.fromI32(10)); // Withdraw more shares than available // Use global constant
             const event = createCollectionWithdrawEvent(COLLECTION_ADDRESS, CALLER_ADDRESS, RECEIVER_ADDRESS, OWNER_ADDRESS, withdrawnAssets, withdrawnShares);
 
             handleCollectionWithdraw(event);
 
-            const entity = CollectionMarket.load(id);
+            const entity = CollectionMarket.load(WITHDRAW_ID_BYTES); // Use global constant
             assert.assertNotNull(entity);
             if (entity) {
                 assert.bigIntEquals(ZERO_BI, entity.totalNFT);
@@ -444,40 +469,11 @@ describe("CollectionVault Handlers", () => {
     });
 });
 
-// Helper for creating mock events - adjust if needed for specific event types
-function newMockEvent(): ethereum.Event {
-    let mockEvent = new ethereum.Event();
-    mockEvent.address = COLLECTION_VAULT_ADDRESS; // Default, can be overridden by specific event creation
-    mockEvent.logIndex = BigInt.fromI32(1);
-    mockEvent.transactionLogIndex = BigInt.fromI32(1);
-    mockEvent.logType = "mined";
-    mockEvent.block = new ethereum.Block(
-        Bytes.fromHexString("0x0"), // hash
-        Bytes.fromHexString("0x0"), // parentHash
-        Bytes.fromHexString("0x0"), // unclesHash
-        Address.fromString(ZERO_ADDRESS), // author
-        Bytes.fromHexString("0x0"), // stateRoot
-        Bytes.fromHexString("0x0"), // transactionsRoot
-        Bytes.fromHexString("0x0"), // receiptsRoot
-        BigInt.fromI32(0), // number
-        BigInt.fromI32(0), // gasUsed
-        BigInt.fromI32(0), // gasLimit
-        BigInt.fromI32(123), // timestamp
-        BigInt.fromI32(0), // difficulty
-        BigInt.fromI32(0), // totalDifficulty
-        BigInt.fromI32(0), // size
-        null // baseFeePerGas
-    );
-    mockEvent.transaction = new ethereum.Transaction(
-        Bytes.fromHexString("0x1"), // hash
-        BigInt.fromI32(0), // index
-        Address.fromString(ZERO_ADDRESS), // from
-        Address.fromString(ZERO_ADDRESS), // to
-        BigInt.fromI32(0), // value
-        BigInt.fromI32(0), // gasLimit
-        BigInt.fromI32(0), // gasPrice
-        Bytes.fromHexString("0x0") // input
-    );
-    mockEvent.parameters = new Array();
-    return mockEvent;
-}
+// Using the built-in newMockEvent() from matchstick-as
+// function createMockEvent(): ethereum.Event { // Commented out as it's unused and causing a lint error
+//     const mockEvent = newMockEvent();
+//     mockEvent.address = COLLECTION_VAULT_ADDRESS;
+//     mockEvent.block.timestamp = BigInt.fromI32(123);
+//     mockEvent.parameters = new Array(); // Consider using []
+//     return mockEvent;
+// }

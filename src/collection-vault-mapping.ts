@@ -3,26 +3,8 @@ import {
     CollectionWithdraw as CollectionWithdrawEvent
 } from "../generated/CollectionVault/CollectionVault"
 import { CollectionMarket } from "../generated/schema"
-import { cToken } from "../generated/cToken/cToken"
-import { ERC20 } from "../generated/cToken/ERC20"
-import { BigInt, log, Address } from "@graphprotocol/graph-ts"
+import { BigInt, log } from "@graphprotocol/graph-ts"
 import { ZERO_BI } from "./utils/rewards"
-
-function fetchTokenDecimals(tokenAddress: Address): i32 {
-    const contract = ERC20.bind(tokenAddress);
-    let decimalValue = 18;
-    const decimalResult = contract.try_decimals();
-    if (!decimalResult.reverted) {
-        if (decimalResult.value > 0) {
-            decimalValue = decimalResult.value;
-        } else {
-            log.warning("fetchTokenDecimals: decimals() returned 0 or negative for token {}", [tokenAddress.toHexString()]);
-        }
-    } else {
-        log.warning("fetchTokenDecimals: decimals() reverted for token {}", [tokenAddress.toHexString()]);
-    }
-    return decimalValue;
-}
 
 function convertTo18DecimalsBI(value: BigInt, currentDecimals: i32): BigInt {
     if (currentDecimals == 18) {
@@ -56,17 +38,7 @@ export function handleCollectionDeposit(event: CollectionDepositEvent): void {
 
     entity.totalNFT = entity.totalNFT.plus(event.params.shares);
 
-    let assetDecimals = 18;
-    const cTokenAddress = event.address;
-    const cTokenContract = cToken.bind(cTokenAddress);
-    const underlyingAssetAddressResult = cTokenContract.try_underlying();
-
-    if (!underlyingAssetAddressResult.reverted) {
-        const underlyingAddress = underlyingAssetAddressResult.value;
-        assetDecimals = fetchTokenDecimals(underlyingAddress);
-    } else {
-        log.warning("handleCollectionDeposit: CToken.underlying() reverted for cToken {}", [cTokenAddress.toHexString()]);
-    }
+    const assetDecimals = 18;
 
     const assetsNormalizedBI = convertTo18DecimalsBI(event.params.assets, assetDecimals);
     entity.principalU = entity.principalU.plus(assetsNormalizedBI);
@@ -95,17 +67,7 @@ export function handleCollectionWithdraw(event: CollectionWithdrawEvent): void {
     if (entity) {
         entity.totalNFT = entity.totalNFT.minus(event.params.shares);
 
-        let assetDecimals = 18;
-        const cTokenAddress = event.address;
-        const cTokenContract = cToken.bind(cTokenAddress);
-        const underlyingAssetAddressResult = cTokenContract.try_underlying();
-
-        if (!underlyingAssetAddressResult.reverted) {
-            const underlyingAddress = underlyingAssetAddressResult.value;
-            assetDecimals = fetchTokenDecimals(underlyingAddress);
-        } else {
-            log.warning("handleCollectionWithdraw: CToken.underlying() reverted for cToken {}", [cTokenAddress.toHexString()]);
-        }
+        const assetDecimals = 18;
 
         const assetsNormalizedBI = convertTo18DecimalsBI(event.params.assets, assetDecimals);
         entity.principalU = entity.principalU.minus(assetsNormalizedBI);

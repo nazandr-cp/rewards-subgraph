@@ -1,14 +1,21 @@
 {
   "extends": "@graphprotocol/graph-ts/types/tsconfig.base.json",
   "compilerOptions": {
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "baseUrl": ".",
+    "paths": {
+      "../../src/*": [
+        "src/*"
+      ]
+    }
   },
   "include": [
     "src",
-    "hardhat_scripts"
+    "hardhat_scripts",
+    "tests" // Include tests for TS/AS type checking
   ],
   "exclude": [
-    "node_modules",
-    "tests"
-  ]
+    "node_modules"
+  ],
+  "rootDir": "./",
 }

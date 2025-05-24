@@ -1,4 +1,4 @@
-import { Address, BigInt, Bytes, log } from "@graphprotocol/graph-ts";
+import { Address, BigInt, Bytes, log, crypto } from "@graphprotocol/graph-ts";
 import { Account, AccountCollectionReward, CollectionReward } from "../../generated/schema";
 import { cToken } from '../../generated/cToken/cToken';
 
@@ -13,6 +13,7 @@ export enum WeightFunctionType {
 export const ZERO_BI = BigInt.fromI32(0);
 export const ONE_BI = BigInt.fromI32(1);
 export const ADDRESS_ZERO_STR = "0x0000000000000000000000000000000000000000";
+export const ZERO_ADDRESS = Address.fromString(ADDRESS_ZERO_STR);
 export const EXP_SCALE = BigInt.fromString('1000000000000000000');
 
 export function exponentToBigInt(decimals: i32): BigInt {
@@ -30,12 +31,32 @@ function approxExponentialTerm(val: BigInt): BigInt {
 }
 
 export function getOrCreateAccount(accountAddress: Bytes): Account {
+    log.info("getOrCreateAccount: Input accountAddress: {}", [accountAddress.toHexString()]);
     let account = Account.load(accountAddress.toHexString());
     if (account == null) {
         account = new Account(accountAddress.toHexString());
         account.save();
+        log.info("getOrCreateAccount: Created new account with ID: {}", [account.id]);
+    } else {
+        log.info("getOrCreateAccount: Loaded existing account with ID: {}", [account.id]);
     }
     return account;
+}
+
+// ID Generation Helpers
+export function generateCollectionRewardId(collectionAddress: Address, rewardTokenAddress: Address): Bytes {
+    return Bytes.fromByteArray(crypto.keccak256(collectionAddress.concat(rewardTokenAddress)));
+}
+
+export function generateAccountCollectionRewardId(userAccountEntityId: string, collectionRewardId: Bytes): Bytes {
+    log.info("generateAccountCollectionRewardId: userAccountEntityId: {}, collectionRewardId: {}", [userAccountEntityId, collectionRewardId.toHexString()]);
+    let hexString = userAccountEntityId;
+    if (!hexString.startsWith("0x")) {
+        hexString = "0x" + hexString;
+    }
+    const id = Bytes.fromByteArray(crypto.keccak256(Bytes.fromHexString(hexString).concat(collectionRewardId)));
+    log.info("generateAccountCollectionRewardId: Generated ID: {}", [id.toHexString()]);
+    return id;
 }
 
 export function getOrCreateCollectionReward(
@@ -46,8 +67,7 @@ export function getOrCreateCollectionReward(
     initialWeightFnType: WeightFunctionType,
     eventTimestamp: BigInt
 ): CollectionReward {
-    // Create a composite ID for the collection reward
-    const id = nftCollectionAddress.concat(rewardTokenAddress);
+    const id = generateCollectionRewardId(nftCollectionAddress, rewardTokenAddress);
     let collectionReward = CollectionReward.load(id);
 
     if (collectionReward == null) {
@@ -81,8 +101,7 @@ export function getOrCreateAccountCollectionReward(
     collectionReward: CollectionReward,
     eventTimestamp: BigInt
 ): AccountCollectionReward {
-    // Create a composite ID using concatenation instead of string operations
-    const id = Bytes.fromHexString(account.id + "-" + collectionReward.id.toHexString());
+    const id = generateAccountCollectionRewardId(account.id, collectionReward.id);
 
     let acr = AccountCollectionReward.load(id);
     if (acr == null) {
@@ -104,13 +123,23 @@ export function currentDepositU(
 ): BigInt {
     const cTokenInstance = cToken.bind(cTokenAddr);
 
+    log.info("currentDepositU: Calling try_balanceOf for user {} and cToken {}", [user.toHexString(), cTokenAddr.toHexString()]);
     const balRes = cTokenInstance.try_balanceOf(user);
-    if (balRes.reverted) return BigInt.zero();
+    if (balRes.reverted) {
+        log.warning("currentDepositU: try_balanceOf reverted for user {} and cToken {}", [user.toHexString(), cTokenAddr.toHexString()]);
+        return BigInt.zero();
+    }
     const cBal = balRes.value;
+    log.info("currentDepositU: try_balanceOf returned cBal: {}", [cBal.toString()]);
 
+    log.info("currentDepositU: Calling try_exchangeRateStored for cToken {}", [cTokenAddr.toHexString()]);
     const rateRes = cTokenInstance.try_exchangeRateStored();
-    if (rateRes.reverted) return BigInt.zero();
+    if (rateRes.reverted) {
+        log.warning("currentDepositU: try_exchangeRateStored reverted for cToken {}", [cTokenAddr.toHexString()]);
+        return BigInt.zero();
+    }
     const rate = rateRes.value;
+    log.info("currentDepositU: try_exchangeRateStored returned rate: {}", [rate.toString()]);
 
     return cBal.times(rate).div(EXP_SCALE);
 }
@@ -121,9 +150,14 @@ export function currentBorrowU(
 ): BigInt {
     const cTokenInstance = cToken.bind(cTokenAddr);
 
+    log.info("currentBorrowU: Calling try_borrowBalanceStored for user {} and cToken {}", [user.toHexString(), cTokenAddr.toHexString()]);
     const borrowRes = cTokenInstance.try_borrowBalanceStored(user);
-    if (borrowRes.reverted) return BigInt.zero();
+    if (borrowRes.reverted) {
+        log.warning("currentBorrowU: try_borrowBalanceStored reverted for user {} and cToken {}", [user.toHexString(), cTokenAddr.toHexString()]);
+        return BigInt.zero();
+    }
 
+    log.info("currentBorrowU: try_borrowBalanceStored returned borrowRes: {}", [borrowRes.value.toString()]);
     return borrowRes.value;
 }
 
@@ -152,8 +186,12 @@ export function accrueSeconds(acr: AccountCollectionReward, coll: CollectionRewa
 
     let basePrincipalForReward = ZERO_BI;
 
-    if (acr.account.length != 20 || coll.cTokenMarketAddress.length != 20) {
-        log.warning("Invalid address bytes length for accrueSeconds. Account: {}, cToken: {}", [
+    log.info("accrueSeconds: acr.account: {}, coll.cTokenMarketAddress: {}", [
+        acr.account,
+        coll.cTokenMarketAddress.toHexString()
+    ]);
+    if (acr.account.length != 42 || coll.cTokenMarketAddress.toHexString().length != 42) { // Check for 0x prefix + 40 hex chars
+        log.warning("Invalid address string length for accrueSeconds. Account: {}, cToken: {}", [
             acr.account,
             coll.cTokenMarketAddress.toHexString()
         ]);
@@ -162,14 +200,20 @@ export function accrueSeconds(acr: AccountCollectionReward, coll: CollectionRewa
 
     // Skip byte-by-byte validation which might cause memory issues
 
+    log.debug("accrueSeconds: Attempting Address.fromString(acr.account): {}", [acr.account]);
+    log.debug("accrueSeconds: Attempting Address.fromBytes(coll.cTokenMarketAddress): {}", [coll.cTokenMarketAddress.toHexString()]);
+
     if (!coll.isBorrowBased) {
         basePrincipalForReward = currentDepositU(Address.fromString(acr.account), Address.fromBytes(coll.cTokenMarketAddress));
     } else {
         basePrincipalForReward = currentBorrowU(Address.fromString(acr.account), Address.fromBytes(coll.cTokenMarketAddress));
     }
 
+    log.info("accrueSeconds: basePrincipalForReward: {}", [basePrincipalForReward.toString()]);
     const nftHoldingWeight = weight(acr.balanceNFT, coll);
+    log.info("accrueSeconds: nftHoldingWeight: {}", [nftHoldingWeight.toString()]);
     const combinedEffectiveValue = basePrincipalForReward.plus(nftHoldingWeight);
+    log.info("accrueSeconds: combinedEffectiveValue: {}", [combinedEffectiveValue.toString()]);
 
     const rewardRateMultiplier = EXP_SCALE;
 

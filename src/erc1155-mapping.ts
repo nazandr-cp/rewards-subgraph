@@ -1,4 +1,4 @@
-import { BigInt, Bytes, log, Address } from "@graphprotocol/graph-ts";
+import { BigInt, log, Address } from "@graphprotocol/graph-ts";
 import {
   TransferSingle as TransferSingleEvent,
   TransferBatch as TransferBatchEvent,
@@ -8,6 +8,7 @@ import {
   accrueSeconds,
   getOrCreateAccountCollectionReward,
   getOrCreateAccount,
+  generateCollectionRewardId,
   HARDCODED_REWARD_TOKEN_ADDRESS,
   ZERO_BI,
   ADDRESS_ZERO_STR
@@ -16,11 +17,11 @@ import {
 const ADDRESS_ZERO = Address.fromString(ADDRESS_ZERO_STR);
 
 export function handleTransferSingle(event: TransferSingleEvent): void {
-  const collectionAddress = event.address; // The ERC1155 contract address
+  const collectionAddress = event.address;
   const fromAddress = event.params.from;
   const toAddress = event.params.to;
-  const tokenId = event.params.id; // Specific ID of the ERC1155 token
-  const value = event.params.value; // Amount of tokens transferred
+  const tokenId = event.params.id;
+  const value = event.params.value;
   const timestamp = event.block.timestamp;
 
   log.info(
@@ -34,8 +35,8 @@ export function handleTransferSingle(event: TransferSingleEvent): void {
     ]
   );
 
-  const collectionRewardIdString = collectionAddress.toHex() + "-" + HARDCODED_REWARD_TOKEN_ADDRESS.toHex();
-  const collectionRewardEntity = CollectionReward.load(Bytes.fromHexString(collectionRewardIdString));
+  const collectionRewardId = generateCollectionRewardId(collectionAddress, HARDCODED_REWARD_TOKEN_ADDRESS);
+  const collectionRewardEntity = CollectionReward.load(collectionRewardId);
 
   if (collectionRewardEntity == null) {
     log.info(
@@ -89,8 +90,8 @@ export function handleTransferBatch(event: TransferBatchEvent): void {
     ]
   );
 
-  const collectionRewardIdString = collectionAddress.toHex() + "-" + HARDCODED_REWARD_TOKEN_ADDRESS.toHex();
-  const collectionRewardEntity = CollectionReward.load(Bytes.fromHexString(collectionRewardIdString));
+  const collectionRewardId = generateCollectionRewardId(collectionAddress, HARDCODED_REWARD_TOKEN_ADDRESS);
+  const collectionRewardEntity = CollectionReward.load(collectionRewardId);
 
   if (collectionRewardEntity == null) {
     log.info(
@@ -100,7 +101,6 @@ export function handleTransferBatch(event: TransferBatchEvent): void {
     return;
   }
 
-  // Accrue once before processing all balance changes for the batch
   let fromAcr: AccountCollectionReward | null = null;
   if (fromAddress.notEqual(ADDRESS_ZERO)) {
     const fromAccountEntity = getOrCreateAccount(fromAddress);
@@ -112,13 +112,11 @@ export function handleTransferBatch(event: TransferBatchEvent): void {
   if (toAddress.notEqual(ADDRESS_ZERO)) {
     const toAccountEntity = getOrCreateAccount(toAddress);
     toAcr = getOrCreateAccountCollectionReward(toAccountEntity, collectionRewardEntity, timestamp);
-    accrueSeconds(toAcr, collectionRewardEntity, timestamp); // Accrue for 'to' as well before balance updates
+    accrueSeconds(toAcr, collectionRewardEntity, timestamp);
   }
 
-  // Process balance changes
   for (let i = 0; i < tokenIds.length; i++) {
     const value = values[i];
-    // let tokenId = tokenIds[i]; // tokenId not directly used in balanceNFT sum if it's total quantity
 
     if (fromAcr != null) {
       fromAcr.balanceNFT = fromAcr.balanceNFT.minus(value);

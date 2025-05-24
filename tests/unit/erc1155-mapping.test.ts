@@ -1,10 +1,10 @@
 import { clearStore, test, assert, newMockEvent } from "matchstick-as/assembly/index";
-import { Address, BigInt, Bytes, ethereum } from "@graphprotocol/graph-ts";
+import { Address, BigInt, ethereum } from "@graphprotocol/graph-ts";
 // AccountCollectionReward is used for type assertions with assert.fieldEquals
 import { CollectionReward } from "../../generated/schema"; // Account and AccountCollectionReward removed as direct import if not used for instantiation
 import { handleTransferSingle, handleTransferBatch } from "../../src/erc1155-mapping";
 import { TransferSingle, TransferBatch } from "../../generated/templates/ERC1155/ERC1155";
-import { ADDRESS_ZERO_STR, HARDCODED_REWARD_TOKEN_ADDRESS, ZERO_BI } from "../../src/utils/rewards";
+import { ADDRESS_ZERO_STR, HARDCODED_REWARD_TOKEN_ADDRESS, generateCollectionRewardId, generateAccountCollectionRewardId } from "../../src/utils/rewards";
 
 // Mock constants
 const COLLECTION_ADDRESS_STR = "0x1234567890123456789012345678901234567890";
@@ -86,35 +86,40 @@ function createTransferBatchEvent(
 }
 
 function createMockCollectionReward(): CollectionReward {
-    const collectionRewardId = COLLECTION_ADDRESS.toHex() + "-" + HARDCODED_REWARD_TOKEN_ADDRESS.toHex();
-    const cr = new CollectionReward(Bytes.fromHexString(collectionRewardId));
+    const collectionRewardId = generateCollectionRewardId(COLLECTION_ADDRESS, HARDCODED_REWARD_TOKEN_ADDRESS);
+    const cr = new CollectionReward(collectionRewardId);
     cr.collection = COLLECTION_ADDRESS;
     cr.rewardToken = HARDCODED_REWARD_TOKEN_ADDRESS;
-    // cr.totalStakedNFT = ZERO_BI; // Property does not exist or not needed for these tests
-    cr.rewardPerSecond = ZERO_BI; // Keep if used by accrueSeconds, otherwise can be removed
-    cr.lastUpdate = ZERO_BI;
-    // cr.totalRewardsAccrued = ZERO_BI; // Property does not exist or not needed for these tests
+    cr.rewardPerSecond = BigInt.fromI32(10);
+    cr.totalSecondsAccrued = BigInt.fromI32(0);
+    cr.lastUpdate = BigInt.fromI32(1000);
+    cr.totalRewardsPool = BigInt.fromI32(1000);
+    cr.fnType = "LINEAR";
+    cr.p1 = BigInt.fromI32(1);
+    cr.p2 = BigInt.fromI32(1);
+    cr.cTokenMarketAddress = Address.fromString("0x0000000000000000000000000000000000000000");
+    cr.isBorrowBased = false;
+    cr.collectionType = "ERC1155";
     cr.save();
     return cr;
 }
 
 test("handleTransferSingle - Mint new token", () => {
     clearStore();
-    createMockCollectionReward();
+    const cr = createMockCollectionReward();
     const event = createTransferSingleEvent(USER1_ADDRESS, ADDRESS_ZERO, USER1_ADDRESS, TOKEN_ID1, VALUE1);
     handleTransferSingle(event);
 
-    const user1AcrId = USER1_ADDRESS_STR + "-" + COLLECTION_ADDRESS_STR + "-" + HARDCODED_REWARD_TOKEN_ADDRESS.toHex();
-    assert.fieldEquals("AccountCollectionReward", user1AcrId, "balanceNFT", VALUE1.toString());
-    assert.fieldEquals("AccountCollectionReward", user1AcrId, "lastUpdate", TIMESTAMP.toString());
+    const user1AcrId = generateAccountCollectionRewardId(USER1_ADDRESS_STR, generateCollectionRewardId(COLLECTION_ADDRESS, HARDCODED_REWARD_TOKEN_ADDRESS));
+    assert.fieldEquals("AccountCollectionReward", user1AcrId.toHexString(), "balanceNFT", VALUE1.toString());
+    assert.fieldEquals("AccountCollectionReward", user1AcrId.toHexString(), "lastUpdate", TIMESTAMP.toString());
 
-    const crId = COLLECTION_ADDRESS.toHex() + "-" + HARDCODED_REWARD_TOKEN_ADDRESS.toHex();
-    assert.fieldEquals("CollectionReward", crId, "lastUpdate", TIMESTAMP.toString());
+    assert.fieldEquals("CollectionReward", cr.id.toHexString(), "lastUpdate", TIMESTAMP.toString());
 });
 
 test("handleTransferSingle - Burn token", () => {
     clearStore();
-    createMockCollectionReward();
+    const cr = createMockCollectionReward();
 
     // Initial mint to User1
     const mintEvent = createTransferSingleEvent(USER1_ADDRESS, ADDRESS_ZERO, USER1_ADDRESS, TOKEN_ID1, VALUE1);
@@ -124,14 +129,14 @@ test("handleTransferSingle - Burn token", () => {
     const burnEvent = createTransferSingleEvent(USER1_ADDRESS, USER1_ADDRESS, ADDRESS_ZERO, TOKEN_ID1, VALUE1);
     handleTransferSingle(burnEvent);
 
-    const user1AcrId = USER1_ADDRESS_STR + "-" + COLLECTION_ADDRESS_STR + "-" + HARDCODED_REWARD_TOKEN_ADDRESS.toHex();
-    assert.fieldEquals("AccountCollectionReward", user1AcrId, "balanceNFT", "0");
-    assert.fieldEquals("AccountCollectionReward", user1AcrId, "lastUpdate", TIMESTAMP.toString());
+    const user1AcrId = generateAccountCollectionRewardId(USER1_ADDRESS_STR, generateCollectionRewardId(COLLECTION_ADDRESS, HARDCODED_REWARD_TOKEN_ADDRESS));
+    assert.fieldEquals("AccountCollectionReward", user1AcrId.toHexString(), "balanceNFT", "0");
+    assert.fieldEquals("AccountCollectionReward", user1AcrId.toHexString(), "lastUpdate", TIMESTAMP.toString());
 });
 
 test("handleTransferSingle - Regular transfer", () => {
     clearStore();
-    createMockCollectionReward();
+    const cr = createMockCollectionReward();
 
     // Initial mint to User1
     const mintEvent = createTransferSingleEvent(USER1_ADDRESS, ADDRESS_ZERO, USER1_ADDRESS, TOKEN_ID1, VALUE1);
@@ -141,11 +146,11 @@ test("handleTransferSingle - Regular transfer", () => {
     const transferEvent = createTransferSingleEvent(USER1_ADDRESS, USER1_ADDRESS, USER2_ADDRESS, TOKEN_ID1, VALUE1);
     handleTransferSingle(transferEvent);
 
-    const user1AcrId = USER1_ADDRESS_STR + "-" + COLLECTION_ADDRESS_STR + "-" + HARDCODED_REWARD_TOKEN_ADDRESS.toHex();
-    assert.fieldEquals("AccountCollectionReward", user1AcrId, "balanceNFT", "0");
+    const user1AcrId = generateAccountCollectionRewardId(USER1_ADDRESS_STR, generateCollectionRewardId(COLLECTION_ADDRESS, HARDCODED_REWARD_TOKEN_ADDRESS));
+    assert.fieldEquals("AccountCollectionReward", user1AcrId.toHexString(), "balanceNFT", "0");
 
-    const user2AcrId = USER2_ADDRESS_STR + "-" + COLLECTION_ADDRESS_STR + "-" + HARDCODED_REWARD_TOKEN_ADDRESS.toHex();
-    assert.fieldEquals("AccountCollectionReward", user2AcrId, "balanceNFT", VALUE1.toString());
+    const user2AcrId = generateAccountCollectionRewardId(USER2_ADDRESS_STR, generateCollectionRewardId(COLLECTION_ADDRESS, HARDCODED_REWARD_TOKEN_ADDRESS));
+    assert.fieldEquals("AccountCollectionReward", user2AcrId.toHexString(), "balanceNFT", VALUE1.toString());
 });
 
 test("handleTransferSingle - CollectionReward does not exist", () => {
@@ -154,31 +159,30 @@ test("handleTransferSingle - CollectionReward does not exist", () => {
     handleTransferSingle(event);
 
     // No AccountCollectionReward should be created
-    const user1AcrId = USER1_ADDRESS_STR + "-" + COLLECTION_ADDRESS_STR + "-" + HARDCODED_REWARD_TOKEN_ADDRESS.toHex();
-    assert.notInStore("AccountCollectionReward", user1AcrId);
+    const user1AcrId = generateAccountCollectionRewardId(USER1_ADDRESS_STR, generateCollectionRewardId(COLLECTION_ADDRESS, HARDCODED_REWARD_TOKEN_ADDRESS));
+    assert.notInStore("AccountCollectionReward", user1AcrId.toHexString());
 });
 
 
 test("handleTransferBatch - Mint new tokens", () => {
     clearStore();
-    createMockCollectionReward();
+    const cr = createMockCollectionReward();
     const ids = [TOKEN_ID1, TOKEN_ID2];
     const values = [VALUE1, VALUE2];
     const event = createTransferBatchEvent(USER1_ADDRESS, ADDRESS_ZERO, USER1_ADDRESS, ids, values);
     handleTransferBatch(event);
 
-    const user1AcrId = USER1_ADDRESS_STR + "-" + COLLECTION_ADDRESS_STR + "-" + HARDCODED_REWARD_TOKEN_ADDRESS.toHex();
+    const user1AcrId = generateAccountCollectionRewardId(USER1_ADDRESS_STR, generateCollectionRewardId(COLLECTION_ADDRESS, HARDCODED_REWARD_TOKEN_ADDRESS));
     const expectedBalance = VALUE1.plus(VALUE2);
-    assert.fieldEquals("AccountCollectionReward", user1AcrId, "balanceNFT", expectedBalance.toString());
-    assert.fieldEquals("AccountCollectionReward", user1AcrId, "lastUpdate", TIMESTAMP.toString());
+    assert.fieldEquals("AccountCollectionReward", user1AcrId.toHexString(), "balanceNFT", expectedBalance.toString());
+    assert.fieldEquals("AccountCollectionReward", user1AcrId.toHexString(), "lastUpdate", TIMESTAMP.toString());
 
-    const crId = COLLECTION_ADDRESS.toHex() + "-" + HARDCODED_REWARD_TOKEN_ADDRESS.toHex();
-    assert.fieldEquals("CollectionReward", crId, "lastUpdate", TIMESTAMP.toString());
+    assert.fieldEquals("CollectionReward", cr.id.toHexString(), "lastUpdate", TIMESTAMP.toString());
 });
 
 test("handleTransferBatch - Burn tokens", () => {
     clearStore();
-    createMockCollectionReward();
+    const cr = createMockCollectionReward();
 
     // Initial mint to User1
     const mintIds = [TOKEN_ID1, TOKEN_ID2];
@@ -190,14 +194,14 @@ test("handleTransferBatch - Burn tokens", () => {
     const burnEvent = createTransferBatchEvent(USER1_ADDRESS, USER1_ADDRESS, ADDRESS_ZERO, mintIds, mintValues);
     handleTransferBatch(burnEvent);
 
-    const user1AcrId = USER1_ADDRESS_STR + "-" + COLLECTION_ADDRESS_STR + "-" + HARDCODED_REWARD_TOKEN_ADDRESS.toHex();
-    assert.fieldEquals("AccountCollectionReward", user1AcrId, "balanceNFT", "0");
-    assert.fieldEquals("AccountCollectionReward", user1AcrId, "lastUpdate", TIMESTAMP.toString());
+    const user1AcrId = generateAccountCollectionRewardId(USER1_ADDRESS_STR, generateCollectionRewardId(COLLECTION_ADDRESS, HARDCODED_REWARD_TOKEN_ADDRESS));
+    assert.fieldEquals("AccountCollectionReward", user1AcrId.toHexString(), "balanceNFT", "0");
+    assert.fieldEquals("AccountCollectionReward", user1AcrId.toHexString(), "lastUpdate", TIMESTAMP.toString());
 });
 
 test("handleTransferBatch - Regular transfer", () => {
     clearStore();
-    createMockCollectionReward();
+    const cr = createMockCollectionReward();
 
     // Initial mint to User1
     const mintIds = [TOKEN_ID1, TOKEN_ID2];
@@ -209,12 +213,12 @@ test("handleTransferBatch - Regular transfer", () => {
     const transferEvent = createTransferBatchEvent(USER1_ADDRESS, USER1_ADDRESS, USER2_ADDRESS, mintIds, mintValues);
     handleTransferBatch(transferEvent);
 
-    const user1AcrId = USER1_ADDRESS_STR + "-" + COLLECTION_ADDRESS_STR + "-" + HARDCODED_REWARD_TOKEN_ADDRESS.toHex();
-    assert.fieldEquals("AccountCollectionReward", user1AcrId, "balanceNFT", "0");
+    const user1AcrId = generateAccountCollectionRewardId(USER1_ADDRESS_STR, generateCollectionRewardId(COLLECTION_ADDRESS, HARDCODED_REWARD_TOKEN_ADDRESS));
+    assert.fieldEquals("AccountCollectionReward", user1AcrId.toHexString(), "balanceNFT", "0");
 
-    const user2AcrId = USER2_ADDRESS_STR + "-" + COLLECTION_ADDRESS_STR + "-" + HARDCODED_REWARD_TOKEN_ADDRESS.toHex();
+    const user2AcrId = generateAccountCollectionRewardId(USER2_ADDRESS_STR, generateCollectionRewardId(COLLECTION_ADDRESS, HARDCODED_REWARD_TOKEN_ADDRESS));
     const expectedBalance = VALUE1.plus(VALUE2);
-    assert.fieldEquals("AccountCollectionReward", user2AcrId, "balanceNFT", expectedBalance.toString());
+    assert.fieldEquals("AccountCollectionReward", user2AcrId.toHexString(), "balanceNFT", expectedBalance.toString());
 });
 
 test("handleTransferBatch - CollectionReward does not exist", () => {
@@ -225,8 +229,8 @@ test("handleTransferBatch - CollectionReward does not exist", () => {
     handleTransferBatch(event);
 
     // No AccountCollectionReward should be created
-    const user1AcrId = USER1_ADDRESS_STR + "-" + COLLECTION_ADDRESS_STR + "-" + HARDCODED_REWARD_TOKEN_ADDRESS.toHex();
-    assert.notInStore("AccountCollectionReward", user1AcrId);
+    const user1AcrId = generateAccountCollectionRewardId(USER1_ADDRESS_STR, generateCollectionRewardId(COLLECTION_ADDRESS, HARDCODED_REWARD_TOKEN_ADDRESS));
+    assert.notInStore("AccountCollectionReward", user1AcrId.toHexString());
 });
 
 test("handleTransferSingle - Balance goes negative (should be zero)", () => {
@@ -242,8 +246,8 @@ test("handleTransferSingle - Balance goes negative (should be zero)", () => {
     const burnEvent = createTransferSingleEvent(USER1_ADDRESS, USER1_ADDRESS, ADDRESS_ZERO, TOKEN_ID1, burnValue);
     handleTransferSingle(burnEvent);
 
-    const user1AcrId = USER1_ADDRESS_STR + "-" + cr.id.toHexString().slice(cr.id.toHexString().indexOf("-") + 1);
-    assert.fieldEquals("AccountCollectionReward", user1AcrId, "balanceNFT", "0"); // Should be reset to 0
+    const user1AcrId = generateAccountCollectionRewardId(USER1_ADDRESS_STR, cr.id);
+    assert.fieldEquals("AccountCollectionReward", user1AcrId.toHexString(), "balanceNFT", "0"); // Should be reset to 0
 });
 
 test("handleTransferBatch - Balance goes negative (should be zero)", () => {
@@ -261,10 +265,10 @@ test("handleTransferBatch - Balance goes negative (should be zero)", () => {
     const burnEvent = createTransferBatchEvent(USER1_ADDRESS, USER1_ADDRESS, ADDRESS_ZERO, mintIds, burnValues);
     handleTransferBatch(burnEvent);
 
-    const user1AcrId = USER1_ADDRESS_STR + "-" + cr.id.toHexString().slice(cr.id.toHexString().indexOf("-") + 1);
+    const user1AcrId = generateAccountCollectionRewardId(USER1_ADDRESS_STR, cr.id);
     // The logic sums up all values in the batch for balanceNFT.
     // Initial balance: 10 + 5 = 15
     // Values to subtract: 20 + 5 = 25
     // Resulting balance: 15 - 25 = -10. Should be corrected to 0.
-    assert.fieldEquals("AccountCollectionReward", user1AcrId, "balanceNFT", "0");
+    assert.fieldEquals("AccountCollectionReward", user1AcrId.toHexString(), "balanceNFT", "0");
 });

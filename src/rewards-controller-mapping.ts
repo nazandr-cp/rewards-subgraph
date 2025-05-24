@@ -1,4 +1,4 @@
-import { Bytes, Address, log, store, BigInt } from "@graphprotocol/graph-ts";
+import { Address, log, store, BigInt } from "@graphprotocol/graph-ts";
 import { ERC721, ERC1155 } from "../generated/templates";
 import {
     CollectionReward,
@@ -14,7 +14,8 @@ import {
     getOrCreateAccountCollectionReward,
     HARDCODED_REWARD_TOKEN_ADDRESS,
     HARDCODED_CTOKEN_MARKET_ADDRESS,
-    WeightFunctionType
+    WeightFunctionType,
+    generateCollectionRewardId
 } from "./utils/rewards";
 import {
     NewCollectionWhitelisted,
@@ -34,11 +35,11 @@ export function handleNewCollectionWhitelisted(event: NewCollectionWhitelisted):
     const collectionTypeParam = event.params.collectionType;
 
     let isBorrowBased: boolean;
-    if (rewardBasisParam == 0) { // DEPOSIT
+    if (rewardBasisParam == 0) {
         isBorrowBased = false;
-    } else if (rewardBasisParam == 1) { // BORROW
+    } else if (rewardBasisParam == 1) {
         isBorrowBased = true;
-    } else { // Default to BORROW
+    } else {
         isBorrowBased = true;
         log.info(
             "NewCollectionWhitelisted: Unknown rewardBasisParam u8 {} for collection {}. Defaulting to isBorrowBased = true.",
@@ -89,8 +90,7 @@ export function handleNewCollectionWhitelisted(event: NewCollectionWhitelisted):
 
 export function handleWhitelistCollectionRemoved(event: WhitelistCollectionRemoved): void {
     const collectionAddress = event.params.collection;
-    const collectionRewardIdString = collectionAddress.toHex() + "-" + HARDCODED_REWARD_TOKEN_ADDRESS.toHex();
-    const collectionRewardId = Bytes.fromHexString(collectionRewardIdString);
+    const collectionRewardId = generateCollectionRewardId(collectionAddress, HARDCODED_REWARD_TOKEN_ADDRESS);
 
     const existingReward = CollectionReward.load(collectionRewardId);
     if (existingReward != null) {
@@ -111,20 +111,13 @@ export function handleCollectionRewardShareUpdated(event: CollectionRewardShareU
     const collectionAddress = event.params.collection;
     const rewardToken = HARDCODED_REWARD_TOKEN_ADDRESS;
 
-    const collectionRewardIdString = collectionAddress.toHex() + "-" + rewardToken.toHex();
-    const collectionRewardId = Bytes.fromHexString(collectionRewardIdString);
+    const collectionRewardId = generateCollectionRewardId(collectionAddress, rewardToken);
     const collReward = CollectionReward.load(collectionRewardId);
 
     if (collReward != null) {
         collReward.rewardPerSecond = BigInt.fromI32(event.params.newSharePercentage);
         collReward.lastUpdate = event.block.timestamp;
         collReward.save();
-        log.info("CollectionRewardShareUpdated: Updated share for CollectionReward {} (collection {}, rewardToken {}). New share: {}", [
-            collectionRewardId.toHexString(),
-            collectionAddress.toHexString(),
-            rewardToken.toHexString(),
-            event.params.newSharePercentage.toString()
-        ]);
     } else {
         log.warning("CollectionRewardShareUpdated: CollectionReward with ID {} not found for collection {} and rewardToken {}. No action taken.", [
             collectionRewardId.toHexString(),
@@ -139,8 +132,7 @@ export function handleWeightFunctionSet(event: WeightFunctionSet): void {
     const rewardToken = HARDCODED_REWARD_TOKEN_ADDRESS;
     const weightFnParams = event.params.fn;
 
-    const collectionRewardIdString = collectionAddress.toHex() + "-" + rewardToken.toHex();
-    const collectionRewardId = Bytes.fromHexString(collectionRewardIdString);
+    const collectionRewardId = generateCollectionRewardId(collectionAddress, rewardToken);
     const collReward = CollectionReward.load(collectionRewardId);
 
     if (collReward != null) {
@@ -177,26 +169,21 @@ export function handleWeightFunctionSet(event: WeightFunctionSet): void {
 export function handleRewardsClaimedForLazy(event: RewardsClaimedForLazy): void {
     const userAddress = event.params.account;
     const collectionAddress = event.params.collection;
-    let rewardTokenAddress: Address;
 
     const contract = RewardsController.bind(event.address) as RewardsController;
-    const vaultInfoTry = contract.try_vault();
-
-    if (!vaultInfoTry.reverted) {
-        rewardTokenAddress = vaultInfoTry.value; // Assuming try_vault().value IS the cToken address
-        log.info("handleRewardsClaimedForLazy: rewardToken (cToken) {} successfully derived from vaultInfo for controller {}", [rewardTokenAddress.toHexString(), event.address.toHexString()]);
-    } else {
-        log.critical(
-            "handleRewardsClaimedForLazy: try_vault() reverted for controller {}. Cannot determine rewardToken. Aborting processing for event in tx {}.",
-            [event.address.toHexString(), event.transaction.hash.toHexString()]
-        );
-        return; // Prevent partial entity creation if rewardToken is missing
+    log.info("handleRewardsClaimedForLazy: Calling contract.try_vault() for address {}", [event.address.toHex()]);
+    const rewardTokenAddressCall = contract.try_vault();
+    if (rewardTokenAddressCall.reverted) {
+        log.error("handleRewardsClaimedForLazy: contract.try_vault() reverted. Skipping processing for user {} and collection {}.", [userAddress.toHex(), collectionAddress.toHex()]);
+        return;
     }
+    log.info("handleRewardsClaimedForLazy: contract.try_vault() returned value. Accessing .value", []);
+    const rewardTokenAddress: Address = rewardTokenAddressCall.value;
+    log.info("handleRewardsClaimedForLazy: rewardTokenAddress: {}", [rewardTokenAddress.toHex()]);
 
     const userAccount = getOrCreateAccount(userAddress);
 
-    const collectionRewardIdString = collectionAddress.toHex() + "-" + rewardTokenAddress.toHex();
-    const collectionRewardId = Bytes.fromHexString(collectionRewardIdString);
+    const collectionRewardId = generateCollectionRewardId(collectionAddress, rewardTokenAddress);
     const collReward = CollectionReward.load(collectionRewardId);
 
     if (collReward != null) {
@@ -216,7 +203,6 @@ export function handleRewardsClaimedForLazy(event: RewardsClaimedForLazy): void 
         claim.secondsColl = collReward.totalSecondsAccrued;
         claim.incRPS = event.params.incRPS;
         claim.yieldSlice = event.params.yieldSlice;
-
         claim.save();
 
         acr.seconds = acr.seconds.minus(event.params.secondsUser);
@@ -229,15 +215,6 @@ export function handleRewardsClaimedForLazy(event: RewardsClaimedForLazy): void 
 
         collReward.lastUpdate = event.block.timestamp;
         collReward.save();
-
-        log.info("RewardsClaimedForLazy: Processed claim for user {}, collection {}, rewardToken {}. Amount: {}, Seconds Claimed: {}", [
-            userAddress.toHexString(),
-            collectionAddress.toHexString(),
-            rewardTokenAddress.toHexString(),
-            event.params.dueAmount.toString(),
-            event.params.secondsUser.toString()
-        ]);
-
     } else {
         log.warning("RewardsClaimedForLazy: CollectionReward not found for collection {} and rewardToken {}. Claim for user {} not fully processed.", [
             collectionAddress.toHexString(),
@@ -290,7 +267,7 @@ export function handleRewardPerBlockUpdated(event: RewardPerBlockUpdatedEvent): 
         log.error("handleRewardPerBlockUpdated: contract.try_vaults reverted for vault {}", [event.params.vault.toHex()]);
         return;
     }
-    vault.rewardPerBlock = vaultInfo.value.rewardPerBlock;
+    vault.rewardPerBlock = event.params.rewardPerBlock;
     vault.globalRPW = vaultInfo.value.globalRPW;
     vault.totalWeight = vaultInfo.value.totalWeight;
     vault.lastUpdateBlock = vaultInfo.value.lastUpdateBlock;
@@ -317,6 +294,7 @@ export function handleRewardClaimed(event: RewardClaimedEvent): void {
         log.warning("Vault {} not found during RewardClaimed for user {}. Creating Vault.", [vaultId, accountId]);
         vault = new Vault(vaultId);
         const rewardsController = RewardsController.bind(event.address) as RewardsController;
+        log.info("handleRewardClaimed: Calling try_vaults with vaultAddress: {}", [vaultAddress.toHex()]);
         const vaultInfo = rewardsController.try_vaults(vaultAddress);
         if (vaultInfo.reverted) {
             log.error("handleRewardClaimed: contract.try_vaults reverted for vault {} (during vault creation)", [vaultAddress.toHex()]);
@@ -333,6 +311,7 @@ export function handleRewardClaimed(event: RewardClaimedEvent): void {
         vault.save();
     } else {
         const contract = RewardsController.bind(event.address) as RewardsController;
+        log.info("handleRewardClaimed: Calling try_vaults with vaultAddress: {}", [vaultAddress.toHex()]);
         const vaultInfoTry = contract.try_vaults(vaultAddress);
         if (vaultInfoTry.reverted) {
             log.error("handleRewardClaimed: contract.try_vaults reverted for vault {} (during vault update)", [vaultAddress.toHex()]);

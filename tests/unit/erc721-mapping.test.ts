@@ -1,9 +1,10 @@
-import { Address, BigInt, Bytes, ethereum } from "@graphprotocol/graph-ts";
-import { Transfer } from "../../generated/IERC721/IERC721";
+import { Address, BigInt, Bytes, ethereum, log } from "@graphprotocol/graph-ts";
+import { Transfer } from "../../generated/templates/ERC721/ERC721";
 import { handleTransfer } from "../../src/erc721-mapping";
 import { Account, AccountCollectionReward, CollectionReward } from "../../generated/schema";
-import { HARDCODED_REWARD_TOKEN_ADDRESS } from "../../src/utils/rewards";
+import { HARDCODED_REWARD_TOKEN_ADDRESS, generateCollectionRewardId, generateAccountCollectionRewardId } from "../../src/utils/rewards";
 import { clearStore, test, assert, newMockEvent, describe, beforeEach, afterEach, mockFunction } from "matchstick-as/assembly/index";
+import { cToken } from "../../generated/cToken/cToken";
 
 const COLLECTION_ADDRESS = Address.fromString("0x0000000000000000000000000000000000000001");
 const FROM_ADDRESS = Address.fromString("0x0000000000000000000000000000000000000002");
@@ -20,12 +21,26 @@ function createTransferEvent(
     timestamp: BigInt,
     blockNumber: BigInt = BigInt.fromI32(1)
 ): Transfer {
-    const transferEvent = changetype<Transfer>(newMockEvent());
-    transferEvent.address = collection;
+    const mockEvent = newMockEvent(); // Get a basic mock event with dummy block and transaction
+
+    const transferEvent = new Transfer(
+        collection, // address
+        mockEvent.logIndex, // Use logIndex from mockEvent
+        mockEvent.transactionLogIndex, // Use transactionLogIndex from mockEvent
+        mockEvent.logType, // Use logType from mockEvent
+        mockEvent.block, // Use block from mockEvent
+        mockEvent.transaction, // Use transaction from mockEvent
+        [], // parameters (will be populated)
+        mockEvent.receipt // Use receipt from mockEvent
+    );
+
+    transferEvent.address = collection; // Set address
     transferEvent.parameters = new Array<ethereum.EventParam>();
     transferEvent.parameters.push(new ethereum.EventParam("from", ethereum.Value.fromAddress(from)));
     transferEvent.parameters.push(new ethereum.EventParam("to", ethereum.Value.fromAddress(to)));
     transferEvent.parameters.push(new ethereum.EventParam("tokenId", ethereum.Value.fromUnsignedBigInt(tokenId)));
+
+    // Set block properties (override mockEvent's block properties)
     transferEvent.block.timestamp = timestamp;
     transferEvent.block.number = blockNumber;
     return transferEvent;
@@ -41,8 +56,8 @@ describe("ERC721 - handleTransfer", () => {
     });
 
     test("Should process a standard transfer correctly", () => {
-        const collectionRewardIdString = COLLECTION_ADDRESS.toHex() + "-" + HARDCODED_REWARD_TOKEN_ADDRESS.toHex();
-        const collectionRewardId = Bytes.fromHexString(collectionRewardIdString);
+        const collectionRewardId = generateCollectionRewardId(COLLECTION_ADDRESS, HARDCODED_REWARD_TOKEN_ADDRESS);
+        // log.info("Generated CollectionReward ID: {}", [collectionRewardId.toHexString()]);
         const collectionReward = new CollectionReward(collectionRewardId);
         collectionReward.rewardToken = HARDCODED_REWARD_TOKEN_ADDRESS;
         collectionReward.collection = COLLECTION_ADDRESS;
@@ -56,16 +71,34 @@ describe("ERC721 - handleTransfer", () => {
         collectionReward.cTokenMarketAddress = ZERO_ADDRESS;
         collectionReward.isBorrowBased = false;
         collectionReward.collectionType = "ERC721";
+        log.info("CollectionReward before save: id={}, rewardToken={}, collection={}, rewardPerSecond={}, totalSecondsAccrued={}, lastUpdate={}, totalRewardsPool={}, fnType={}, p1={}, p2={}, cTokenMarketAddress={}, isBorrowBased={}, collectionType={}", [
+            collectionReward.id.toHexString(),
+            collectionReward.rewardToken.toHexString(),
+            collectionReward.collection.toHexString(),
+            collectionReward.rewardPerSecond.toString(),
+            collectionReward.totalSecondsAccrued.toString(),
+            collectionReward.lastUpdate.toString(),
+            collectionReward.totalRewardsPool.toString(),
+            collectionReward.fnType,
+            collectionReward.p1.toString(),
+            collectionReward.p2.toString(),
+            collectionReward.cTokenMarketAddress.toHexString(),
+            collectionReward.isBorrowBased.toString(),
+            collectionReward.collectionType
+        ]);
         collectionReward.save();
 
-        const fromAccount = new Account(FROM_ADDRESS);
+        const fromAccount = new Account(FROM_ADDRESS.toHexString());
+        // log.info("Generated From Account ID: {}", [fromAccount.id]);
         fromAccount.save();
-        const toAccount = new Account(TO_ADDRESS);
+        const toAccount = new Account(TO_ADDRESS.toHexString());
+        // log.info("Generated To Account ID: {}", [toAccount.id]);
         toAccount.save();
 
-        const fromAcrId = Bytes.fromHexString(FROM_ADDRESS.toHex() + "-" + collectionRewardIdString);
+        const fromAcrId = generateAccountCollectionRewardId(fromAccount.id, collectionReward.id);
+        // log.info("Generated From ACR ID: {}", [fromAcrId.toHexString()]);
         const fromAcr = new AccountCollectionReward(fromAcrId);
-        fromAcr.account = FROM_ADDRESS;
+        fromAcr.account = FROM_ADDRESS.toHexString(); // Changed
         fromAcr.collection = collectionRewardId;
         fromAcr.rewardToken = HARDCODED_REWARD_TOKEN_ADDRESS;
         fromAcr.balanceNFT = BigInt.fromI32(1);
@@ -73,9 +106,10 @@ describe("ERC721 - handleTransfer", () => {
         fromAcr.lastUpdate = TIMESTAMP.minus(BigInt.fromI32(100));
         fromAcr.save();
 
-        const toAcrId = Bytes.fromHexString(TO_ADDRESS.toHex() + "-" + collectionRewardIdString);
+        const toAcrId = generateAccountCollectionRewardId(toAccount.id, collectionReward.id);
+        // log.info("Generated To ACR ID: {}", [toAcrId.toHexString()]);
         const toAcr = new AccountCollectionReward(toAcrId);
-        toAcr.account = TO_ADDRESS;
+        toAcr.account = TO_ADDRESS.toHexString(); // Changed
         toAcr.collection = collectionRewardId;
         toAcr.rewardToken = HARDCODED_REWARD_TOKEN_ADDRESS;
         toAcr.balanceNFT = BigInt.fromI32(0);
@@ -83,32 +117,61 @@ describe("ERC721 - handleTransfer", () => {
         toAcr.lastUpdate = TIMESTAMP.minus(BigInt.fromI32(100));
         toAcr.save();
 
-        // Mock getOrCreateAccount for FROM_ADDRESS
+
+        // Mock cToken.try_balanceOf for ZERO_ADDRESS
         mockFunction(
             ZERO_ADDRESS,
-            "getOrCreateAccount",
-            "getOrCreateAccount(address):(bytes)", // Account ID is Bytes
+            "balanceOf",
+            "balanceOf(address):(uint256)",
             [ethereum.Value.fromAddress(FROM_ADDRESS)],
-            [ethereum.Value.fromBytes(fromAccount.id)],
+            [ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(100))], // Mock a balance
+            true // success
+        );
+        mockFunction(
+            ZERO_ADDRESS,
+            "balanceOf",
+            "balanceOf(address):(uint256)",
+            [ethereum.Value.fromAddress(TO_ADDRESS)],
+            [ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(50))], // Mock a balance
+            true // success
+        );
+
+        // Mock cToken.try_exchangeRateStored for ZERO_ADDRESS
+        mockFunction(
+            ZERO_ADDRESS,
+            "exchangeRateStored",
+            "exchangeRateStored():(uint256)",
+            [],
+            [ethereum.Value.fromUnsignedBigInt(BigInt.fromString("1000000000000000000"))], // Mock exchange rate
+            true // success
+        );
+
+        // Mock getOrCreateAccount for FROM_ADDRESS
+        mockFunction(
+            ZERO_ADDRESS, // Contract address for module mock workaround
+            "getOrCreateAccount",
+            "getOrCreateAccount(bytes):(string)", // Account ID is string
+            [ethereum.Value.fromBytes(Bytes.fromHexString(FROM_ADDRESS.toHexString()))],
+            [ethereum.Value.fromString(fromAccount.id)],
             false
         );
         // Mock getOrCreateAccount for TO_ADDRESS
         mockFunction(
-            ZERO_ADDRESS,
+            ZERO_ADDRESS, // Contract address for module mock workaround
             "getOrCreateAccount",
-            "getOrCreateAccount(address):(bytes)",
-            [ethereum.Value.fromAddress(TO_ADDRESS)],
-            [ethereum.Value.fromBytes(toAccount.id)],
+            "getOrCreateAccount(bytes):(string)",
+            [ethereum.Value.fromBytes(Bytes.fromHexString(TO_ADDRESS.toHexString()))],
+            [ethereum.Value.fromString(toAccount.id)],
             false
         );
 
         // Mock getOrCreateAccountCollectionReward for fromAccount
         mockFunction(
-            ZERO_ADDRESS,
+            ZERO_ADDRESS, // Contract address for module mock workaround
             "getOrCreateAccountCollectionReward",
-            "getOrCreateAccountCollectionReward(bytes,bytes,uint256):(bytes)", // IDs are Bytes, BigInt is uint256
+            "getOrCreateAccountCollectionReward(string,bytes,uint256):(bytes)", // IDs are Bytes, BigInt is uint256
             [
-                ethereum.Value.fromBytes(fromAccount.id), // account.id is Bytes
+                ethereum.Value.fromString(fromAccount.id), // account.id is string
                 ethereum.Value.fromBytes(collectionReward.id), // cr.id is Bytes
                 ethereum.Value.fromUnsignedBigInt(TIMESTAMP)
             ],
@@ -117,11 +180,11 @@ describe("ERC721 - handleTransfer", () => {
         );
         // Mock getOrCreateAccountCollectionReward for toAccount
         mockFunction(
-            ZERO_ADDRESS,
+            ZERO_ADDRESS, // Contract address for module mock workaround
             "getOrCreateAccountCollectionReward",
-            "getOrCreateAccountCollectionReward(bytes,bytes,uint256):(bytes)",
+            "getOrCreateAccountCollectionReward(string,bytes,uint256):(bytes)",
             [
-                ethereum.Value.fromBytes(toAccount.id),
+                ethereum.Value.fromString(toAccount.id), // account.id is string
                 ethereum.Value.fromBytes(collectionReward.id),
                 ethereum.Value.fromUnsignedBigInt(TIMESTAMP)
             ],
@@ -131,7 +194,7 @@ describe("ERC721 - handleTransfer", () => {
 
         // Mock accrueSeconds for fromAcr
         mockFunction(
-            ZERO_ADDRESS,
+            ZERO_ADDRESS, // Contract address for module mock workaround
             "accrueSeconds",
             "accrueSeconds(bytes,bytes,uint256):()", // Void return
             [
@@ -144,7 +207,7 @@ describe("ERC721 - handleTransfer", () => {
         );
         // Mock accrueSeconds for toAcr
         mockFunction(
-            ZERO_ADDRESS,
+            ZERO_ADDRESS, // Contract address for module mock workaround
             "accrueSeconds",
             "accrueSeconds(bytes,bytes,uint256):()",
             [
@@ -172,8 +235,7 @@ describe("ERC721 - handleTransfer", () => {
     });
 
     test("Should handle mint (from zero address)", () => {
-        const collectionRewardIdString = COLLECTION_ADDRESS.toHex() + "-" + HARDCODED_REWARD_TOKEN_ADDRESS.toHex();
-        const collectionRewardId = Bytes.fromHexString(collectionRewardIdString);
+        const collectionRewardId = generateCollectionRewardId(COLLECTION_ADDRESS, HARDCODED_REWARD_TOKEN_ADDRESS);
         const collectionReward = new CollectionReward(collectionRewardId);
         collectionReward.rewardToken = HARDCODED_REWARD_TOKEN_ADDRESS;
         collectionReward.collection = COLLECTION_ADDRESS;
@@ -187,14 +249,31 @@ describe("ERC721 - handleTransfer", () => {
         collectionReward.cTokenMarketAddress = ZERO_ADDRESS;
         collectionReward.isBorrowBased = false;
         collectionReward.collectionType = "ERC721";
+        log.info("CollectionReward before save: id={}, rewardToken={}, collection={}, rewardPerSecond={}, totalSecondsAccrued={}, lastUpdate={}, totalRewardsPool={}, fnType={}, p1={}, p2={}, cTokenMarketAddress={}, isBorrowBased={}, collectionType={}", [
+            collectionReward.id.toHexString(),
+            collectionReward.rewardToken.toHexString(),
+            collectionReward.collection.toHexString(),
+            collectionReward.rewardPerSecond.toString(),
+            collectionReward.totalSecondsAccrued.toString(),
+            collectionReward.lastUpdate.toString(),
+            collectionReward.totalRewardsPool.toString(),
+            collectionReward.fnType,
+            collectionReward.p1.toString(),
+            collectionReward.p2.toString(),
+            collectionReward.cTokenMarketAddress.toHexString(),
+            collectionReward.isBorrowBased.toString(),
+            collectionReward.collectionType
+        ]);
         collectionReward.save();
 
-        const toAccount = new Account(TO_ADDRESS);
+        const toAccount = new Account(TO_ADDRESS.toHexString());
         toAccount.save();
+        assert.entityCount("Account", 1);
+        assert.fieldEquals("Account", toAccount.id, "id", TO_ADDRESS.toHexString());
 
-        const toAcrId = Bytes.fromHexString(TO_ADDRESS.toHex() + "-" + collectionRewardIdString);
+        const toAcrId = generateAccountCollectionRewardId(toAccount.id, collectionReward.id);
         const toAcr = new AccountCollectionReward(toAcrId);
-        toAcr.account = TO_ADDRESS;
+        toAcr.account = TO_ADDRESS.toHexString(); // Changed
         toAcr.collection = collectionRewardId;
         toAcr.rewardToken = HARDCODED_REWARD_TOKEN_ADDRESS;
         toAcr.balanceNFT = BigInt.fromI32(0);
@@ -206,9 +285,9 @@ describe("ERC721 - handleTransfer", () => {
         mockFunction(
             ZERO_ADDRESS,
             "getOrCreateAccount",
-            "getOrCreateAccount(address):(bytes)",
-            [ethereum.Value.fromAddress(TO_ADDRESS)],
-            [ethereum.Value.fromBytes(toAccount.id)],
+            "getOrCreateAccount(bytes):(string)",
+            [ethereum.Value.fromBytes(Bytes.fromHexString(TO_ADDRESS.toHexString()))],
+            [ethereum.Value.fromString(toAccount.id)],
             false
         );
         // Note: If getOrCreateAccount is called with ZERO_ADDRESS in this test, it needs a mock too.
@@ -219,9 +298,9 @@ describe("ERC721 - handleTransfer", () => {
         mockFunction(
             ZERO_ADDRESS,
             "getOrCreateAccountCollectionReward",
-            "getOrCreateAccountCollectionReward(bytes,bytes,uint256):(bytes)",
+            "getOrCreateAccountCollectionReward(string,bytes,uint256):(bytes)",
             [
-                ethereum.Value.fromBytes(toAccount.id),
+                ethereum.Value.fromString(toAccount.id), // account.id is string
                 ethereum.Value.fromBytes(collectionReward.id),
                 ethereum.Value.fromUnsignedBigInt(TIMESTAMP)
             ],
@@ -256,8 +335,7 @@ describe("ERC721 - handleTransfer", () => {
     });
 
     test("Should handle burn (to zero address)", () => {
-        const collectionRewardIdString = COLLECTION_ADDRESS.toHex() + "-" + HARDCODED_REWARD_TOKEN_ADDRESS.toHex();
-        const collectionRewardId = Bytes.fromHexString(collectionRewardIdString);
+        const collectionRewardId = generateCollectionRewardId(COLLECTION_ADDRESS, HARDCODED_REWARD_TOKEN_ADDRESS);
         const collectionReward = new CollectionReward(collectionRewardId);
         collectionReward.rewardToken = HARDCODED_REWARD_TOKEN_ADDRESS;
         collectionReward.collection = COLLECTION_ADDRESS;
@@ -271,14 +349,31 @@ describe("ERC721 - handleTransfer", () => {
         collectionReward.cTokenMarketAddress = ZERO_ADDRESS;
         collectionReward.isBorrowBased = false;
         collectionReward.collectionType = "ERC721";
+        log.info("CollectionReward before save: id={}, rewardToken={}, collection={}, rewardPerSecond={}, totalSecondsAccrued={}, lastUpdate={}, totalRewardsPool={}, fnType={}, p1={}, p2={}, cTokenMarketAddress={}, isBorrowBased={}, collectionType={}", [
+            collectionReward.id.toHexString(),
+            collectionReward.rewardToken.toHexString(),
+            collectionReward.collection.toHexString(),
+            collectionReward.rewardPerSecond.toString(),
+            collectionReward.totalSecondsAccrued.toString(),
+            collectionReward.lastUpdate.toString(),
+            collectionReward.totalRewardsPool.toString(),
+            collectionReward.fnType,
+            collectionReward.p1.toString(),
+            collectionReward.p2.toString(),
+            collectionReward.cTokenMarketAddress.toHexString(),
+            collectionReward.isBorrowBased.toString(),
+            collectionReward.collectionType
+        ]);
         collectionReward.save();
 
-        const fromAccount = new Account(FROM_ADDRESS);
+        const fromAccount = new Account(FROM_ADDRESS.toHexString());
         fromAccount.save();
+        assert.entityCount("Account", 1);
+        assert.fieldEquals("Account", fromAccount.id, "id", FROM_ADDRESS.toHexString());
 
-        const fromAcrId = Bytes.fromHexString(FROM_ADDRESS.toHex() + "-" + collectionRewardIdString);
+        const fromAcrId = generateAccountCollectionRewardId(fromAccount.id, collectionReward.id);
         const fromAcr = new AccountCollectionReward(fromAcrId);
-        fromAcr.account = FROM_ADDRESS;
+        fromAcr.account = FROM_ADDRESS.toHexString(); // Changed
         fromAcr.collection = collectionRewardId;
         fromAcr.rewardToken = HARDCODED_REWARD_TOKEN_ADDRESS;
         fromAcr.balanceNFT = BigInt.fromI32(1);
@@ -290,9 +385,9 @@ describe("ERC721 - handleTransfer", () => {
         mockFunction(
             ZERO_ADDRESS,
             "getOrCreateAccount",
-            "getOrCreateAccount(address):(bytes)",
-            [ethereum.Value.fromAddress(FROM_ADDRESS)],
-            [ethereum.Value.fromBytes(fromAccount.id)],
+            "getOrCreateAccount(bytes):(string)",
+            [ethereum.Value.fromBytes(Bytes.fromHexString(FROM_ADDRESS.toHexString()))],
+            [ethereum.Value.fromString(fromAccount.id)],
             false
         );
         // Note: If getOrCreateAccount is called with ZERO_ADDRESS in this test, it needs a mock too.
@@ -301,9 +396,9 @@ describe("ERC721 - handleTransfer", () => {
         mockFunction(
             ZERO_ADDRESS,
             "getOrCreateAccountCollectionReward",
-            "getOrCreateAccountCollectionReward(bytes,bytes,uint256):(bytes)",
+            "getOrCreateAccountCollectionReward(string,bytes,uint256):(bytes)",
             [
-                ethereum.Value.fromBytes(fromAccount.id),
+                ethereum.Value.fromString(fromAccount.id), // account.id is string
                 ethereum.Value.fromBytes(collectionReward.id),
                 ethereum.Value.fromUnsignedBigInt(TIMESTAMP)
             ],
@@ -346,8 +441,7 @@ describe("ERC721 - handleTransfer", () => {
     });
 
     test("Should handle negative balance gracefully for 'from' account (and log warning)", () => {
-        const collectionRewardIdString = COLLECTION_ADDRESS.toHex() + "-" + HARDCODED_REWARD_TOKEN_ADDRESS.toHex();
-        const collectionRewardId = Bytes.fromHexString(collectionRewardIdString);
+        const collectionRewardId = generateCollectionRewardId(COLLECTION_ADDRESS, HARDCODED_REWARD_TOKEN_ADDRESS);
         const collectionReward = new CollectionReward(collectionRewardId);
         collectionReward.rewardToken = HARDCODED_REWARD_TOKEN_ADDRESS;
         collectionReward.collection = COLLECTION_ADDRESS;
@@ -361,16 +455,36 @@ describe("ERC721 - handleTransfer", () => {
         collectionReward.cTokenMarketAddress = ZERO_ADDRESS;
         collectionReward.isBorrowBased = false;
         collectionReward.collectionType = "ERC721";
+        log.info("CollectionReward before save: id={}, rewardToken={}, collection={}, rewardPerSecond={}, totalSecondsAccrued={}, lastUpdate={}, totalRewardsPool={}, fnType={}, p1={}, p2={}, cTokenMarketAddress={}, isBorrowBased={}, collectionType={}", [
+            collectionReward.id.toHexString(),
+            collectionReward.rewardToken.toHexString(),
+            collectionReward.collection.toHexString(),
+            collectionReward.rewardPerSecond.toString(),
+            collectionReward.totalSecondsAccrued.toString(),
+            collectionReward.lastUpdate.toString(),
+            collectionReward.totalRewardsPool.toString(),
+            collectionReward.fnType,
+            collectionReward.p1.toString(),
+            collectionReward.p2.toString(),
+            collectionReward.cTokenMarketAddress.toHexString(),
+            collectionReward.isBorrowBased.toString(),
+            collectionReward.collectionType
+        ]);
         collectionReward.save();
 
-        const fromAccount = new Account(FROM_ADDRESS);
+        const fromAccount = new Account(FROM_ADDRESS.toHexString());
         fromAccount.save();
-        const toAccount = new Account(TO_ADDRESS);
-        toAccount.save();
+        assert.entityCount("Account", 1);
+        assert.fieldEquals("Account", fromAccount.id, "id", FROM_ADDRESS.toHexString());
 
-        const fromAcrId = Bytes.fromHexString(FROM_ADDRESS.toHex() + "-" + collectionRewardIdString);
+        const toAccount = new Account(TO_ADDRESS.toHexString());
+        toAccount.save();
+        assert.entityCount("Account", 2);
+        assert.fieldEquals("Account", toAccount.id, "id", TO_ADDRESS.toHexString());
+
+        const fromAcrId = generateAccountCollectionRewardId(fromAccount.id, collectionReward.id);
         const fromAcr = new AccountCollectionReward(fromAcrId);
-        fromAcr.account = FROM_ADDRESS;
+        fromAcr.account = FROM_ADDRESS.toHexString(); // Changed
         fromAcr.collection = collectionRewardId;
         fromAcr.rewardToken = HARDCODED_REWARD_TOKEN_ADDRESS;
         fromAcr.balanceNFT = BigInt.fromI32(0);
@@ -378,9 +492,9 @@ describe("ERC721 - handleTransfer", () => {
         fromAcr.lastUpdate = TIMESTAMP.minus(BigInt.fromI32(100));
         fromAcr.save();
 
-        const toAcrId = Bytes.fromHexString(TO_ADDRESS.toHex() + "-" + collectionRewardIdString);
+        const toAcrId = generateAccountCollectionRewardId(toAccount.id, collectionReward.id);
         const toAcr = new AccountCollectionReward(toAcrId);
-        toAcr.account = TO_ADDRESS;
+        toAcr.account = TO_ADDRESS.toHexString(); // Changed
         toAcr.collection = collectionRewardId;
         toAcr.rewardToken = HARDCODED_REWARD_TOKEN_ADDRESS;
         toAcr.balanceNFT = BigInt.fromI32(0);
@@ -392,18 +506,18 @@ describe("ERC721 - handleTransfer", () => {
         mockFunction(
             ZERO_ADDRESS,
             "getOrCreateAccount",
-            "getOrCreateAccount(address):(bytes)",
-            [ethereum.Value.fromAddress(FROM_ADDRESS)],
-            [ethereum.Value.fromBytes(fromAccount.id)],
+            "getOrCreateAccount(bytes):(string)",
+            [ethereum.Value.fromBytes(Bytes.fromHexString(FROM_ADDRESS.toHexString()))],
+            [ethereum.Value.fromString(fromAccount.id)],
             false
         );
         // Mock getOrCreateAccount for TO_ADDRESS
         mockFunction(
             ZERO_ADDRESS,
             "getOrCreateAccount",
-            "getOrCreateAccount(address):(bytes)",
-            [ethereum.Value.fromAddress(TO_ADDRESS)],
-            [ethereum.Value.fromBytes(toAccount.id)],
+            "getOrCreateAccount(bytes):(string)",
+            [ethereum.Value.fromBytes(Bytes.fromHexString(TO_ADDRESS.toHexString()))],
+            [ethereum.Value.fromString(toAccount.id)],
             false
         );
 
@@ -411,22 +525,22 @@ describe("ERC721 - handleTransfer", () => {
         mockFunction(
             ZERO_ADDRESS,
             "getOrCreateAccountCollectionReward",
-            "getOrCreateAccountCollectionReward(bytes,bytes,uint256):(bytes)",
+            "getOrCreateAccountCollectionReward(string,bytes,uint256):(bytes)",
             [
-                ethereum.Value.fromBytes(fromAccount.id),
-                ethereum.Value.fromBytes(collectionReward.id),
+                ethereum.Value.fromString(fromAccount.id), // account.id is string
+                ethereum.Value.fromBytes(collectionReward.id), // cr.id is Bytes
                 ethereum.Value.fromUnsignedBigInt(TIMESTAMP)
             ],
-            [ethereum.Value.fromBytes(fromAcr.id)],
+            [ethereum.Value.fromBytes(fromAcr.id)], // ACR ID is Bytes
             false
         );
         // Mock getOrCreateAccountCollectionReward for toAccount
         mockFunction(
             ZERO_ADDRESS,
             "getOrCreateAccountCollectionReward",
-            "getOrCreateAccountCollectionReward(bytes,bytes,uint256):(bytes)",
+            "getOrCreateAccountCollectionReward(string,bytes,uint256):(bytes)",
             [
-                ethereum.Value.fromBytes(toAccount.id),
+                ethereum.Value.fromString(toAccount.id), // account.id is string
                 ethereum.Value.fromBytes(collectionReward.id),
                 ethereum.Value.fromUnsignedBigInt(TIMESTAMP)
             ],

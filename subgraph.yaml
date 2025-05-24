@@ -67,6 +67,8 @@ dataSources:
       abis:
         - name: CollectionVault
           file: ./abis/ICollectionsVault.json
+        - name: cToken
+          file: ./abis/cToken.json
       eventHandlers:
         - event: CollectionDeposit(indexed address,indexed address,indexed address,uint256,uint256)
           handler: handleCollectionDeposit
