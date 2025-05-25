@@ -32,10 +32,13 @@ export function handleTransfer(event: TransferEvent): void {
 
         accrueSeconds(fromAcr, collectionRewardEntity, timestamp);
 
-        fromAcr.balanceNFT = fromAcr.balanceNFT.minus(BigInt.fromI32(1));
-        if (fromAcr.balanceNFT.lt(BigInt.fromI32(0))) {
-            log.warning("NFT balance for account {} in collection {} went negative.", [fromAddress.toHexString(), collectionAddress.toHexString()]);
-            fromAcr.balanceNFT = BigInt.fromI32(0);
+        if (fromAcr.balanceNFT.gt(BigInt.fromI32(0))) {
+            fromAcr.balanceNFT = fromAcr.balanceNFT.minus(BigInt.fromI32(1));
+        } else {
+            log.warning(
+                "Attempted to transfer NFT from account {} in collection {} which has a recorded balance of 0.",
+                [fromAddress.toHexString(), collectionAddress.toHexString()]
+            );
         }
         fromAcr.lastUpdate = timestamp;
         fromAcr.save();

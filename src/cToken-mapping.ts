@@ -7,8 +7,8 @@ import {
     Redeem as RedeemEvent,
     RepayBorrow as RepayBorrowEvent,
     Transfer as TransferEvent,
-    cToken
-} from "../generated/cToken/cToken";
+} from "../generated/templates/cToken/cToken";
+import { cToken as CTokenContract } from "../generated/templates/cToken/cToken";
 import {
     CTokenMarket,
     Liquidation,
@@ -31,7 +31,7 @@ function getOrCreateCTokenMarket(
     let market = CTokenMarket.load(marketId);
     if (market == null) {
         market = new CTokenMarket(marketId);
-        const cTokenContract = cToken.bind(marketAddress);
+        const cTokenContract = CTokenContract.bind(marketAddress);
 
         let underlyingAddress: Address = ADDRESS_ZERO;
         let underlyingSymbol: string = "UNKNOWN";
@@ -106,7 +106,7 @@ export function handleAccrueInterest(event: AccrueInterestEvent): void {
         return;
     }
 
-    const cTokenContract = cToken.bind(event.address);
+    const cTokenContract = CTokenContract.bind(event.address);
 
     if (event.params.totalBorrows) {
         market.totalBorrowsU = event.params.totalBorrows;
@@ -176,7 +176,7 @@ export function handleLiquidateBorrow(event: LiquidateBorrowEvent): void {
     const liquidator = getOrCreateAccount(event.params.liquidator);
     const borrower = getOrCreateAccount(event.params.borrower);
 
-    const borrowedCTokenContract = cToken.bind(event.address);
+    const borrowedCTokenContract = CTokenContract.bind(event.address);
     const borrowedTotalBorrowsTry = borrowedCTokenContract.try_totalBorrows();
     if (!borrowedTotalBorrowsTry.reverted) {
         borrowedMarket.totalBorrowsU = borrowedTotalBorrowsTry.value;
@@ -186,7 +186,7 @@ export function handleLiquidateBorrow(event: LiquidateBorrowEvent): void {
     borrowedMarket.blockTimestamp = event.block.timestamp;
     borrowedMarket.save();
 
-    const collateralCTokenContract = cToken.bind(event.params.cTokenCollateral);
+    const collateralCTokenContract = CTokenContract.bind(event.params.cTokenCollateral);
     const collateralTotalSupplyTry = collateralCTokenContract.try_totalSupply();
     if (!collateralTotalSupplyTry.reverted) {
         collateralMarket.totalSupplyC = collateralTotalSupplyTry.value;
@@ -215,7 +215,7 @@ export function handleMint(event: MintEvent): void {
     const market = getOrCreateCTokenMarket(event.address, event.block.timestamp);
     getOrCreateAccount(event.params.minter);
 
-    const cTokenContract = cToken.bind(event.address);
+    const cTokenContract = CTokenContract.bind(event.address);
     const totalSupplyTry = cTokenContract.try_totalSupply();
     if (!totalSupplyTry.reverted) {
         market.totalSupplyC = totalSupplyTry.value;
@@ -230,7 +230,7 @@ export function handleRedeem(event: RedeemEvent): void {
     const market = getOrCreateCTokenMarket(event.address, event.block.timestamp);
     getOrCreateAccount(event.params.redeemer);
 
-    const cTokenContract = cToken.bind(event.address);
+    const cTokenContract = CTokenContract.bind(event.address);
     const totalSupplyTry = cTokenContract.try_totalSupply();
     if (!totalSupplyTry.reverted) {
         market.totalSupplyC = totalSupplyTry.value;
@@ -257,7 +257,7 @@ export function handleTransfer(event: TransferEvent): void {
 
     const market = getOrCreateCTokenMarket(event.address, event.block.timestamp);
 
-    const cTokenContract = cToken.bind(event.address);
+    const cTokenContract = CTokenContract.bind(event.address);
 
     const totalSupplyTry = cTokenContract.try_totalSupply();
     if (!totalSupplyTry.reverted) {

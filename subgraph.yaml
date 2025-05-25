@@ -5,76 +5,28 @@ indexerHints:
   prune: auto
 dataSources:
   - kind: ethereum
-    name: cToken
+    name: Comptroller
     network: apechain-curtis
     source:
-      address: "0x663702880Ec335BB1fae3ca05915B2D24F2b6A48"
-      abi: cToken
+      address: "0x2E40b5B0fD75c659908aa8e38122c797d2A892ae"
+      abi: Comptroller
       startBlock: 17504126
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
       language: wasm/assemblyscript
       entities:
-        - Vault
-        - AccountVault
-        - CollectionReward
-        - AccountCollectionReward
-        - Account
         - CTokenMarket
-        - CollectionMarket
         - MarketData
-        - Liquidation
       abis:
-        - name: cToken
-          file: ./abis/cToken.json
-        - name: ERC20
-          file: ./abis/ERC20.json
-        - name: ERC20SymbolBytes
-          file: ./abis/ERC20SymbolBytes.json
         - name: Comptroller
-          file: ./abis/ComptrollerInterface.json
-      eventHandlers:
-        - event: AccrueInterest(uint256,uint256,uint256,uint256)
-          handler: handleAccrueInterest
-        - event: Borrow(address,uint256,uint256,uint256)
-          handler: handleBorrow
-        - event: LiquidateBorrow(address,address,uint256,address,uint256)
-          handler: handleLiquidateBorrow
-        - event: Mint(address,uint256,uint256)
-          handler: handleMint
-        - event: Redeem(address,uint256,uint256)
-          handler: handleRedeem
-        - event: RepayBorrow(address,address,uint256,uint256,uint256)
-          handler: handleRepayBorrow
-        - event: Transfer(indexed address,indexed address,uint256)
-          handler: handleTransfer
-      file: ./src/cToken-mapping.ts
-
-  - kind: ethereum
-    name: CollectionVault
-    network: apechain-curtis
-    source:
-      address: "0xCc7eadE99a0D2A0075ADA98b1b238d9f46DE2495"
-      abi: CollectionVault
-      startBlock: 17870949
-    mapping:
-      kind: ethereum/events
-      apiVersion: 0.0.9
-      language: wasm/assemblyscript
-      entities:
-        - CollectionMarket
-      abis:
-        - name: CollectionVault
-          file: ./abis/ICollectionsVault.json
+          file: ./abis/Comptroller.json
         - name: cToken
           file: ./abis/cToken.json
       eventHandlers:
-        - event: CollectionDeposit(indexed address,indexed address,indexed address,uint256,uint256)
-          handler: handleCollectionDeposit
-        - event: CollectionWithdraw(indexed address,address,indexed address,indexed address,uint256,uint256)
-          handler: handleCollectionWithdraw
-      file: ./src/collection-vault-mapping.ts
+        - event: MarketListed(address)
+          handler: handleMarketListed
+      file: ./src/comptroller-mapping.ts
 
   - kind: ethereum
     name: RewardsController
@@ -98,25 +50,89 @@ dataSources:
         - name: RewardsController
           file: ./abis/IRewardsController.json
       eventHandlers:
-        - event: NewCollectionWhitelisted(indexed address,uint8,uint8,uint16)
+        - event: VaultAdded(indexed address)
+          handler: handleVaultAdded
+        - event: NewCollectionWhitelisted(indexed address,indexed address,uint8,uint8,uint16)
           handler: handleNewCollectionWhitelisted
-        - event: WhitelistCollectionRemoved(indexed address)
+        - event: WhitelistCollectionRemoved(indexed address,indexed address)
           handler: handleWhitelistCollectionRemoved
-        - event: CollectionRewardShareUpdated(indexed address,uint16,uint16)
+        - event: CollectionRewardShareUpdated(indexed address,indexed address,uint16,uint16)
           handler: handleCollectionRewardShareUpdated
-        - event: WeightFunctionSet(indexed address,(uint8,int256,int256))
+        - event: WeightFunctionSet(indexed address,indexed address,(uint8,int256,int256))
           handler: handleWeightFunctionSet
-        - event: RewardsClaimedForLazy(indexed address,indexed address,uint256,uint256,uint256,uint256,uint256,uint256)
-          handler: handleRewardsClaimedForLazy
-        - event: BatchRewardsClaimedForLazy(indexed address,uint256,uint256)
-          handler: handleBatchRewardsClaimedForLazy
         - event: RewardPerBlockUpdated(indexed address,uint128)
           handler: handleRewardPerBlockUpdated
-        - event: RewardClaimed(address,indexed address,uint256)
+        - event: RewardsClaimed(indexed address,indexed address,indexed address,uint256,uint64)
           handler: handleRewardClaimed
       file: ./src/rewards-controller-mapping.ts
 
 templates:
+  - kind: ethereum/contract
+    name: cToken
+    network: apechain-curtis
+    source:
+      abi: cToken
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/cToken-mapping.ts
+      entities:
+        - Vault
+        - AccountVault
+        - CollectionReward
+        - AccountCollectionReward
+        - Account
+        - CTokenMarket
+        - CollectionMarket
+        - MarketData
+        - Liquidation
+      abis:
+        - name: cToken
+          file: ./abis/cToken.json
+        - name: ERC20
+          file: ./abis/ERC20.json
+        - name: ERC20SymbolBytes
+          file: ./abis/ERC20SymbolBytes.json
+        - name: Comptroller
+          file: ./abis/Comptroller.json
+      eventHandlers:
+        - event: AccrueInterest(uint256,uint256,uint256,uint256)
+          handler: handleAccrueInterest
+        - event: Borrow(address,uint256,uint256,uint256)
+          handler: handleBorrow
+        - event: LiquidateBorrow(address,address,uint256,address,uint256)
+          handler: handleLiquidateBorrow
+        - event: Mint(address,uint256,uint256)
+          handler: handleMint
+        - event: Redeem(address,uint256,uint256)
+          handler: handleRedeem
+        - event: RepayBorrow(address,address,uint256,uint256,uint256)
+          handler: handleRepayBorrow
+        - event: Transfer(indexed address,indexed address,uint256)
+          handler: handleTransfer
+  - kind: ethereum/contract
+    name: CollectionVault
+    network: apechain-curtis
+    source:
+      abi: CollectionVault
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - CollectionMarket
+      abis:
+        - name: CollectionVault
+          file: ./abis/ICollectionsVault.json
+        - name: cToken
+          file: ./abis/cToken.json
+      eventHandlers:
+        - event: CollectionDeposit(indexed address,indexed address,indexed address,uint256,uint256)
+          handler: handleCollectionDeposit
+        - event: CollectionWithdraw(indexed address,address,indexed address,indexed address,uint256,uint256)
+          handler: handleCollectionWithdraw
+      file: ./src/collection-vault-mapping.ts
   - kind: ethereum/contract
     name: ERC1155
     network: apechain-curtis
@@ -157,6 +173,8 @@ templates:
       abis:
         - name: ERC721
           file: ./abis/IERC721.json
+        - name: cToken
+          file: ./abis/cToken.json
       eventHandlers:
         - event: Transfer(indexed address,indexed address,indexed uint256)
           handler: handleTransfer
