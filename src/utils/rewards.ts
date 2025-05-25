@@ -1,5 +1,5 @@
 import { Address, BigInt, Bytes, log, crypto } from "@graphprotocol/graph-ts";
-import { Account, AccountCollectionReward, CollectionReward } from "../../generated/schema";
+import { Account, AccountCollectionReward, CollectionReward, CTokenMarket, MarketData, CollectionMarket, Vault, AccountVault } from "../../generated/schema";
 import { cToken } from '../../generated/cToken/cToken';
 
 export const HARDCODED_REWARD_TOKEN_ADDRESS = Address.fromString("0xf43EE9653ff96AB50C270eC3D9f0A8e015Df4065");
@@ -35,6 +35,7 @@ export function getOrCreateAccount(accountAddress: Bytes): Account {
     let account = Account.load(accountAddress.toHexString());
     if (account == null) {
         account = new Account(accountAddress.toHexString());
+        account.totalSecondsClaimed = ZERO_BI;
         account.save();
         log.info("getOrCreateAccount: Created new account with ID: {}", [account.id]);
     } else {
@@ -50,11 +51,8 @@ export function generateCollectionRewardId(collectionAddress: Address, rewardTok
 
 export function generateAccountCollectionRewardId(userAccountEntityId: string, collectionRewardId: Bytes): Bytes {
     log.info("generateAccountCollectionRewardId: userAccountEntityId: {}, collectionRewardId: {}", [userAccountEntityId, collectionRewardId.toHexString()]);
-    let hexString = userAccountEntityId;
-    if (!hexString.startsWith("0x")) {
-        hexString = "0x" + hexString;
-    }
-    const id = Bytes.fromByteArray(crypto.keccak256(Bytes.fromHexString(hexString).concat(collectionRewardId)));
+    const accountBytes = Bytes.fromHexString(userAccountEntityId);
+    const id = Bytes.fromByteArray(crypto.keccak256(accountBytes.concat(collectionRewardId)));
     log.info("generateAccountCollectionRewardId: Generated ID: {}", [id.toHexString()]);
     return id;
 }
@@ -198,8 +196,6 @@ export function accrueSeconds(acr: AccountCollectionReward, coll: CollectionRewa
         return;
     }
 
-    // Skip byte-by-byte validation which might cause memory issues
-
     log.debug("accrueSeconds: Attempting Address.fromString(acr.account): {}", [acr.account]);
     log.debug("accrueSeconds: Attempting Address.fromBytes(coll.cTokenMarketAddress): {}", [coll.cTokenMarketAddress.toHexString()]);
 
@@ -238,4 +234,86 @@ export function accrueSeconds(acr: AccountCollectionReward, coll: CollectionRewa
     acr.seconds = acr.seconds.plus(rewardAccruedScaled.div(EXP_SCALE));
     coll.totalSecondsAccrued = coll.totalSecondsAccrued.plus(rewardAccruedScaled.div(EXP_SCALE));
     acr.lastUpdate = now;
+}
+
+export function getOrCreateCTokenMarket(address: Address, timestamp: BigInt): CTokenMarket {
+    let cTokenMarket = CTokenMarket.load(address.toHexString());
+    if (cTokenMarket == null) {
+        cTokenMarket = new CTokenMarket(address.toHexString());
+        cTokenMarket.underlying = ZERO_ADDRESS;
+        cTokenMarket.underlyingSymbol = "";
+        cTokenMarket.underlyingDecimals = 0;
+        cTokenMarket.totalSupplyC = ZERO_BI;
+        cTokenMarket.totalBorrowsU = ZERO_BI;
+        cTokenMarket.totalReservesU = ZERO_BI;
+        cTokenMarket.exchangeRate = ZERO_BI;
+        cTokenMarket.collateralFactor = ZERO_BI;
+        cTokenMarket.borrowIndex = ZERO_BI;
+        cTokenMarket.lastAccrualTimestamp = timestamp;
+        cTokenMarket.blockTimestamp = timestamp;
+        cTokenMarket.save();
+    }
+    return cTokenMarket;
+}
+
+export function getOrCreateMarketData(address: Address, timestamp: BigInt): MarketData {
+    let marketData = MarketData.load(address.toHexString());
+    if (marketData == null) {
+        marketData = new MarketData(address.toHexString());
+        marketData.totalSupply = ZERO_BI;
+        marketData.totalBorrow = ZERO_BI;
+        marketData.totalReserves = ZERO_BI;
+        marketData.accruedInterest = ZERO_BI;
+        marketData.lastInterestUpdate = timestamp;
+        marketData.save();
+    }
+    return marketData;
+}
+
+export function getOrCreateCollectionMarket(collection: Address, market: Address): CollectionMarket {
+    const id = Bytes.fromByteArray(crypto.keccak256(collection.concat(market)));
+    let collectionMarket = CollectionMarket.load(id);
+    if (collectionMarket == null) {
+        collectionMarket = new CollectionMarket(id);
+        collectionMarket.collection = collection;
+        collectionMarket.market = market;
+        collectionMarket.totalNFT = ZERO_BI;
+        collectionMarket.totalSeconds = ZERO_BI;
+        collectionMarket.principalU = ZERO_BI;
+        collectionMarket.save();
+    }
+    return collectionMarket;
+}
+
+export function getOrCreateVault(vaultAddress: Address): Vault {
+    let vault = Vault.load(vaultAddress.toHexString());
+    if (vault == null) {
+        vault = new Vault(vaultAddress.toHexString());
+        vault.rewardPerBlock = ZERO_BI;
+        vault.globalRPW = ZERO_BI;
+        vault.totalWeight = ZERO_BI;
+        vault.lastUpdateBlock = ZERO_BI;
+        vault.weightByBorrow = false;
+        vault.useExp = false;
+        vault.linK = ZERO_BI;
+        vault.expR = ZERO_BI;
+        vault.save();
+    }
+    return vault;
+}
+
+export function getOrCreateAccountVault(accountId: string, vaultId: string): AccountVault {
+    const id = accountId.concat("-").concat(vaultId);
+    let accountVault = AccountVault.load(id);
+    if (accountVault == null) {
+        accountVault = new AccountVault(id);
+        accountVault.account = accountId;
+        accountVault.vault = vaultId;
+        accountVault.weight = ZERO_BI;
+        accountVault.rewardDebt = ZERO_BI;
+        accountVault.accrued = ZERO_BI;
+        accountVault.claimable = ZERO_BI;
+        accountVault.save();
+    }
+    return accountVault;
 }

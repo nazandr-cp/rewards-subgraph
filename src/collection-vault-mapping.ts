@@ -1,10 +1,20 @@
 import {
     CollectionDeposit as CollectionDepositEvent,
     CollectionWithdraw as CollectionWithdrawEvent
-} from "../generated/CollectionVault/CollectionVault"
-import { CollectionMarket } from "../generated/schema"
-import { BigInt, log } from "@graphprotocol/graph-ts"
-import { ZERO_BI } from "./utils/rewards"
+} from "../generated/CollectionVault/CollectionVault";
+import { log, BigInt, Address, Bytes } from "@graphprotocol/graph-ts";
+import { Account, CollectionReward, AccountCollectionReward } from "../generated/schema";
+import {
+    ZERO_BI,
+    getOrCreateCollectionMarket,
+    getOrCreateAccount,
+    generateCollectionRewardId,
+    getOrCreateAccountCollectionReward,
+    HARDCODED_REWARD_TOKEN_ADDRESS,
+    // getOrCreateCollectionReward, // Not creating CollectionReward here, only loading
+    // HARDCODED_CTOKEN_MARKET_ADDRESS, // Not needed if only loading CollectionReward
+    // WeightFunctionType // Not needed if only loading
+} from "./utils/rewards";
 
 function convertTo18DecimalsBI(value: BigInt, currentDecimals: i32): BigInt {
     if (currentDecimals == 18) {
@@ -24,17 +34,7 @@ function convertTo18DecimalsBI(value: BigInt, currentDecimals: i32): BigInt {
 }
 
 export function handleCollectionDeposit(event: CollectionDepositEvent): void {
-    const id = event.params.collectionAddress.concat(event.address);
-    let entity = CollectionMarket.load(id);
-
-    if (!entity) {
-        entity = new CollectionMarket(id);
-        entity.collection = event.params.collectionAddress;
-        entity.market = event.address;
-        entity.totalNFT = ZERO_BI;
-        entity.totalSeconds = ZERO_BI;
-        entity.principalU = ZERO_BI;
-    }
+    const entity = getOrCreateCollectionMarket(event.params.collectionAddress, event.address);
 
     entity.totalNFT = entity.totalNFT.plus(event.params.shares);
 
@@ -56,13 +56,42 @@ export function handleCollectionDeposit(event: CollectionDepositEvent): void {
             entity.principalU.toString()
         ]
     );
-
     entity.save();
+
+    // --- AccountCollectionReward Logic ---
+    const accountId = event.params.receiver.toHexString();
+    const account: Account = getOrCreateAccount(event.params.receiver as Bytes);
+
+    const collectionAddress: Address = event.params.collectionAddress;
+    const rewardTokenAddress = HARDCODED_REWARD_TOKEN_ADDRESS;
+    const collectionRewardId = generateCollectionRewardId(collectionAddress, rewardTokenAddress);
+    const collectionReward = CollectionReward.load(collectionRewardId);
+
+    if (collectionReward != null) {
+        const accountCollectionReward: AccountCollectionReward = getOrCreateAccountCollectionReward(account, collectionReward, event.block.timestamp);
+        accountCollectionReward.balanceNFT = accountCollectionReward.balanceNFT.plus(event.params.shares);
+        accountCollectionReward.lastUpdate = event.block.timestamp;
+        accountCollectionReward.save();
+        log.info(
+            "handleCollectionDeposit: Updated AccountCollectionReward {} for account {}, collectionReward {}. New balanceNFT: {}",
+            [
+                accountCollectionReward.id.toHexString(),
+                accountId,
+                collectionReward.id.toHexString(),
+                accountCollectionReward.balanceNFT.toString()
+            ]
+        );
+    } else {
+        log.warning(
+            "handleCollectionDeposit: CollectionReward not found for collection {} and reward token {}. AccountCollectionReward not updated.",
+            [collectionAddress.toHexString(), rewardTokenAddress.toHexString()]
+        );
+    }
+    // --- End AccountCollectionReward Logic ---
 }
 
 export function handleCollectionWithdraw(event: CollectionWithdrawEvent): void {
-    const id = event.params.collectionAddress.concat(event.address);
-    const entity = CollectionMarket.load(id);
+    const entity = getOrCreateCollectionMarket(event.params.collectionAddress, event.address);
 
     if (entity) {
         entity.totalNFT = entity.totalNFT.minus(event.params.shares);
@@ -102,6 +131,40 @@ export function handleCollectionWithdraw(event: CollectionWithdrawEvent): void {
             ]
         );
         entity.save();
+
+        // --- AccountCollectionReward Logic ---
+        // For withdraw, event.params.owner is the user whose NFT balance is affected.
+        const accountId = event.params.owner.toHexString();
+        const account: Account = getOrCreateAccount(event.params.owner as Bytes);
+
+        const collectionAddress: Address = event.params.collectionAddress;
+        const rewardTokenAddress = HARDCODED_REWARD_TOKEN_ADDRESS;
+        const collectionRewardId = generateCollectionRewardId(collectionAddress, rewardTokenAddress);
+        const collectionReward = CollectionReward.load(collectionRewardId);
+
+        if (collectionReward != null) {
+            const accountCollectionReward: AccountCollectionReward = getOrCreateAccountCollectionReward(account, collectionReward, event.block.timestamp);
+            const newBalance = accountCollectionReward.balanceNFT.minus(event.params.shares);
+            accountCollectionReward.balanceNFT = newBalance.lt(ZERO_BI) ? ZERO_BI : newBalance; // Ensure non-negative
+            accountCollectionReward.lastUpdate = event.block.timestamp;
+            accountCollectionReward.save();
+            log.info(
+                "handleCollectionWithdraw: Updated AccountCollectionReward {} for account {}, collectionReward {}. New balanceNFT: {}",
+                [
+                    accountCollectionReward.id.toHexString(),
+                    accountId,
+                    collectionReward.id.toHexString(),
+                    accountCollectionReward.balanceNFT.toString()
+                ]
+            );
+        } else {
+            log.warning(
+                "handleCollectionWithdraw: CollectionReward not found for collection {} and reward token {}. AccountCollectionReward not updated.",
+                [collectionAddress.toHexString(), rewardTokenAddress.toHexString()]
+            );
+        }
+        // --- End AccountCollectionReward Logic ---
+
     } else {
         log.warning(
             "CollectionWithdraw: CollectionMarket entity not found for collection {} and market (cToken) {}. This may happen if withdraw occurs before any deposit was recorded for this specific collection in this market.",

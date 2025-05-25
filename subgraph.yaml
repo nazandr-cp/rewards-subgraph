@@ -32,7 +32,7 @@ dataSources:
     name: RewardsController
     network: apechain-curtis
     source:
-      address: "0xAc7d4e419DDC2E021a795d0598D9366bDD84323F"
+      address: "0xaA13C0fe4B51038E7eA9E402D009b069FdB74471"
       abi: RewardsController
       startBlock: 17870949
     mapping:
@@ -62,9 +62,57 @@ dataSources:
           handler: handleWeightFunctionSet
         - event: RewardPerBlockUpdated(indexed address,uint128)
           handler: handleRewardPerBlockUpdated
-        - event: RewardsClaimed(indexed address,indexed address,indexed address,uint256,uint64)
+        - event: RewardsClaimed(indexed address,indexed address,indexed address,uint256,uint64,uint256)
           handler: handleRewardClaimed
       file: ./src/rewards-controller-mapping.ts
+
+  - kind: ethereum
+    name: ERC721Collection
+    network: apechain-curtis
+    source:
+      address: "0xf97F713c919655636C0cE006f53a5Be03FA8815a"
+      abi: ERC721
+      startBlock: 17504228
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/erc721-mapping.ts
+      entities:
+        - CollectionReward
+        - Account
+        - AccountCollectionReward
+      abis:
+        - name: ERC721
+          file: ./abis/IERC721.json
+        - name: cToken
+          file: ./abis/cToken.json
+      eventHandlers:
+        - event: Transfer(indexed address,indexed address,indexed uint256)
+          handler: handleTransfer
+
+  # - kind: ethereum
+  #   name: ERC1155Collection
+  #   network: apechain-curtis
+  #   source:
+  #     abi: ERC1155
+  #   mapping:
+  #     kind: ethereum/events
+  #     apiVersion: 0.0.9
+  #     language: wasm/assemblyscript
+  #     file: ./src/erc1155-mapping.ts
+  #     entities:
+  #       - AccountCollectionReward
+  #       - CollectionReward
+  #       - Account
+  #     abis:
+  #       - name: ERC1155
+  #         file: ./abis/IERC1155.json
+  #     eventHandlers:
+  #       - event: TransferSingle(indexed address,indexed address,indexed address,uint256,uint256)
+  #         handler: handleTransferSingle
+  #       - event: TransferBatch(indexed address,indexed address,indexed address,uint256[],uint256[])
+  #         handler: handleTransferBatch
 
 templates:
   - kind: ethereum/contract
@@ -133,48 +181,3 @@ templates:
         - event: CollectionWithdraw(indexed address,address,indexed address,indexed address,uint256,uint256)
           handler: handleCollectionWithdraw
       file: ./src/collection-vault-mapping.ts
-  - kind: ethereum/contract
-    name: ERC1155
-    network: apechain-curtis
-    source:
-      abi: ERC1155
-    mapping:
-      kind: ethereum/events
-      apiVersion: 0.0.9
-      language: wasm/assemblyscript
-      file: ./src/erc1155-mapping.ts
-      entities:
-        - AccountCollectionReward
-        - CollectionReward
-        - Account
-      abis:
-        - name: ERC1155
-          file: ./abis/IERC1155.json
-      eventHandlers:
-        - event: TransferSingle(indexed address,indexed address,indexed address,uint256,uint256)
-          handler: handleTransferSingle
-        - event: TransferBatch(indexed address,indexed address,indexed address,uint256[],uint256[])
-          handler: handleTransferBatch
-
-  - kind: ethereum/contract
-    name: ERC721
-    network: apechain-curtis
-    source:
-      abi: ERC721
-    mapping:
-      kind: ethereum/events
-      apiVersion: 0.0.9
-      language: wasm/assemblyscript
-      file: ./src/erc721-mapping.ts
-      entities:
-        - CollectionReward
-        - Account
-        - AccountCollectionReward
-      abis:
-        - name: ERC721
-          file: ./abis/IERC721.json
-        - name: cToken
-          file: ./abis/cToken.json
-      eventHandlers:
-        - event: Transfer(indexed address,indexed address,indexed uint256)
-          handler: handleTransfer

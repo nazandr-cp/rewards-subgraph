@@ -1,17 +1,21 @@
 import { log, store, BigInt } from "@graphprotocol/graph-ts";
-import { ERC721, ERC1155, CollectionVault as CollectionVaultTemplate } from "../generated/templates";
+import { CollectionVault as CollectionVaultTemplate } from "../generated/templates";
 import {
     CollectionReward,
-    Vault,
-    AccountVault
+    Account,
+    RewardClaim,
+    AccountCollectionReward
 } from "../generated/schema";
 import {
     ZERO_BI,
     getOrCreateCollectionReward,
+    getOrCreateAccountCollectionReward,
     HARDCODED_REWARD_TOKEN_ADDRESS,
     HARDCODED_CTOKEN_MARKET_ADDRESS,
     WeightFunctionType,
-    generateCollectionRewardId
+    generateCollectionRewardId,
+    getOrCreateVault,
+    getOrCreateAccountVault
 } from "./utils/rewards";
 import {
     NewCollectionWhitelisted,
@@ -67,18 +71,10 @@ export function handleNewCollectionWhitelisted(event: NewCollectionWhitelisted):
     collReward.collectionType = collectionTypeString;
     collReward.save();
 
-    if (collectionTypeString == "ERC721") {
-        ERC721.create(nftCollectionAddress);
-        log.info("NewCollectionWhitelisted: Created ERC721 data source for collection {}", [nftCollectionAddress.toHexString()]);
-    } else if (collectionTypeString == "ERC1155") {
-        ERC1155.create(nftCollectionAddress);
-        log.info("NewCollectionWhitelisted: Created ERC1155 data source for collection {}", [nftCollectionAddress.toHexString()]);
-    }
-
     log.info("NewCollectionWhitelisted: Processed collection {}, type {}, rewardBasis (from event u8) {}, sharePercentage {}", [
         nftCollectionAddress.toHexString(),
         collectionTypeString,
-        rewardBasisParam.toString(), // Log the original u8 from event
+        rewardBasisParam.toString(),
         event.params.sharePercentageBps.toString()
     ]);
 }
@@ -162,18 +158,8 @@ export function handleWeightFunctionSet(event: WeightFunctionSet): void {
 }
 
 export function handleRewardPerBlockUpdated(event: RewardPerBlockUpdatedEvent): void {
-    const vaultId = event.params.vault.toHex();
-    let vault = Vault.load(vaultId);
-
-    if (!vault) {
-        // This case should ideally be handled by handleVaultAdded,
-        // but as a safeguard or for vaults existing before this handler was deployed:
-        vault = new Vault(vaultId);
-        log.info("New Vault entity created in handleRewardPerBlockUpdated: {}", [vaultId]);
-        // We might be missing initial setup data here if handleVaultAdded wasn't called.
-        // Consider if CollectionVault.create() is also needed here if a vault can be updated before being "added"
-        // For now, assuming VaultAdded will always be called first for new vaults.
-    }
+    const vaultAddress = event.params.vault;
+    const vault = getOrCreateVault(vaultAddress);
 
     const rewardsController = RewardsController.bind(event.address) as RewardsController;
     const vaultInfo = rewardsController.try_vaults(event.params.vault);
@@ -191,127 +177,186 @@ export function handleRewardPerBlockUpdated(event: RewardPerBlockUpdatedEvent): 
     vault.expR = vaultInfo.value.expR;
 
     vault.save();
-    log.info("Vault {} rewardPerBlock updated to {}", [vaultId, event.params.rewardPerBlock.toString()]);
+    log.info("Vault {} rewardPerBlock updated to {}", [vault.id, event.params.rewardPerBlock.toString()]);
 }
 
 export function handleRewardClaimed(event: RewardClaimedEvent): void {
     const vaultAddress = event.params.vaultAddress;
     const userAddress = event.params.user;
+    const collectionAddressFromEvent = event.params.collectionAddress;
     const amountClaimed = event.params.amount;
+    const newNonceFromEvent = event.params.newNonce;
+    const secondsInClaimFromEvent = event.params.secondsInClaim;
 
     const vaultId = vaultAddress.toHex();
     const accountId = userAddress.toHex();
-    const accountVaultId = vaultId + "-" + accountId;
 
-    let vault = Vault.load(vaultId);
-    if (!vault) {
-        log.warning("Vault {} not found during RewardClaimed for user {}. Creating Vault.", [vaultId, accountId]);
-        vault = new Vault(vaultId);
-        const rewardsController = RewardsController.bind(event.address) as RewardsController;
-        log.info("handleRewardClaimed: Calling try_vaults with vaultAddress: {}", [vaultAddress.toHex()]);
-        const vaultInfo = rewardsController.try_vaults(vaultAddress);
-        if (vaultInfo.reverted) {
-            log.error("handleRewardClaimed: contract.try_vaults reverted for vault {} (during vault creation)", [vaultAddress.toHex()]);
-            return;
-        }
-        vault.rewardPerBlock = vaultInfo.value.rewardPerBlock;
-        vault.globalRPW = vaultInfo.value.globalRPW;
-        vault.totalWeight = vaultInfo.value.totalWeight;
-        vault.lastUpdateBlock = vaultInfo.value.lastUpdateBlock;
-        vault.weightByBorrow = vaultInfo.value.weightByBorrow;
-        vault.useExp = vaultInfo.value.useExp;
-        vault.linK = vaultInfo.value.linK;
-        vault.expR = vaultInfo.value.expR;
-        vault.save();
+    const vault = getOrCreateVault(vaultAddress);
+    // Update vault details even if it was just created by getOrCreateVault
+    const contract_ = RewardsController.bind(event.address) as RewardsController;
+    log.info("handleRewardClaimed: Calling try_vaults with vaultAddress: {}", [vaultAddress.toHex()]);
+    const vaultInfoTry_ = contract_.try_vaults(vaultAddress);
+    if (vaultInfoTry_.reverted) {
+        log.error("handleRewardClaimed: contract.try_vaults reverted for vault {} (during vault update/creation)", [vaultAddress.toHex()]);
+        // If vault was just created and this fails, it might be in an inconsistent state.
+        // However, getOrCreateVault already initializes fields, so we might proceed or handle error differently.
+        // For now, we'll proceed as some fields might still be useful or updated later.
     } else {
-        const contract = RewardsController.bind(event.address) as RewardsController;
-        log.info("handleRewardClaimed: Calling try_vaults with vaultAddress: {}", [vaultAddress.toHex()]);
-        const vaultInfoTry = contract.try_vaults(vaultAddress);
-        if (vaultInfoTry.reverted) {
-            log.error("handleRewardClaimed: contract.try_vaults reverted for vault {} (during vault update)", [vaultAddress.toHex()]);
-            return;
-        }
-        vault.globalRPW = vaultInfoTry.value.globalRPW;
-        vault.lastUpdateBlock = vaultInfoTry.value.lastUpdateBlock;
-        vault.totalWeight = vaultInfoTry.value.totalWeight;
+        vault.globalRPW = vaultInfoTry_.value.globalRPW;
+        vault.lastUpdateBlock = vaultInfoTry_.value.lastUpdateBlock;
+        vault.totalWeight = vaultInfoTry_.value.totalWeight;
+        // rewardPerBlock is updated by its own handler, do not overwrite here
+        // other fields like weightByBorrow, useExp, linK, expR are set on creation or specific updates
         vault.save();
     }
 
-    let accountVault = AccountVault.load(accountVaultId);
-    if (!accountVault) {
-        accountVault = new AccountVault(accountVaultId);
-        accountVault.vault = vault.id; // Changed: Use vault.id (which is a string) instead of vaultId (Bytes)
-        accountVault.account = userAddress.toHexString();
-    }
 
+    let account = Account.load(accountId);
+    if (!account) {
+        account = new Account(accountId);
+        account.totalSecondsClaimed = ZERO_BI;
+    }
+    const previousTotalSecondsClaimed = account.totalSecondsClaimed;
+    account.totalSecondsClaimed = account.totalSecondsClaimed.plus(secondsInClaimFromEvent);
+    account.save();
+
+    const rewardClaimId = event.transaction.hash.concatI32(event.logIndex.toI32());
+    const rewardClaim = new RewardClaim(rewardClaimId);
+    rewardClaim.account = accountId;
+    rewardClaim.collectionAddress = collectionAddressFromEvent;
+    rewardClaim.amount = amountClaimed;
+    rewardClaim.timestamp = event.block.timestamp;
+    rewardClaim.transactionHash = event.transaction.hash;
+    rewardClaim.nonce = newNonceFromEvent;
+    rewardClaim.secondsInClaim = secondsInClaimFromEvent;
+    rewardClaim.secondsUser = previousTotalSecondsClaimed;
+    rewardClaim.secondsColl = ZERO_BI;
+    rewardClaim.incRPS = ZERO_BI;
+    rewardClaim.yieldSlice = ZERO_BI;
+    rewardClaim.save();
+
+    const accountVault = getOrCreateAccountVault(accountId, vaultId);
+    // Reset accrued and claimable as per original logic after a claim
     accountVault.accrued = ZERO_BI;
+    accountVault.claimable = ZERO_BI;
 
     const contract = RewardsController.bind(event.address) as RewardsController;
-    const accountInfoTry = contract.try_acc(vaultAddress, userAddress);
-    if (accountInfoTry.reverted) {
-        log.error("handleRewardClaimed: contract.try_acc reverted for vault {} and user {}", [vaultAddress.toHex(), userAddress.toHex()]);
-        return;
+    const userSecondsPaidTry = contract.try_userSecondsClaimed(vaultAddress, userAddress);
+    if (!userSecondsPaidTry.reverted) {
+        log.info("handleRewardClaimed: contract.userSecondsPaid for vault {} user {} is {}", [
+            vaultAddress.toHex(),
+            userAddress.toHex(),
+            userSecondsPaidTry.value.toString()
+        ]);
+    } else {
+        log.warning("handleRewardClaimed: contract.try_userSecondsPaid reverted for vault {} and user {}", [vaultAddress.toHex(), userAddress.toHex()]);
     }
-    const accountInfoFromCall = accountInfoTry.value;
-
-    accountVault.weight = accountInfoFromCall.weight;
-    accountVault.rewardDebt = accountInfoFromCall.rewardDebt;
-
-    accountVault.claimable = ZERO_BI;
 
     accountVault.save();
 
-    log.info("AccountVault {} updated after claim. Amount: {}. New weight: {}, New rewardDebt: {}", [
-        accountVaultId,
+    // Ensure AccountCollectionReward exists and its lastUpdate timestamp is current.
+    const collectionAddress = event.params.collectionAddress;
+    const rewardTokenAddress = HARDCODED_REWARD_TOKEN_ADDRESS;
+    const collectionRewardId_bytes = generateCollectionRewardId(collectionAddress, rewardTokenAddress);
+
+    // account is already loaded or created earlier in this handler
+    if (account != null) {
+        const collectionReward = CollectionReward.load(collectionRewardId_bytes);
+
+        if (collectionReward != null) {
+            const accountCollectionReward: AccountCollectionReward = getOrCreateAccountCollectionReward(account, collectionReward, event.block.timestamp);
+            // The getOrCreate function sets initial fields. We only need to ensure lastUpdate is current.
+            accountCollectionReward.lastUpdate = event.block.timestamp;
+            // balanceNFT is not updated here; it's managed by deposit/withdraw handlers.
+            // Other fields like 'seconds' are managed by accrual logic.
+            accountCollectionReward.save();
+
+            log.info(
+                "handleRewardClaimed: Ensured/Updated AccountCollectionReward {} for account {} and collectionReward {}.",
+                [accountCollectionReward.id.toHexString(), account.id, collectionReward.id.toHexString()]
+            );
+        } else {
+            log.warning(
+                "handleRewardClaimed: CollectionReward {} not found for collection {}. Cannot create/update AccountCollectionReward.",
+                [collectionRewardId_bytes.toHexString(), collectionAddress.toHexString()]
+            );
+        }
+    } else {
+        // This case should ideally not happen if account is always loaded/created above.
+        log.error("handleRewardClaimed: Account entity was null when trying to process AccountCollectionReward for accountId {}.", [accountId]);
+    }
+
+    log.info("Account {} totalSecondsClaimed updated to {}. RewardClaim {} created for amount {}. AccountVault {} processed.", [
+        accountId,
+        account.totalSecondsClaimed.toString(),
+        rewardClaimId.toHex(),
         amountClaimed.toString(),
-        accountVault.weight.toString(),
-        accountVault.rewardDebt.toString()
+        accountVault.id
     ]);
 }
 
 export function handleVaultAdded(event: VaultAddedEvent): void {
     const vaultAddress = event.params.vaultAddress;
-    const vaultId = vaultAddress.toHex();
-    let vault = Vault.load(vaultId);
+    const vault = getOrCreateVault(vaultAddress); // This will create or load the vault
 
-    if (vault == null) {
-        vault = new Vault(vaultId);
-        // Initialize other Vault properties from the event or contract state if necessary
-        // For example, if RewardsController has a public mapping or getter for vault info:
-        const rewardsController = RewardsController.bind(event.address);
-        const vaultInfoTry = rewardsController.try_vaults(vaultAddress); // Renamed to vaultInfoTry
+    // If the vault was newly created by getOrCreateVault, its fields are initialized.
+    // If it existed, we might want to refresh some data if applicable,
+    // but getOrCreateVault already handles basic setup.
+    // The original logic re-fetched all vault info if it was null.
+    // getOrCreateVault initializes with defaults or existing data.
+    // We might still need to fetch and update if specific event data implies changes
+    // beyond what getOrCreateVault sets up by default for a *new* vault.
+    // However, for VaultAdded, the primary action is creation if not exists,
+    // and `getOrCreateVault` handles this.
+    // The contract call to `try_vaults` is to populate fields if it's truly new.
+    // `getOrCreateVault` in `rewards.ts` should ideally do this fetch if it creates.
+    // Assuming `getOrCreateVault` correctly initializes a new vault (including a contract call if needed),
+    // we might not need to repeat the `try_vaults` call here unless the event provides *new* info
+    // that `getOrCreateVault` wouldn't know.
 
-        if (!vaultInfoTry.reverted) { // Check vaultInfoTry.reverted
-            const vaultInfo = vaultInfoTry.value; // Assign to new const vaultInfo
-            vault.rewardPerBlock = vaultInfo.rewardPerBlock;
-            vault.globalRPW = vaultInfo.globalRPW;
-            vault.totalWeight = vaultInfo.totalWeight;
-            vault.lastUpdateBlock = vaultInfo.lastUpdateBlock;
-            vault.weightByBorrow = vaultInfo.weightByBorrow;
-            vault.useExp = vaultInfo.useExp;
-            vault.linK = vaultInfo.linK;
-            vault.expR = vaultInfo.expR;
-        } else {
-            log.warning("handleVaultAdded: try_vaults reverted for vault {}", [vaultAddress.toHexString()]);
-            // Initialize with defaults if contract call fails or is not desired
-            vault.rewardPerBlock = ZERO_BI;
-            vault.globalRPW = ZERO_BI;
-            vault.totalWeight = ZERO_BI;
-            vault.lastUpdateBlock = ZERO_BI;
-            vault.weightByBorrow = false;
-            vault.useExp = false;
-            vault.linK = ZERO_BI;
-            vault.expR = ZERO_BI;
-        }
+    // The original code only created the template if the vault was null.
+    // We should ensure the template is created if `getOrCreateVault` indicated it was a new vault.
+    // However, `getOrCreateVault` doesn't return a flag for "wasCreated".
+    // A common pattern is to check a specific field that's only set on true creation,
+    // or to always try to create the template, as `create` is often idempotent or cheap if exists.
+    // For now, let's assume `getOrCreateVault` handles the Vault entity correctly.
+    // The template creation should happen regardless of whether it was just created or already existed,
+    // if the intention is to ensure the template is running for this vault address.
+    // However, the original logic was `if (vault == null)`, so let's stick to creating template only if it's "new".
+    // This is tricky without knowing if `getOrCreateVault` made it new.
+    // A simple check could be if `vault.rewardPerBlock` is still its initial `ZERO_BI` if that's a proxy for new.
+    // Or, more robustly, `getOrCreateVault` should be the one creating the template if it creates the vault.
+
+    // For simplicity and to match the "only if new" logic, we'll assume that if `vault.lastUpdateBlock` is ZERO_BI
+    // (or some other field that is only ZERO_BI on initial creation by `getOrCreateVault` before specific updates),
+    // then it's "new" for the purpose of template creation. This is a heuristic.
+    // A better approach would be for `getOrCreateVault` to return a struct `{ entity: Vault, created: boolean }`.
+    // Given the current tools, we'll try to infer.
+    // The most direct translation of `if (vault == null)` before is to check if it was loaded or created.
+    // Since `getOrCreateVault` abstracts this, we'll assume it's fine and always try to create the template.
+    // Graph Protocol's `create` for templates is usually safe to call multiple times.
+
+    const rewardsController = RewardsController.bind(event.address);
+    const vaultInfoTry = rewardsController.try_vaults(vaultAddress);
+
+    if (!vaultInfoTry.reverted) {
+        const vaultInfo = vaultInfoTry.value;
+        vault.rewardPerBlock = vaultInfo.rewardPerBlock;
+        vault.globalRPW = vaultInfo.globalRPW;
+        vault.totalWeight = vaultInfo.totalWeight;
+        vault.lastUpdateBlock = vaultInfo.lastUpdateBlock;
+        vault.weightByBorrow = vaultInfo.weightByBorrow;
+        vault.useExp = vaultInfo.useExp;
+        vault.linK = vaultInfo.linK;
+        vault.expR = vaultInfo.expR;
         vault.save();
-        log.info("VaultAdded: New Vault entity {} created and saved.", [vaultId]);
-
-        // Create CollectionVault template instance
-        CollectionVaultTemplate.create(vaultAddress);
-        log.info("VaultAdded: CollectionVault template created for address {}", [vaultAddress.toHexString()]);
-
+        log.info("VaultAdded: Vault entity {} (re)loaded/created and updated.", [vault.id]);
     } else {
-        log.info("VaultAdded: Vault entity {} already exists. Skipping creation.", [vaultId]);
-        // Optionally, update existing vault if necessary, though VaultAdded should ideally be for new ones.
+        log.warning("handleVaultAdded: try_vaults reverted for vault {}. Vault might have default values.", [vaultAddress.toHexString()]);
+        // `getOrCreateVault` would have set defaults if it created it.
+        // If it loaded, existing values remain. This warning is for the failed update.
     }
+
+    CollectionVaultTemplate.create(vaultAddress);
+    log.info("VaultAdded: CollectionVault template creation attempted for address {}", [vaultAddress.toHexString()]);
 }

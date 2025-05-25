@@ -63,6 +63,7 @@ type Account @entity(immutable: false) {
   collectionRewards: [AccountCollectionReward!]! @derivedFrom(field: "account")
   claimedRewards: [RewardClaim!]! @derivedFrom(field: "account")
   vaults: [AccountVault!]! @derivedFrom(field: "account")
+  totalSecondsClaimed: BigInt!
 }
 
 type MarketData @entity(immutable: false) {
@@ -86,6 +87,7 @@ type RewardClaim @entity(immutable: true) {
   secondsColl: BigInt!
   incRPS: BigInt!
   yieldSlice: BigInt!
+  secondsInClaim: BigInt!
 }
 
 type CollectionMarket @entity(immutable: false) {

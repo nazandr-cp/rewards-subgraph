@@ -35,11 +35,14 @@ const ZERO_BI = BigInt.fromI32(0);
 const LINEAR_FN_TYPE: BigInt = BigInt.fromI32(0);
 const EXPONENTIAL_FN_TYPE: BigInt = BigInt.fromI32(1);
 
-// Helper function to create a RewardClaimed event (existing)
+// Helper function to create a RewardClaimed event (updated for new params)
 function createRewardClaimedEvent(
-    claimer: Address, // maps to 'user' in event
-    collection: Address, // maps to 'vault' in event
+    user: Address,
+    vaultAddress: Address,
+    collectionAddressParam: Address, // Renamed to avoid conflict with 'collection' variable name
     amount: BigInt,
+    newNonce: BigInt,
+    secondsInClaim: BigInt,
     logIndex: BigInt = BigInt.fromI32(1),
     txHash: string = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
 ): RewardClaimed {
@@ -61,13 +64,19 @@ function createRewardClaimedEvent(
     );
 
     rewardClaimedEvent.parameters = [];
-    const userParam = new ethereum.EventParam("user", ethereum.Value.fromAddress(claimer));
-    const vaultParam = new ethereum.EventParam("vault", ethereum.Value.fromAddress(collection));
+    const vaultAddressParam = new ethereum.EventParam("vaultAddress", ethereum.Value.fromAddress(vaultAddress));
+    const userParam = new ethereum.EventParam("user", ethereum.Value.fromAddress(user));
+    const collectionAddressEvParam = new ethereum.EventParam("collectionAddress", ethereum.Value.fromAddress(collectionAddressParam));
     const amountParam = new ethereum.EventParam("amount", ethereum.Value.fromUnsignedBigInt(amount));
+    const newNonceParam = new ethereum.EventParam("newNonce", ethereum.Value.fromUnsignedBigInt(newNonce));
+    const secondsInClaimParam = new ethereum.EventParam("secondsInClaim", ethereum.Value.fromUnsignedBigInt(secondsInClaim));
 
-    rewardClaimedEvent.parameters.push(vaultParam);
+    rewardClaimedEvent.parameters.push(vaultAddressParam);
     rewardClaimedEvent.parameters.push(userParam);
+    rewardClaimedEvent.parameters.push(collectionAddressEvParam);
     rewardClaimedEvent.parameters.push(amountParam);
+    rewardClaimedEvent.parameters.push(newNonceParam);
+    rewardClaimedEvent.parameters.push(secondsInClaimParam);
 
     return rewardClaimedEvent;
 }
@@ -351,25 +360,50 @@ function createRedeemEvent(
 }
 
 describe("Reward Handlers", () => {
-    test("should handle RewardClaimed event and create/update Vault and AccountVault entities", () => {
+    test("should handle RewardClaimed event and create/update relevant entities including AccountCollectionReward", () => {
         clearStore();
 
         const userAddress = Address.fromString("0x0000000000000000000000000000000000000001");
         const vaultAddress = Address.fromString("0x0000000000000000000000000000000000000002");
+        const nftCollectionAddress = Address.fromString("0x0000000000000000000000000000000000000003"); // For CollectionReward and AccountCollectionReward
         const rewardAmount = BigInt.fromI32(1000);
+        const newNonce = BigInt.fromI32(101);
+        const secondsInClaim = BigInt.fromI32(600);
         const logIdx = BigInt.fromI32(5);
         const txHashStr = "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef12345678";
+
+        // Pre-create the CollectionReward entity that the handler will try to load
+        const collectionRewardId = generateCollectionRewardId(nftCollectionAddress, HARDCODED_REWARD_TOKEN_ADDRESS);
+        const collectionReward = new CollectionReward(collectionRewardId);
+        collectionReward.collection = nftCollectionAddress;
+        collectionReward.rewardToken = HARDCODED_REWARD_TOKEN_ADDRESS;
+        collectionReward.cTokenMarketAddress = HARDCODED_CTOKEN_MARKET_ADDRESS;
+        collectionReward.isBorrowBased = false;
+        collectionReward.collectionType = "ERC721";
+        collectionReward.totalSecondsAccrued = ZERO_BI;
+        collectionReward.lastUpdate = BigInt.fromI32(1672531100); // Some prior timestamp
+        collectionReward.fnType = "LINEAR";
+        collectionReward.p1 = ZERO_BI;
+        collectionReward.p2 = ZERO_BI;
+        collectionReward.rewardPerSecond = BigInt.fromI32(10); // Example value
+        collectionReward.totalRewardsPool = ZERO_BI;
+        collectionReward.expiresAt = ZERO_BI;
+        collectionReward.save();
 
         const rewardClaimedEventInstance = createRewardClaimedEvent(
             userAddress,
             vaultAddress,
+            nftCollectionAddress, // This is the collectionAddress for the reward
             rewardAmount,
+            newNonce,
+            secondsInClaim,
             logIdx,
             txHashStr
         );
 
+        // Mock contract calls for Vault and AccountVault updates
         const vaultInfoTuple = new ethereum.Tuple();
-        vaultInfoTuple.push(ethereum.Value.fromUnsignedBigInt(rewardAmount)); // uint128 rewardPerBlock
+        vaultInfoTuple.push(ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(0))); // rewardPerBlock (not directly set by this event's mock)
         vaultInfoTuple.push(ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(100))); // uint128 globalRPW
         vaultInfoTuple.push(ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(200))); // uint128 totalWeight
         vaultInfoTuple.push(ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(1672531200))); // uint32 lastUpdate (using a fixed timestamp for consistency)
@@ -383,30 +417,52 @@ describe("Reward Handlers", () => {
             .withArgs([ethereum.Value.fromAddress(vaultAddress)])
             .returns([ethereum.Value.fromTuple(vaultInfoTuple)]);
 
-        const accInfoTuple = new ethereum.Tuple();
-        accInfoTuple.push(ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(50))); // uint128 weight
-        accInfoTuple.push(ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(25))); // uint128 rewardDebt
-        accInfoTuple.push(ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(0))); // uint128 accrued
-        createMockedFunction(MOCK_CONTRACT_ADDRESS, "acc", "acc(address,address):((uint128,uint128,uint128))")
+        // Mock userSecondsClaimed for AccountVault update
+        createMockedFunction(MOCK_CONTRACT_ADDRESS, "userSecondsClaimed", "userSecondsClaimed(address,address):(uint256)")
             .withArgs([ethereum.Value.fromAddress(vaultAddress), ethereum.Value.fromAddress(userAddress)])
-            .returns([ethereum.Value.fromTuple(accInfoTuple)]);
+            .returns([ethereum.Value.fromUnsignedBigInt(secondsInClaim)]); // Mock it returns the new total seconds claimed
 
         handleRewardClaimed(rewardClaimedEventInstance);
 
+        // Assertions for Vault
         const vaultId = vaultAddress.toHex();
         assert.entityCount("Vault", 1);
-        assert.fieldEquals("Vault", vaultId, "rewardPerBlock", rewardAmount.toString());
         assert.fieldEquals("Vault", vaultId, "globalRPW", "100");
         assert.fieldEquals("Vault", vaultId, "totalWeight", "200");
+        assert.fieldEquals("Vault", vaultId, "lastUpdateBlock", "1672531200");
 
+
+        // Assertions for Account
+        const accountId = userAddress.toHex();
+        assert.entityCount("Account", 1);
+        assert.fieldEquals("Account", accountId, "totalSecondsClaimed", secondsInClaim.toString());
+
+        // Assertions for RewardClaim
+        const rewardClaimId = rewardClaimedEventInstance.transaction.hash.concatI32(rewardClaimedEventInstance.logIndex.toI32()).toHexString();
+        assert.entityCount("RewardClaim", 1);
+        assert.fieldEquals("RewardClaim", rewardClaimId, "account", accountId);
+        assert.fieldEquals("RewardClaim", rewardClaimId, "collectionAddress", nftCollectionAddress.toHex());
+        assert.fieldEquals("RewardClaim", rewardClaimId, "amount", rewardAmount.toString());
+        assert.fieldEquals("RewardClaim", rewardClaimId, "nonce", newNonce.toString());
+        assert.fieldEquals("RewardClaim", rewardClaimId, "secondsInClaim", secondsInClaim.toString());
+
+        // Assertions for AccountVault
         const accountVaultId = vaultId + "-" + userAddress.toHex();
         assert.entityCount("AccountVault", 1);
         assert.fieldEquals("AccountVault", accountVaultId, "vault", vaultId);
         assert.fieldEquals("AccountVault", accountVaultId, "account", userAddress.toHex());
-        assert.fieldEquals("AccountVault", accountVaultId, "weight", "50");
-        assert.fieldEquals("AccountVault", accountVaultId, "rewardDebt", "25");
-        assert.fieldEquals("AccountVault", accountVaultId, "accrued", ZERO_BI.toString());
-        assert.fieldEquals("AccountVault", accountVaultId, "claimable", ZERO_BI.toString());
+        assert.fieldEquals("AccountVault", accountVaultId, "accrued", ZERO_BI.toString()); // Reset after claim
+        assert.fieldEquals("AccountVault", accountVaultId, "claimable", ZERO_BI.toString()); // Reset after claim
+
+        // Assertions for AccountCollectionReward
+        const accountCollectionRewardId = generateAccountCollectionRewardId(accountId, collectionRewardId).toHexString();
+        assert.entityCount("AccountCollectionReward", 1);
+        assert.fieldEquals("AccountCollectionReward", accountCollectionRewardId, "account", accountId);
+        assert.fieldEquals("AccountCollectionReward", accountCollectionRewardId, "collection", collectionRewardId.toHexString());
+        assert.fieldEquals("AccountCollectionReward", accountCollectionRewardId, "rewardToken", HARDCODED_REWARD_TOKEN_ADDRESS.toHexString());
+        assert.fieldEquals("AccountCollectionReward", accountCollectionRewardId, "balanceNFT", ZERO_BI.toString()); // Not affected by claim
+        assert.fieldEquals("AccountCollectionReward", accountCollectionRewardId, "seconds", ZERO_BI.toString()); // Initialized to zero
+        assert.fieldEquals("AccountCollectionReward", accountCollectionRewardId, "lastUpdate", rewardClaimedEventInstance.block.timestamp.toString());
     });
 
     test("should handle NewCollectionWhitelisted (ERC721, Deposit)", () => {

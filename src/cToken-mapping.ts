@@ -1,4 +1,4 @@
-import { BigInt, Address, log } from "@graphprotocol/graph-ts";
+import { Address, log } from "@graphprotocol/graph-ts";
 import {
     AccrueInterest as AccrueInterestEvent,
     Borrow as BorrowEvent,
@@ -10,86 +10,17 @@ import {
 } from "../generated/templates/cToken/cToken";
 import { cToken as CTokenContract } from "../generated/templates/cToken/cToken";
 import {
-    CTokenMarket,
-    Liquidation,
-    MarketData
+    Liquidation
 } from "../generated/schema";
 import {
     ZERO_BI,
     ADDRESS_ZERO_STR,
     getOrCreateAccount,
+    getOrCreateCTokenMarket,
+    getOrCreateMarketData,
 } from "./utils/rewards";
 
 const ADDRESS_ZERO = Address.fromString(ADDRESS_ZERO_STR);
-
-function getOrCreateCTokenMarket(
-    marketAddress: Address,
-    blockTimestamp: BigInt
-): CTokenMarket {
-    log.debug("getOrCreateCTokenMarket: {}", [marketAddress.toHexString()]);
-    const marketId = marketAddress.toHexString();
-    let market = CTokenMarket.load(marketId);
-    if (market == null) {
-        market = new CTokenMarket(marketId);
-        const cTokenContract = CTokenContract.bind(marketAddress);
-
-        let underlyingAddress: Address = ADDRESS_ZERO;
-        let underlyingSymbol: string = "UNKNOWN";
-        let underlyingDecimals: i32 = 18;
-
-        underlyingAddress = Address.fromString("0xf43EE9653ff96AB50C270eC3D9f0A8e015Df4065");
-        underlyingSymbol = "mDAI";
-        underlyingDecimals = 18;
-
-        market.underlying = underlyingAddress;
-        market.underlyingSymbol = underlyingSymbol;
-        market.underlyingDecimals = underlyingDecimals;
-
-        const totalSupplyTry = cTokenContract.try_totalSupply();
-        if (!totalSupplyTry.reverted) {
-            market.totalSupplyC = totalSupplyTry.value;
-        } else {
-            log.warning("totalSupply() call reverted for cToken: {}", [marketAddress.toHexString()]);
-            market.totalSupplyC = ZERO_BI;
-        }
-
-        const totalBorrowsTry = cTokenContract.try_totalBorrows();
-        if (!totalBorrowsTry.reverted) {
-            market.totalBorrowsU = totalBorrowsTry.value;
-        } else {
-            log.warning("totalBorrows() call reverted for cToken: {}", [marketAddress.toHexString()]);
-            market.totalBorrowsU = ZERO_BI;
-        }
-
-        const totalReservesTry = cTokenContract.try_totalReserves();
-        if (!totalReservesTry.reverted) {
-            market.totalReservesU = totalReservesTry.value;
-        } else {
-            log.warning("totalReserves() call reverted for cToken: {}", [marketAddress.toHexString()]);
-            market.totalReservesU = ZERO_BI;
-        }
-
-        const exchangeRateStoredTry = cTokenContract.try_exchangeRateStored();
-        if (!exchangeRateStoredTry.reverted) {
-            market.exchangeRate = exchangeRateStoredTry.value;
-        } else {
-            log.warning("exchangeRateStored() call reverted for cToken: {}", [marketAddress.toHexString()]);
-            market.exchangeRate = ZERO_BI;
-        }
-
-        const comptrollerAddressTry = cTokenContract.try_comptroller();
-        if (!comptrollerAddressTry.reverted) {
-            market.collateralFactor = ZERO_BI;
-        } else {
-            market.collateralFactor = ZERO_BI;
-        }
-        market.borrowIndex = ZERO_BI;
-        market.lastAccrualTimestamp = blockTimestamp;
-        market.blockTimestamp = blockTimestamp;
-        market.save();
-    }
-    return market;
-}
 
 
 export function handleAccrueInterest(event: AccrueInterestEvent): void {
@@ -134,16 +65,7 @@ export function handleAccrueInterest(event: AccrueInterestEvent): void {
     market.blockTimestamp = event.block.timestamp;
     market.save();
 
-    const marketDataId = "MD-" + event.address.toHexString();
-    let md = MarketData.load(marketDataId);
-    if (md == null) {
-        md = new MarketData(marketDataId);
-        md.totalSupply = ZERO_BI;
-        md.totalBorrow = ZERO_BI;
-        md.totalReserves = ZERO_BI;
-        md.accruedInterest = ZERO_BI;
-        md.lastInterestUpdate = ZERO_BI;
-    }
+    const md = getOrCreateMarketData(event.address, event.block.timestamp);
 
     const totalSupplyTry = cTokenContract.try_totalSupply();
     if (!totalSupplyTry.reverted) {
