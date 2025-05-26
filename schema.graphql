@@ -8,17 +8,94 @@ enum CollectionType {
   ERC1155
 }
 
+type CTokenMarket @entity(immutable: false) {
+  id: ID! @id
+  underlyingAsset: Bytes!
+  underlyingAssetSymbol: String!
+  underlyingDecimals: Int!
+  totalSupply: BigInt!
+  totalBorrows: BigInt!
+  totalReserves: BigInt!
+  exchangeRate: BigInt!
+  collateralFactor: BigInt!
+  borrowIndex: BigInt!
+  lastAccrualTimestamp: Timestamp!
+  blockTimestamp: Timestamp!
+}
+
 type Vault @entity(immutable: false) {
   id: ID! @id
+  CTokenMarket: CTokenMarket! # Assuming this is the intended link, or should it be cTokenAddress? For now, keeping as is.
   rewardPerBlock: BigInt!
   globalRPW: BigInt!
   totalWeight: BigInt!
   lastUpdateBlock: BigInt!
   weightByBorrow: Boolean!
   useExp: Boolean!
-  linK: BigInt
-  expR: BigInt
-  accountVaults: [AccountVault!]! @derivedFrom(field: "vault")
+  linK: BigInt!
+  expR: BigInt!
+  collections: [CollectionVault!]! @derivedFrom(field: "vault")
+  rewardClaims: [RewardClaim!]! @derivedFrom(field: "vault")
+}
+
+type Account @entity(immutable: false) {
+  id: ID! @id
+  totalSecondsClaimed: BigInt!
+  Collections: [AccountCollection!]! @derivedFrom(field: "account")
+  Vaults: [AccountVault!]! @derivedFrom(field: "account")
+  rewardClaims: [RewardClaim!]! @derivedFrom(field: "account")
+  accountRewards: [AccountRewardsPerCollection!]! @derivedFrom(field: "account")
+}
+
+type RewardClaim @entity(immutable: true) {
+  id: ID! @id
+  account: Account!
+  vault: Vault!
+  collectionAddress: Bytes!
+  amount: BigInt!
+  secondsInClaim: BigInt!
+  nonce: BigInt!
+  secondsUser: BigInt!
+  secondsColl: BigInt!
+  incRPS: BigInt!
+  yieldSlice: BigInt!
+  blockNumber: BigInt!
+  blockTimestamp: Timestamp!
+  transactionHash: Bytes!
+}
+
+type CollectionVault @entity(immutable: false) {
+  id: ID! @id
+  collection: Collection!
+  vault: Vault!
+  principalDeposit: BigInt!
+  isBorrowBased: Boolean!
+  fnType: WeightFunctionType!
+  p1: BigInt!
+  p2: BigInt!
+  rewardSharePercentage: Int!
+  principalYield: BigInt!
+  totalSeconds: BigInt!
+}
+
+type AccountCollection @entity(immutable: false) {
+  id: ID! @id
+  account: Account!
+  vault: Vault!
+  collection: Collection!
+  balanceNFT: BigInt!
+  totalSeconds: BigInt!
+  rewards: [AccountRewardsPerCollection!]! @derivedFrom(field: "account")
+  lastUpdate: Timestamp!
+}
+
+type AccountRewardsPerCollection @entity(immutable: false) {
+  id: ID! @id
+  account: Account!
+  vault: Vault!
+  collection: Collection!
+  seconds: BigInt!
+  lastUpdate: Timestamp!
 }
 
 type AccountVault @entity(immutable: false) {
@@ -29,100 +106,5 @@ type AccountVault @entity(immutable: false) {
   rewardDebt: BigInt!
   accrued: BigInt!
   claimable: BigInt!
-}
-type CollectionReward @entity(immutable: false) {
-  id: Bytes! @id
-  collection: Bytes! @index
-  rewardToken: Bytes! @index
-  rewardPerSecond: BigInt!
-  totalRewardsPool: BigInt!
-  expiresAt: BigInt
-  totalSecondsAccrued: BigInt!
-  lastUpdate: BigInt!
-  fnType: WeightFunctionType!
-  p1: BigInt!
-  p2: BigInt!
-  cTokenMarketAddress: Bytes!
-  isBorrowBased: Boolean!
-  collectionType: CollectionType!
-  accountRewards: [AccountCollectionReward!]! @derivedFrom(field: "collection")
-}
-
-type AccountCollectionReward @entity(immutable: false) {
-  id: Bytes! @id
-  account: Account!
-  collection: CollectionReward!
-  rewardToken: Bytes!
-  lastUpdate: BigInt!
-  balanceNFT: BigInt!
-  seconds: BigInt!
-}
-
-type Account @entity(immutable: false) {
-  id: ID! @id
-  collectionRewards: [AccountCollectionReward!]! @derivedFrom(field: "account")
-  claimedRewards: [RewardClaim!]! @derivedFrom(field: "account")
-  vaults: [AccountVault!]! @derivedFrom(field: "account")
-  totalSecondsClaimed: BigInt!
-}
-
-type MarketData @entity(immutable: false) {
-  id: ID!
-  totalSupply: BigInt!
-  totalBorrow: BigInt!
-  totalReserves: BigInt!
-  accruedInterest: BigInt!
-  lastInterestUpdate: BigInt!
-}
-
-type RewardClaim @entity(immutable: true) {
-  id: Bytes! @id
-  account: Account!
-  collectionAddress: Bytes!
-  amount: BigInt!
-  timestamp: BigInt!
-  transactionHash: Bytes!
-  nonce: BigInt!
-  secondsUser: BigInt!
-  secondsColl: BigInt!
-  incRPS: BigInt!
-  yieldSlice: BigInt!
-  secondsInClaim: BigInt!
-}
-
-type CollectionMarket @entity(immutable: false) {
-  id: Bytes! @id
-  collection: Bytes!
-  market: Bytes!
-  totalNFT: BigInt!
-  totalSeconds: BigInt!
-  principalU: BigInt!
-}
-
-type CTokenMarket @entity(immutable: false) {
-  id: ID! @id
-  underlying: Bytes!
-  underlyingSymbol: String!
-  underlyingDecimals: Int!
-  totalSupplyC: BigInt!
-  totalBorrowsU: BigInt!
-  totalReservesU: BigInt!
-  exchangeRate: BigInt!
-  collateralFactor: BigInt!
-  borrowIndex: BigInt!
-  lastAccrualTimestamp: BigInt!
-  blockTimestamp: BigInt!
-}
-
-type Liquidation @entity(immutable: true) {
-  id: ID!
-  liquidator: Account!
-  borrower: Account!
-  borrowedCTokenMarket: CTokenMarket!
-  collateralCTokenMarket: CTokenMarket!
-  repayAmountUnderlying: BigInt!
-  seizedAmountCollateralCToken: BigInt!
-  timestamp: BigInt!
-  blockNumber: BigInt!
-  transactionHash: Bytes!
+  collections: [AccountCollection!]! @derivedFrom(field: "accountVault")
 }
