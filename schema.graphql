@@ -51,13 +51,7 @@ type RewardClaim @entity(immutable: true) {
   account: Account!
   vault: Vault!
   collection: Collection! # Address of the collection for which reward was claimed
-  amount: BigInt! # Amount of reward token claimed
-  secondsInClaim: BigInt! # Number of "reward seconds" this claim represents
   nonce: BigInt! # User's nonce for claims from this vault and collection
-  secondsUser: BigInt! # User's total seconds before this claim
-  secondsColl: BigInt! # Collection's total seconds related to this claim type
-  incRPS: BigInt! # Incremental reward per second at time of claim
-  yieldSlice: BigInt! # Portion of yield related to this claim
   blockNumber: BigInt!
   blockTimestamp: Timestamp!
   transactionHash: Bytes!
