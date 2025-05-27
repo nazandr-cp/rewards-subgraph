@@ -1,52 +1,91 @@
-import { BigInt } from "@graphprotocol/graph-ts";
-import { Transfer as TransferEvent } from "../generated/templates/ERC721/ERC721";
+import { BigInt, Address } from "@graphprotocol/graph-ts";
+import { Transfer as TransferEvent } from "../generated/ERC721Collection/ERC721";
 import {
-    accrueSeconds,
-    getOrCreateAccountCollectionReward,
-    getOrCreateAccount,
-    getOrCreateCollectionReward,
-    HARDCODED_REWARD_TOKEN_ADDRESS,
-    HARDCODED_CTOKEN_MARKET_ADDRESS,
-    WeightFunctionType
-} from "./utils/rewards";
+  CollectionVault,
+  AccountRewardsPerCollection,
+} from "../generated/schema";
+
+import { accrueSeconds } from "./utils/rewards";
+import { ZERO_BI } from "./utils/const";
+
+import {
+  getOrCreateAccount,
+  getOrCreateCollection,
+  getOrCreateVault,
+} from "./utils/getters";
+
+function generateCollectionVaultId(
+  vaultId: string,
+  collectionAddress: Address
+): string {
+  return vaultId.concat("-").concat(collectionAddress.toHexString());
+}
 
 export function handleTransfer(event: TransferEvent): void {
-    const collectionAddress = event.address;
-    const fromAddress = event.params.from;
-    const toAddress = event.params.to;
-    const timestamp = event.block.timestamp;
+  const collectionAddress = event.address;
+  const fromAddress = event.params.from;
+  const toAddress = event.params.to;
+  const timestamp = event.block.timestamp;
 
-    const collectionRewardEntity = getOrCreateCollectionReward(
-        collectionAddress,
-        HARDCODED_REWARD_TOKEN_ADDRESS,
-        HARDCODED_CTOKEN_MARKET_ADDRESS,
-        false,
-        WeightFunctionType.LINEAR,
-        timestamp
+  const vault = getOrCreateVault(HARDCODED_CTOKEN_MARKET_ADDRESS);
+  const collection = getOrCreateCollection(collectionAddress);
+
+  const collectionVaultId = generateCollectionVaultId(
+    vault.id,
+    collectionAddress
+  );
+  let collectionVault = getOrCreateCollectionVault(
+
+  collectionVault.lastUpdateTimestamp = timestamp;
+  collectionVault.save();
+
+  if (
+    fromAddress.toHexString() != "0x0000000000000000000000000000000000000000"
+  ) {
+    const fromAccount = getOrCreateAccount(fromAddress);
+    const fromAccRewardsId = generateAccountRewardsPerCollectionId(
+      fromAccount.id,
+      collectionVault.id
     );
+    let fromAccRewards = AccountRewardsPerCollection.load(fromAccRewardsId);
 
-    if (fromAddress.toHexString() != "0x0000000000000000000000000000000000000000") {
-        const fromAccountEntity = getOrCreateAccount(fromAddress);
-        const fromAcr = getOrCreateAccountCollectionReward(fromAccountEntity, collectionRewardEntity, timestamp);
-
-        accrueSeconds(fromAcr, collectionRewardEntity, timestamp);
-
-        fromAcr.balanceNFT = fromAcr.balanceNFT.minus(BigInt.fromI32(1));
-        fromAcr.lastUpdate = timestamp;
-        fromAcr.save();
+    if (fromAccRewards == null) {
+      fromAccRewards = new AccountRewardsPerCollection(fromAccRewardsId);
+      fromAccRewards.account = fromAccount.id;
+      fromAccRewards.collectionVault = collectionVault.id;
+      fromAccRewards.balanceNFT = ZERO_BI;
+      fromAccRewards.seconds = ZERO_BI;
     }
 
-    if (toAddress.toHexString() != "0x0000000000000000000000000000000000000000") {
-        const toAccountEntity = getOrCreateAccount(toAddress);
-        const toAcr = getOrCreateAccountCollectionReward(toAccountEntity, collectionRewardEntity, timestamp);
+    accrueSeconds(fromAccRewards, collectionVault, timestamp);
 
-        accrueSeconds(toAcr, collectionRewardEntity, timestamp);
+    fromAccRewards.balanceNFT = fromAccRewards.balanceNFT.minus(
+      BigInt.fromI32(1)
+    );
+    fromAccRewards.lastUpdate = timestamp.toI32();
+    fromAccRewards.save();
+  }
 
-        toAcr.balanceNFT = toAcr.balanceNFT.plus(BigInt.fromI32(1));
-        toAcr.lastUpdate = timestamp;
-        toAcr.save();
+  if (toAddress.toHexString() != "0x0000000000000000000000000000000000000000") {
+    const toAccount = getOrCreateAccount(toAddress);
+    const toAccRewardsId = generateAccountRewardsPerCollectionId(
+      toAccount.id,
+      collectionVault.id
+    );
+    let toAccRewards = AccountRewardsPerCollection.load(toAccRewardsId);
+
+    if (toAccRewards == null) {
+      toAccRewards = new AccountRewardsPerCollection(toAccRewardsId);
+      toAccRewards.account = toAccount.id;
+      toAccRewards.collectionVault = collectionVault.id;
+      toAccRewards.balanceNFT = ZERO_BI;
+      toAccRewards.seconds = ZERO_BI;
     }
 
-    collectionRewardEntity.lastUpdate = timestamp;
-    collectionRewardEntity.save();
+    accrueSeconds(toAccRewards, collectionVault, timestamp);
+
+    toAccRewards.balanceNFT = toAccRewards.balanceNFT.plus(BigInt.fromI32(1));
+    toAccRewards.lastUpdate = timestamp.toI32();
+    toAccRewards.save();
+  }
 }

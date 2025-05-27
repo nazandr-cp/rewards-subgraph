@@ -17,7 +17,6 @@ dataSources:
       language: wasm/assemblyscript
       entities:
         - CTokenMarket
-        - MarketData
       abis:
         - name: Comptroller
           file: ./abis/Comptroller.json
@@ -40,19 +39,22 @@ dataSources:
       apiVersion: 0.0.9
       language: wasm/assemblyscript
       entities:
-        - CollectionReward
+        - Collection
+        - CollectionVault
         - Account
         - RewardClaim
         - Vault
-        - AccountVault
-        - AccountCollectionReward
+        - AccountMarket
+        - AccountRewardsPerCollection
       abis:
         - name: RewardsController
           file: ./abis/IRewardsController.json
+        - name: ERC721Metadata
+          file: ./abis/IERC721Metadata.json
       eventHandlers:
-        - event: VaultAdded(indexed address)
+        - event: VaultAdded(indexed address,indexed address,indexed address)
           handler: handleVaultAdded
-        - event: NewCollectionWhitelisted(indexed address,indexed address,uint8,uint8,uint16)
+        - event: NewCollectionWhitelisted(indexed address,indexed address,uint8,uint8,uint16,(uint8,int256,int256))
           handler: handleNewCollectionWhitelisted
         - event: WhitelistCollectionRemoved(indexed address,indexed address)
           handler: handleWhitelistCollectionRemoved
@@ -79,9 +81,10 @@ dataSources:
       language: wasm/assemblyscript
       file: ./src/erc721-mapping.ts
       entities:
-        - CollectionReward
+        - Collection
+        - CollectionVault
         - Account
-        - AccountCollectionReward
+        - AccountRewardsPerCollection
       abis:
         - name: ERC721
           file: ./abis/IERC721.json
@@ -128,13 +131,11 @@ templates:
       entities:
         - Vault
         - AccountVault
-        - CollectionReward
-        - AccountCollectionReward
+        - Collection
+        - CollectionVault
+        - AccountRewardsPerCollection
         - Account
         - CTokenMarket
-        - CollectionMarket
-        - MarketData
-        - Liquidation
       abis:
         - name: cToken
           file: ./abis/cToken.json
@@ -169,7 +170,11 @@ templates:
       apiVersion: 0.0.9
       language: wasm/assemblyscript
       entities:
-        - CollectionMarket
+        - Collection
+        - CollectionVault
+        - Account
+        - AccountRewardsPerCollection
+        - Vault
       abis:
         - name: CollectionVault
           file: ./abis/ICollectionsVault.json

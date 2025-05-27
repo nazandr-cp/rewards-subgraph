@@ -8,103 +8,115 @@ enum CollectionType {
   ERC1155
 }
 
+# General state of a cToken market
 type CTokenMarket @entity(immutable: false) {
-  id: ID! @id
-  underlyingAsset: Bytes!
-  underlyingAssetSymbol: String!
-  underlyingDecimals: Int!
-  totalSupply: BigInt!
-  totalBorrows: BigInt!
-  totalReserves: BigInt!
+  id: ID! # cToken address
+  decimals: Int! # Number of decimals for the underlying asset
+  totalSupply: BigInt! # Total supply of this cToken
+  totalBorrows: BigInt! # Total borrows of the underlying asset
+  totalReserves: BigInt! # Total reserves of the underlying asset
   exchangeRate: BigInt!
+  interestAccumulated: BigInt! # Total interest accumulated in this market
+  cashPrior: BigInt! # Cash available in the market before the last transaction
   collateralFactor: BigInt!
   borrowIndex: BigInt!
-  lastAccrualTimestamp: Timestamp!
-  blockTimestamp: Timestamp!
+  lastAccrualTimestamp: Timestamp! # Timestamp of last interest accrual for the market
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: Timestamp!
 }
 
+# Represents a rewards vault, which is Collection vault contract
 type Vault @entity(immutable: false) {
-  id: ID! @id
-  CTokenMarket: CTokenMarket! # Assuming this is the intended link, or should it be cTokenAddress? For now, keeping as is.
-  rewardPerBlock: BigInt!
-  globalRPW: BigInt!
-  totalWeight: BigInt!
-  lastUpdateBlock: BigInt!
-  weightByBorrow: Boolean!
-  useExp: Boolean!
-  linK: BigInt!
-  expR: BigInt!
+  id: ID! # Vault address
+  cTokenMarket: CTokenMarket! # The cToken market this vault is associated with
+  totalShares: BigInt! # Total shares issued by this vault
+  totalDeposits: BigInt! # Total amount of underlying asset deposited in this vault
   collections: [CollectionVault!]! @derivedFrom(field: "vault")
   rewardClaims: [RewardClaim!]! @derivedFrom(field: "vault")
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: Timestamp!
 }
 
 type Account @entity(immutable: false) {
-  id: ID! @id
+  id: ID! # User address
   totalSecondsClaimed: BigInt!
-  Collections: [AccountCollection!]! @derivedFrom(field: "account")
-  Vaults: [AccountVault!]! @derivedFrom(field: "account")
+  Collections: [AccountCollection!]! @derivedFrom(field: "account") # User's general collection interactions
+  Markets: [AccountMarket!]! @derivedFrom(field: "account") # User's market state across all cToken markets
   rewardClaims: [RewardClaim!]! @derivedFrom(field: "account")
-  accountRewards: [AccountRewardsPerCollection!]! @derivedFrom(field: "account")
+  accountRewards: [AccountRewardsPerCollection!]! @derivedFrom(field: "account") # Detailed reward state per collection-vault
 }
 
 type RewardClaim @entity(immutable: true) {
-  id: ID! @id
+  id: ID! # Transaction hash + log index
   account: Account!
   vault: Vault!
-  collectionAddress: Bytes!
-  amount: BigInt!
-  secondsInClaim: BigInt!
-  nonce: BigInt!
-  secondsUser: BigInt!
-  secondsColl: BigInt!
-  incRPS: BigInt!
-  yieldSlice: BigInt!
+  collection: Collection! # Address of the collection for which reward was claimed
+  amount: BigInt! # Amount of reward token claimed
+  secondsInClaim: BigInt! # Number of "reward seconds" this claim represents
+  nonce: BigInt! # User's nonce for claims from this vault and collection
+  secondsUser: BigInt! # User's total seconds before this claim
+  secondsColl: BigInt! # Collection's total seconds related to this claim type
+  incRPS: BigInt! # Incremental reward per second at time of claim
+  yieldSlice: BigInt! # Portion of yield related to this claim
   blockNumber: BigInt!
   blockTimestamp: Timestamp!
   transactionHash: Bytes!
 }
 
+type Collection @entity(immutable: false) {
+  id: ID! # Collection address
+  name: String!
+  symbol: String!
+  totalNFTs: BigInt! # Total number of NFTs in this collection (overall)
+  collectionType: CollectionType!
+  vaults: [CollectionVault!]! @derivedFrom(field: "collection") # All vaults this collection is configured in
+  claims: [RewardClaim!]! @derivedFrom(field: "collection") # All claims related to this collection
+}
+
+# Represents a collection's reward configuration and deposit/market state within a specific Vault
 type CollectionVault @entity(immutable: false) {
-  id: ID! @id
+  id: ID! # Composite ID, e.g., vault.id + "-" + collection.id
   collection: Collection!
-  vault: Vault!
-  principalDeposit: BigInt!
-  isBorrowBased: Boolean!
-  fnType: WeightFunctionType!
-  p1: BigInt!
-  p2: BigInt!
-  rewardSharePercentage: Int!
-  principalYield: BigInt!
-  totalSeconds: BigInt!
+  vault: Vault! # The specific vault this configuration and state applies to
+  principalShares: BigInt! # Total shares of this collection in this vault (e.g., cTokens)
+  principalDeposited: BigInt! # Total amount of underlying asset deposited for this collection in this vault
+  isBorrowBased: Boolean! # True if rewards are based on borrow activity, false if deposit based
+  rewardSharePercentage: Int! # Percentage of rewards allocated to this collection (e.g., 10000 = 100%)
+  fnType: WeightFunctionType! # Type of weighting function (LINEAR or EXPONENTIAL)
+  p1: BigInt! # Parameter 1 for the weighting function
+  p2: BigInt! # Parameter 2 for the weighting function
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: Timestamp!
 }
 
+# Tracks an account's general interaction with a collection within a specific vault (e.g., NFT balance)
 type AccountCollection @entity(immutable: false) {
-  id: ID! @id
+  id: ID! # Composite ID, e.g., account.id + "-" + vault.id + "-" + collection.id
   account: Account!
   vault: Vault!
   collection: Collection!
-  balanceNFT: BigInt!
-  totalSeconds: BigInt!
-  rewards: [AccountRewardsPerCollection!]! @derivedFrom(field: "account")
-  lastUpdate: Timestamp!
+  accountMarket: AccountMarket! # Link to the user's market state for this collection in this vault
+  balanceNFT: BigInt! # User's current NFT balance of this collection within this vault context
+  totalSeconds: BigInt! # User's total seconds related to this collection in this vault (potentially deprecated if AccountRewardsPerCollection.seconds is primary)
+  lastUpdate: Timestamp! # Timestamp of last update to this record
 }
 
+# Tracks an account's specific reward accrual state for a CollectionVault configuration
 type AccountRewardsPerCollection @entity(immutable: false) {
-  id: ID! @id
+  id: ID! # Composite ID, e.g., account.id + "-" + collectionVault.id
   account: Account!
-  vault: Vault!
-  collection: Collection!
-  seconds: BigInt!
-  lastUpdate: Timestamp!
+  collectionVault: CollectionVault! # Link to the specific collection-vault configuration and state
+  balanceNFT: BigInt! # User's NFT balance relevant for calculating rewards for this CollectionVault
+  seconds: BigInt! # User's accrued "reward seconds" for this specific CollectionVault
+  lastUpdate: Timestamp! # Timestamp of the last update to the user's reward accrual
 }
 
-type AccountVault @entity(immutable: false) {
-  id: ID! @id
-  vault: Vault!
+type AccountMarket @entity(immutable: false) {
+  id: ID! # Composite ID, e.g., account.id + "-" + cTokenMarket.id
   account: Account!
-  weight: BigInt!
-  rewardDebt: BigInt!
-  accrued: BigInt!
-  claimable: BigInt!
-  collections: [AccountCollection!]! @derivedFrom(field: "accountVault")
+  cTokenMarket: CTokenMarket!
+  deposit: BigInt! # Total amount of underlying asset deposited by the user in this market
+  borrow: BigInt! # Total amount of underlying asset borrowed by the user in this market
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: Timestamp!
 }
