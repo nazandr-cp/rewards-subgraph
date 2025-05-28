@@ -1,6 +1,6 @@
 import { MarketListed } from "../generated/Comptroller/Comptroller";
 import { cToken } from "../generated/templates";
-import { cToken as CToken } from "generated/Comptroller/cToken";
+import { cToken as CToken } from "../generated/Comptroller/cToken";
 import { getOrCreateCTokenMarket } from "./utils/getters";
 
 export function handleMarketListed(event: MarketListed): void {

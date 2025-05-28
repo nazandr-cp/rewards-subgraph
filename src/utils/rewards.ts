@@ -90,7 +90,7 @@ export function accrueSeconds(
   cv: CollectionVault,
   now: BigInt
 ): void {
-  const dt = now.minus(BigInt.fromI64(arpc.lastUpdate));
+  const dt = now.minus(BigInt.fromI64(arpc.updatedAtTimestamp));
   if (dt.isZero() || dt.lt(ZERO_BI)) {
     return;
   }
@@ -106,7 +106,7 @@ export function accrueSeconds(
     );
     return;
   }
-  const cTokenMarketAddress = Address.fromString(vaultEntity.id);
+  const cTokenMarketAddress = Address.fromString(vaultEntity.cTokenMarket);
 
   if (!cv.isBorrowBased) {
     basePrincipalForReward = currentDepositU(
@@ -141,8 +141,5 @@ export function accrueSeconds(
   }
 
   arpc.seconds = arpc.seconds.plus(rewardAccruedScaled.div(EXP_SCALE));
-  cv.totalAccruedSecondsInVault = cv.totalAccruedSecondsInVault.plus(
-    rewardAccruedScaled.div(EXP_SCALE)
-  );
-  arpc.lastUpdate = now.toI32();
+  arpc.updatedAtTimestamp = now.toI64();
 }

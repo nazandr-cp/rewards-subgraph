@@ -1,6 +1,6 @@
 import { log, store, Address } from "@graphprotocol/graph-ts";
 import { CollectionVault as CollectionVaultTemplate } from "../generated/templates";
-import { RewardClaim } from "../generated/schema";
+import { RewardClaim, Vault } from "../generated/schema";
 import { ZERO_BI } from "./utils/const";
 import {
   getOrCreateVault,
@@ -20,12 +20,13 @@ import {
   RewardsClaimed as RewardClaimedEvent,
   VaultAdded as VaultAddedEvent,
 } from "../generated/RewardsController/RewardsController";
-import { ERC721Metadata } from "generated/RewardsController/ERC721Metadata";
+import { ERC721Metadata } from "../generated/RewardsController/ERC721Metadata";
 
 export function handleVaultAdded(event: VaultAddedEvent): void {
   const vaultAddress = event.params.vaultAddress;
   const cTokenAddress = event.params.cTokenAddress;
-  const vault = getOrCreateVault(vaultAddress);
+  // Pass cTokenAddress to getOrCreateVault
+  const vault = getOrCreateVault(vaultAddress, cTokenAddress);
 
   const rewardsController = RewardsController.bind(event.address);
   const vaultInfoTry = rewardsController.try_vaults(vaultAddress);
@@ -35,9 +36,6 @@ export function handleVaultAdded(event: VaultAddedEvent): void {
     vault.cTokenMarket = Address.fromString(
       cTokenAddress.toHexString()
     ).toHexString();
-    vault.rewardPerBlock = vaultInfo.rewardPerBlock;
-    vault.globalRPW = vaultInfo.globalRPW;
-    vault.totalWeight = vaultInfo.totalWeight;
     vault.updatedAtBlock = vaultInfo.lastUpdateBlock;
     vault.updatedAtTimestamp = event.block.timestamp.toI64();
     vault.save();
@@ -106,9 +104,20 @@ export function handleNewCollectionWhitelisted(
   }
   collection.save();
 
+  const vaultEntity = Vault.load(vaultAddress.toHex());
+  if (!vaultEntity) {
+    log.error(
+      "handleNewCollectionWhitelisted: Vault {} not found. Cannot create CollectionVault.",
+      [vaultAddress.toHex()]
+    );
+    return;
+  }
+  const cTokenMarketForVault = Address.fromString(vaultEntity.cTokenMarket);
+
   const collVault = getOrCreateCollectionVault(
     vaultAddress,
-    nftCollectionAddress
+    nftCollectionAddress,
+    cTokenMarketForVault
   );
 
   let isBorrowBased: boolean;
@@ -150,9 +159,22 @@ export function handleWhitelistCollectionRemoved(
   const collectionAddress = event.params.collectionAddress;
   const vaultAddress = event.params.vaultAddress;
 
+  const vaultEntityForRemoval = Vault.load(vaultAddress.toHex());
+  if (!vaultEntityForRemoval) {
+    log.error(
+      "handleWhitelistCollectionRemoved: Vault {} not found. Cannot remove CollectionVault.",
+      [vaultAddress.toHex()]
+    );
+    return;
+  }
+  const cTokenMarketForCVRemoval = Address.fromString(
+    vaultEntityForRemoval.cTokenMarket
+  );
+
   const existingCollVault = getOrCreateCollectionVault(
     vaultAddress,
-    collectionAddress
+    collectionAddress,
+    cTokenMarketForCVRemoval
   );
 
   store.remove("CollectionVault", existingCollVault.id);
@@ -167,7 +189,23 @@ export function handleCollectionRewardShareUpdated(
 ): void {
   const collectionAddress = event.params.collectionAddress;
   const vaultAddress = event.params.vaultAddress;
-  const collVault = getOrCreateCollectionVault(vaultAddress, collectionAddress);
+
+  const vaultEntityForShareUpdate = Vault.load(vaultAddress.toHex());
+  if (!vaultEntityForShareUpdate) {
+    log.error("handleCollectionRewardShareUpdated: Vault {} not found.", [
+      vaultAddress.toHex(),
+    ]);
+    return;
+  }
+  const cTokenMarketForShareUpdate = Address.fromString(
+    vaultEntityForShareUpdate.cTokenMarket
+  );
+
+  const collVault = getOrCreateCollectionVault(
+    vaultAddress,
+    collectionAddress,
+    cTokenMarketForShareUpdate
+  );
 
   collVault.rewardSharePercentage = event.params.newSharePercentage;
   collVault.updatedAtBlock = event.block.number;
@@ -180,7 +218,22 @@ export function handleWeightFunctionSet(event: WeightFunctionSet): void {
   const vaultAddress = event.params.vaultAddress;
   const weightFnParams = event.params.fn;
 
-  const collVault = getOrCreateCollectionVault(vaultAddress, collectionAddress);
+  const vaultEntityForWeightFn = Vault.load(vaultAddress.toHex());
+  if (!vaultEntityForWeightFn) {
+    log.error("handleWeightFunctionSet: Vault {} not found.", [
+      vaultAddress.toHex(),
+    ]);
+    return;
+  }
+  const cTokenMarketForWeightFn = Address.fromString(
+    vaultEntityForWeightFn.cTokenMarket
+  );
+
+  const collVault = getOrCreateCollectionVault(
+    vaultAddress,
+    collectionAddress,
+    cTokenMarketForWeightFn
+  );
 
   const fnTypeU8 = weightFnParams.fnType;
   if (fnTypeU8 == WeightFunctionType.LINEAR) {
@@ -210,12 +263,22 @@ export function handleWeightFunctionSet(event: WeightFunctionSet): void {
     ]
   );
 }
-// TODO: implement correctly
+
 export function handleRewardPerBlockUpdated(
   event: RewardPerBlockUpdatedEvent
 ): void {
-  const vaultAddress = event.params.vault;
-  const vault = getOrCreateVault(vaultAddress);
+  const vaultAddress = event.params.vault; // This is the vault being updated
+
+  const vaultEntity = Vault.load(vaultAddress.toHex());
+  if (!vaultEntity) {
+    log.error(
+      "handleRewardPerBlockUpdated: Vault {} not found, cannot get its cTokenMarket.",
+      [vaultAddress.toHex()]
+    );
+    return;
+  }
+  const cTokenMarket = Address.fromString(vaultEntity.cTokenMarket);
+  const vault = getOrCreateVault(vaultAddress, cTokenMarket);
 
   const rewardsController = RewardsController.bind(event.address);
   const vaultInfoTry = rewardsController.try_vaults(event.params.vault);
@@ -226,10 +289,6 @@ export function handleRewardPerBlockUpdated(
     );
     return;
   }
-  const vaultInfo = vaultInfoTry.value;
-  vault.rewardPerBlock = event.params.rewardPerBlock;
-  vault.globalRPW = vaultInfo.globalRPW;
-  vault.totalWeight = vaultInfo.totalWeight;
   vault.updatedAtBlock = event.block.number;
   vault.updatedAtTimestamp = event.block.timestamp.toI64();
   vault.save();
@@ -240,29 +299,28 @@ export function handleRewardClaimed(event: RewardClaimedEvent): void {
   const userAddress = event.params.user;
   const collectionAddressFromEvent = event.params.collectionAddress;
   const amountClaimed = event.params.amount;
-  const newNonceFromEvent = event.params.newNonce;
   const secondsInClaimFromEvent = event.params.secondsInClaim;
 
   const vaultId = vaultAddress.toHex();
   const accountId = userAddress.toHex();
 
-  // Ensure Vault entity is up-to-date
-  const vault = getOrCreateVault(vaultAddress, Address.fromString(""));
-  if (vault == null) {
-    log.error("handleRewardClaimed: Vault entity not found for address {}", [
+  const vaultEntityForClaim = Vault.load(vaultAddress.toHex());
+  if (!vaultEntityForClaim) {
+    log.error("handleRewardClaimed: Vault {} not found. Cannot proceed.", [
       vaultAddress.toHex(),
     ]);
     return;
   }
+  const cTokenMarketForClaim = Address.fromString(
+    vaultEntityForClaim.cTokenMarket
+  );
+  const vault = getOrCreateVault(vaultAddress, cTokenMarketForClaim);
+
   const contract_ = RewardsController.bind(event.address);
   const vaultInfoTry_ = contract_.try_vaults(vaultAddress);
   if (!vaultInfoTry_.reverted) {
-    const vaultInfo = vaultInfoTry_.value;
-    vault.globalRPW = vaultInfo.globalRPW;
     vault.updatedAtBlock = event.block.number;
     vault.updatedAtTimestamp = event.block.timestamp.toI64();
-    vault.totalWeight = vaultInfo.totalWeight;
-    // rewardPerBlock is updated by its own handler
     vault.save();
   } else {
     log.error(
@@ -271,8 +329,7 @@ export function handleRewardClaimed(event: RewardClaimedEvent): void {
     );
   }
 
-  const account = getOrCreateAccount(userAddress); // Use util
-  const previousTotalSecondsClaimed = account.totalSecondsClaimed;
+  const account = getOrCreateAccount(userAddress);
   account.totalSecondsClaimed = account.totalSecondsClaimed.plus(
     secondsInClaimFromEvent
   );
@@ -289,25 +346,30 @@ export function handleRewardClaimed(event: RewardClaimedEvent): void {
   rewardClaim.blockTimestamp = event.block.timestamp.toI32();
   rewardClaim.blockNumber = event.block.number;
   rewardClaim.transactionHash = event.transaction.hash;
-  rewardClaim.nonce = newNonceFromEvent;
+  rewardClaim.nonce = ZERO_BI;
   rewardClaim.save();
 
-  const accountVault = getOrCreateAccountVault(accountId, vaultId);
-  accountVault.accrued = ZERO_BI;
-  accountVault.claimable = ZERO_BI;
-  accountVault.save();
+  const cTokenMarketForCV = Address.fromString(vault.cTokenMarket);
+
   const collectionVault = getOrCreateCollectionVault(
     vaultAddress,
-    collectionAddressFromEvent
+    collectionAddressFromEvent,
+    cTokenMarketForCV
   );
+  if (!collectionVault) {
+    log.error(
+      "handleRewardClaimed: Failed to get or create CollectionVault for {} in vault {}.",
+      [collectionAddressFromEvent.toHex(), vaultAddress.toHex()]
+    );
+    return;
+  }
 
   const accRewards = getOrCreateAccountRewardsPerCollection(
-    Address.fromString(accountId),
+    userAddress,
     collectionVault.id,
+    event.block.number,
     event.block.timestamp
   );
-  accRewards.lastUpdate = event.block.timestamp.toI32();
-  accRewards.save();
 
   log.info(
     "handleRewardClaimed: Ensured/Updated AccountRewardsPerCollection {} for account {} and collectionVault {}.",
@@ -321,7 +383,6 @@ export function handleRewardClaimed(event: RewardClaimedEvent): void {
       account.totalSecondsClaimed.toString(),
       rewardClaimIdBytes.toHex(),
       amountClaimed.toString(),
-      accountVault.id,
     ]
   );
 }

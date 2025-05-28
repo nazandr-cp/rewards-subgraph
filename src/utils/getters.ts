@@ -1,4 +1,4 @@
-import { Address, log } from "@graphprotocol/graph-ts";
+import { BigInt, Address, log } from "@graphprotocol/graph-ts";
 import {
   Account,
   Collection,
@@ -9,7 +9,7 @@ import {
   AccountMarket,
 } from "../../generated/schema";
 
-import { ZERO_BI } from "./const";
+import { ZERO_BI, ADDRESS_ZERO_STR } from "./const";
 
 function generateCollectionVaultId(
   vaultId: string,
@@ -133,21 +133,37 @@ export function getOrCreateCollectionVault(
 
 export function getOrCreateAccountRewardsPerCollection(
   accountAddress: Address,
-  collectionId: string,
-  vaultId: string,
-  cTokenMarketAddress: Address
+  collectionVaultId: string,
+  blockNumber: BigInt,
+  timestamp: BigInt
 ): AccountRewardsPerCollection {
   const account = getOrCreateAccount(accountAddress);
-  const collectionVault = getOrCreateCollectionVault(
-    Address.fromString(vaultId),
-    Address.fromString(collectionId),
-    cTokenMarketAddress
-  );
+  const collectionVault = CollectionVault.load(collectionVaultId);
 
-  const vault = Vault.load(collectionVault.vault)!;
+  if (collectionVault == null) {
+    log.critical(
+      "getOrCreateAccountRewardsPerCollection: CollectionVault {} not found.",
+      [collectionVaultId]
+    );
+    throw new Error(
+      `CRITICAL: CollectionVault with id ${collectionVaultId} not found in getOrCreateAccountRewardsPerCollection. This should not happen.`
+    );
+  }
+
+  const vaultEntity = Vault.load(collectionVault.vault);
+  if (!vaultEntity) {
+    throw new Error(
+      `CRITICAL: Vault with id ${collectionVaultId} not found when creating AccountRewardsPerCollection. This should not happen.`
+    );
+  }
+
+  const cTokenMarketForVault = vaultEntity.cTokenMarket
+    ? Address.fromString(vaultEntity.cTokenMarket)
+    : Address.fromString(ADDRESS_ZERO_STR);
+
   const accountMarket = getOrCreateAccountMarket(
     accountAddress,
-    Address.fromString(vault.cTokenMarket)
+    cTokenMarketForVault
   );
 
   const id = generateAccountRewardsPerCollectionId(
@@ -165,8 +181,12 @@ export function getOrCreateAccountRewardsPerCollection(
     arpc.collectionVault = collectionVault.id;
     arpc.balanceNFT = ZERO_BI;
     arpc.seconds = ZERO_BI;
-    arpc.updatedAtBlock = ZERO_BI;
-    arpc.updatedAtTimestamp = ZERO_BI.toI32();
+    arpc.updatedAtBlock = blockNumber;
+    arpc.updatedAtTimestamp = timestamp.toI32();
+    arpc.save();
+  } else {
+    arpc.updatedAtBlock = blockNumber;
+    arpc.updatedAtTimestamp = timestamp.toI32();
     arpc.save();
   }
   return arpc;

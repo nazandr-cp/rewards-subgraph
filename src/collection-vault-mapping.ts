@@ -2,7 +2,8 @@ import {
   CollectionDeposit as CollectionDepositEvent,
   CollectionWithdraw as CollectionWithdrawEvent,
 } from "../generated/CollectionVault/CollectionVault";
-import { log } from "@graphprotocol/graph-ts";
+import { log, Address } from "@graphprotocol/graph-ts"; // Added Address
+import { Vault } from "../generated/schema"; // Added Vault for loading
 
 import { getOrCreateVault, getOrCreateCollectionVault } from "./utils/getters";
 
@@ -12,7 +13,17 @@ export function handleCollectionDeposit(event: CollectionDepositEvent): void {
   const shares = event.params.shares;
   const assets = event.params.assets;
 
-  const vault = getOrCreateVault(vaultAddress);
+  // Load the Vault to get its cTokenMarket address
+  const vaultEntity = Vault.load(vaultAddress.toHex());
+  if (!vaultEntity) {
+    log.error("handleCollectionDeposit: Vault {} not found. Cannot proceed.", [
+      vaultAddress.toHex(),
+    ]);
+    return;
+  }
+  const cTokenMarketForVault = Address.fromString(vaultEntity.cTokenMarket);
+
+  const vault = getOrCreateVault(vaultAddress, cTokenMarketForVault);
   vault.totalShares = vault.totalShares.plus(shares);
   vault.totalDeposits = vault.totalDeposits.plus(assets);
   vault.updatedAtBlock = event.block.number;
@@ -24,7 +35,12 @@ export function handleCollectionDeposit(event: CollectionDepositEvent): void {
     vault.totalDeposits.toString(),
   ]);
 
-  const collVault = getOrCreateCollectionVault(vaultAddress, collectionAddress);
+  // Use the cTokenMarketForVault obtained above
+  const collVault = getOrCreateCollectionVault(
+    vaultAddress,
+    collectionAddress,
+    cTokenMarketForVault
+  );
 
   collVault.principalShares = collVault.principalShares.plus(shares);
   collVault.principalDeposited = collVault.principalDeposited.plus(assets);
@@ -51,7 +67,19 @@ export function handleCollectionWithdraw(event: CollectionWithdrawEvent): void {
   const shares = event.params.shares;
   const assets = event.params.assets;
 
-  const vault = getOrCreateVault(vaultAddress);
+  // Load the Vault to get its cTokenMarket address
+  const vaultEntityWithdraw = Vault.load(vaultAddress.toHex());
+  if (!vaultEntityWithdraw) {
+    log.error("handleCollectionWithdraw: Vault {} not found. Cannot proceed.", [
+      vaultAddress.toHex(),
+    ]);
+    return;
+  }
+  const cTokenMarketForVaultWithdraw = Address.fromString(
+    vaultEntityWithdraw.cTokenMarket
+  );
+
+  const vault = getOrCreateVault(vaultAddress, cTokenMarketForVaultWithdraw);
   vault.totalShares = vault.totalShares.minus(shares);
   vault.totalDeposits = vault.totalDeposits.minus(assets);
   vault.updatedAtBlock = event.block.number;
@@ -62,7 +90,12 @@ export function handleCollectionWithdraw(event: CollectionWithdrawEvent): void {
     vault.totalShares.toString(),
     vault.totalDeposits.toString(),
   ]);
-  const collVault = getOrCreateCollectionVault(vaultAddress, collectionAddress);
+  // Use the cTokenMarketForVaultWithdraw obtained above
+  const collVault = getOrCreateCollectionVault(
+    vaultAddress,
+    collectionAddress,
+    cTokenMarketForVaultWithdraw
+  );
   collVault.principalShares = collVault.principalShares.minus(shares);
   collVault.principalDeposited = collVault.principalDeposited.minus(assets);
   collVault.updatedAtBlock = event.block.number;

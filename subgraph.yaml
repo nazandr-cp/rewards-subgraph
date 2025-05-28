@@ -62,8 +62,6 @@ dataSources:
           handler: handleCollectionRewardShareUpdated
         - event: WeightFunctionSet(indexed address,indexed address,(uint8,int256,int256))
           handler: handleWeightFunctionSet
-        - event: RewardPerBlockUpdated(indexed address,uint128)
-          handler: handleRewardPerBlockUpdated
         - event: RewardsClaimed(indexed address,indexed address,indexed address,uint256,uint256)
           handler: handleRewardClaimed
       file: ./src/rewards-controller-mapping.ts
