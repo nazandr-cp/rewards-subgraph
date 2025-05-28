@@ -20,7 +20,7 @@ type CTokenMarket @entity(immutable: false) {
   cashPrior: BigInt! # Cash available in the market before the last transaction
   collateralFactor: BigInt!
   borrowIndex: BigInt!
-  lastAccrualTimestamp: Timestamp! # Timestamp of last interest accrual for the market
+  lastExchangeRateTimestamp: Timestamp! # Timestamp of the last exchange rate update
   updatedAtBlock: BigInt!
   updatedAtTimestamp: Timestamp!
 }
@@ -31,6 +31,7 @@ type Vault @entity(immutable: false) {
   cTokenMarket: CTokenMarket! # The cToken market this vault is associated with
   totalShares: BigInt! # Total shares issued by this vault
   totalDeposits: BigInt! # Total amount of underlying asset deposited in this vault
+  totalCTokens: BigInt! # Total cTokens issued by this vault
   collections: [CollectionVault!]! @derivedFrom(field: "vault")
   rewardClaims: [RewardClaim!]! @derivedFrom(field: "vault")
   updatedAtBlock: BigInt!
@@ -40,7 +41,7 @@ type Vault @entity(immutable: false) {
 type Account @entity(immutable: false) {
   id: ID! # User address
   totalSecondsClaimed: BigInt!
-  Collections: [AccountCollection!]! @derivedFrom(field: "account") # User's general collection interactions
+  Collections: [AccountRewardsPerCollection!]! @derivedFrom(field: "account") # User's general collection interactions
   Markets: [AccountMarket!]! @derivedFrom(field: "account") # User's market state across all cToken markets
   rewardClaims: [RewardClaim!]! @derivedFrom(field: "account")
   accountRewards: [AccountRewardsPerCollection!]! @derivedFrom(field: "account") # Detailed reward state per collection-vault
@@ -51,7 +52,9 @@ type RewardClaim @entity(immutable: true) {
   account: Account!
   vault: Vault!
   collection: Collection! # Address of the collection for which reward was claimed
+  seconds: BigInt! # Total reward seconds accrued for this claim
   nonce: BigInt! # User's nonce for claims from this vault and collection
+  amount: BigInt! # Total reward amount claimed
   blockNumber: BigInt!
   blockTimestamp: Timestamp!
   transactionHash: Bytes!
@@ -79,30 +82,26 @@ type CollectionVault @entity(immutable: false) {
   fnType: WeightFunctionType! # Type of weighting function (LINEAR or EXPONENTIAL)
   p1: BigInt! # Parameter 1 for the weighting function
   p2: BigInt! # Parameter 2 for the weighting function
+  secondsAccumulated: BigInt! # Total "reward seconds" accumulated for this collection in this vault
+  secondsClaimed: BigInt! # Total "reward seconds" claimed for this collection in this vault
+  totalRewards: BigInt! # Total rewards distributed for this collection in this vault
+  totalRewardsClaimed: BigInt! # Total rewards claimed for this collection in this vault
   updatedAtBlock: BigInt!
   updatedAtTimestamp: Timestamp!
-}
-
-# Tracks an account's general interaction with a collection within a specific vault (e.g., NFT balance)
-type AccountCollection @entity(immutable: false) {
-  id: ID! # Composite ID, e.g., account.id + "-" + vault.id + "-" + collection.id
-  account: Account!
-  vault: Vault!
-  collection: Collection!
-  accountMarket: AccountMarket! # Link to the user's market state for this collection in this vault
-  balanceNFT: BigInt! # User's current NFT balance of this collection within this vault context
-  totalSeconds: BigInt! # User's total seconds related to this collection in this vault (potentially deprecated if AccountRewardsPerCollection.seconds is primary)
-  lastUpdate: Timestamp! # Timestamp of last update to this record
 }
 
 # Tracks an account's specific reward accrual state for a CollectionVault configuration
 type AccountRewardsPerCollection @entity(immutable: false) {
   id: ID! # Composite ID, e.g., account.id + "-" + collectionVault.id
   account: Account!
+  vault: Vault!
+  collection: Collection!
+  accountMarket: AccountMarket! # Link to the user's market state for this collection in this vault
   collectionVault: CollectionVault! # Link to the specific collection-vault configuration and state
   balanceNFT: BigInt! # User's NFT balance relevant for calculating rewards for this CollectionVault
   seconds: BigInt! # User's accrued "reward seconds" for this specific CollectionVault
-  lastUpdate: Timestamp! # Timestamp of the last update to the user's reward accrual
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: Timestamp!
 }
 
 type AccountMarket @entity(immutable: false) {

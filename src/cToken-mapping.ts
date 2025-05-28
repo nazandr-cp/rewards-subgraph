@@ -45,7 +45,7 @@ export function handleAccrueInterest(event: AccrueInterestEvent): void {
   market.cashPrior = cashPrior;
   market.borrowIndex = borrowIndex;
   market.totalBorrows = totalBorrows;
-  market.lastAccrualTimestamp = event.block.timestamp.toI64();
+  market.lastExchangeRateTimestamp = event.block.timestamp.toI64();
   market.updatedAtBlock = event.block.number;
   market.updatedAtTimestamp = event.block.timestamp.toI64();
   market.save();

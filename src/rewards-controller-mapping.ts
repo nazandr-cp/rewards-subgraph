@@ -247,7 +247,13 @@ export function handleRewardClaimed(event: RewardClaimedEvent): void {
   const accountId = userAddress.toHex();
 
   // Ensure Vault entity is up-to-date
-  const vault = getOrCreateVault(vaultAddress);
+  const vault = getOrCreateVault(vaultAddress, Address.fromString(""));
+  if (vault == null) {
+    log.error("handleRewardClaimed: Vault entity not found for address {}", [
+      vaultAddress.toHex(),
+    ]);
+    return;
+  }
   const contract_ = RewardsController.bind(event.address);
   const vaultInfoTry_ = contract_.try_vaults(vaultAddress);
   if (!vaultInfoTry_.reverted) {
@@ -284,11 +290,6 @@ export function handleRewardClaimed(event: RewardClaimedEvent): void {
   rewardClaim.blockNumber = event.block.number;
   rewardClaim.transactionHash = event.transaction.hash;
   rewardClaim.nonce = newNonceFromEvent;
-  rewardClaim.secondsInClaim = secondsInClaimFromEvent;
-  rewardClaim.secondsUser = previousTotalSecondsClaimed;
-  rewardClaim.secondsColl = ZERO_BI;
-  rewardClaim.incRPS = ZERO_BI;
-  rewardClaim.yieldSlice = ZERO_BI;
   rewardClaim.save();
 
   const accountVault = getOrCreateAccountVault(accountId, vaultId);

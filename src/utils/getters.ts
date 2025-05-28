@@ -1,4 +1,4 @@
-import { Address, BigInt, log } from "@graphprotocol/graph-ts";
+import { Address, log } from "@graphprotocol/graph-ts";
 import {
   Account,
   Collection,
@@ -49,13 +49,16 @@ export function getOrCreateCTokenMarket(address: Address): CTokenMarket {
   let cTokenMarket = CTokenMarket.load(address.toHexString());
   if (cTokenMarket == null) {
     cTokenMarket = new CTokenMarket(address.toHexString());
+    cTokenMarket.decimals = 0;
     cTokenMarket.totalSupply = ZERO_BI;
     cTokenMarket.totalBorrows = ZERO_BI;
     cTokenMarket.totalReserves = ZERO_BI;
     cTokenMarket.exchangeRate = ZERO_BI;
+    cTokenMarket.interestAccumulated = ZERO_BI;
+    cTokenMarket.cashPrior = ZERO_BI;
     cTokenMarket.collateralFactor = ZERO_BI;
     cTokenMarket.borrowIndex = ZERO_BI;
-    cTokenMarket.lastAccrualTimestamp = ZERO_BI.toI32();
+    cTokenMarket.lastExchangeRateTimestamp = ZERO_BI.toI32();
     cTokenMarket.updatedAtBlock = ZERO_BI;
     cTokenMarket.updatedAtTimestamp = ZERO_BI.toI32();
     cTokenMarket.save();
@@ -76,13 +79,18 @@ export function getOrCreateCollection(collectionAddress: Address): Collection {
   return collection;
 }
 
-export function getOrCreateVault(vaultAddress: Address): Vault {
+export function getOrCreateVault(
+  vaultAddress: Address,
+  cTokenMarketAddress: Address
+): Vault {
   let vault = Vault.load(vaultAddress.toHexString());
   if (vault == null) {
     vault = new Vault(vaultAddress.toHexString());
-    vault.rewardPerBlock = ZERO_BI;
-    vault.globalRPW = ZERO_BI;
-    vault.totalWeight = ZERO_BI;
+    const cTokenMarket = getOrCreateCTokenMarket(cTokenMarketAddress);
+    vault.cTokenMarket = cTokenMarket.id;
+    vault.totalShares = ZERO_BI;
+    vault.totalDeposits = ZERO_BI;
+    vault.totalCTokens = ZERO_BI;
     vault.updatedAtBlock = ZERO_BI;
     vault.updatedAtTimestamp = ZERO_BI.toI32();
     vault.save();
@@ -92,9 +100,10 @@ export function getOrCreateVault(vaultAddress: Address): Vault {
 
 export function getOrCreateCollectionVault(
   vaultAddress: Address,
-  collectionAddress: Address
+  collectionAddress: Address,
+  cTokenMarketAddress: Address
 ): CollectionVault {
-  const vault = getOrCreateVault(vaultAddress);
+  const vault = getOrCreateVault(vaultAddress, cTokenMarketAddress);
   const collection = getOrCreateCollection(collectionAddress);
 
   const id = generateCollectionVaultId(vault.id, collection.id);
@@ -104,16 +113,19 @@ export function getOrCreateCollectionVault(
     cv = new CollectionVault(id);
     cv.collection = collection.id;
     cv.vault = vault.id;
+    cv.principalShares = ZERO_BI;
+    cv.principalDeposited = ZERO_BI;
     cv.isBorrowBased = false;
+    cv.rewardSharePercentage = 0;
     cv.fnType = "LINEAR";
     cv.p1 = ZERO_BI;
     cv.p2 = ZERO_BI;
-    cv.rewardPerSecond = ZERO_BI;
-    cv.totalSecondsAccrued = ZERO_BI;
-    cv.totalRewardsPool = ZERO_BI;
-    cv.totalAccruedSecondsInVault = ZERO_BI;
+    cv.secondsAccumulated = ZERO_BI;
+    cv.secondsClaimed = ZERO_BI;
+    cv.totalRewards = ZERO_BI;
+    cv.totalRewardsClaimed = ZERO_BI;
     cv.updatedAtBlock = ZERO_BI;
-    cv.updatedAtTimestamp = ZERO_BI.toU64();
+    cv.updatedAtTimestamp = ZERO_BI.toI32();
     cv.save();
   }
   return cv;
@@ -121,32 +133,40 @@ export function getOrCreateCollectionVault(
 
 export function getOrCreateAccountRewardsPerCollection(
   accountAddress: Address,
-  collectionVaultId: string,
-  eventTimestamp: BigInt
+  collectionId: string,
+  vaultId: string,
+  cTokenMarketAddress: Address
 ): AccountRewardsPerCollection {
   const account = getOrCreateAccount(accountAddress);
-  const collectionVault = CollectionVault.load(collectionVaultId);
+  const collectionVault = getOrCreateCollectionVault(
+    Address.fromString(vaultId),
+    Address.fromString(collectionId),
+    cTokenMarketAddress
+  );
 
-  if (collectionVault == null) {
-    log.critical(
-      "getOrCreateAccountRewardsPerCollection: CollectionVault with ID {} not found. This should not happen.",
-      [collectionVaultId]
-    );
-  }
+  const vault = Vault.load(collectionVault.vault)!;
+  const accountMarket = getOrCreateAccountMarket(
+    accountAddress,
+    Address.fromString(vault.cTokenMarket)
+  );
 
   const id = generateAccountRewardsPerCollectionId(
     account.id,
-    collectionVaultId
+    collectionVault.id
   );
   let arpc = AccountRewardsPerCollection.load(id);
 
   if (arpc == null) {
     arpc = new AccountRewardsPerCollection(id);
     arpc.account = account.id;
-    arpc.collectionVault = collectionVaultId;
+    arpc.vault = collectionVault.vault;
+    arpc.collection = collectionVault.collection;
+    arpc.accountMarket = accountMarket.id;
+    arpc.collectionVault = collectionVault.id;
     arpc.balanceNFT = ZERO_BI;
     arpc.seconds = ZERO_BI;
-    arpc.lastUpdate = eventTimestamp.toI32();
+    arpc.updatedAtBlock = ZERO_BI;
+    arpc.updatedAtTimestamp = ZERO_BI.toI32();
     arpc.save();
   }
   return arpc;
@@ -168,6 +188,8 @@ export function getOrCreateAccountMarket(
     accountMarket.cTokenMarket = market.id;
     accountMarket.deposit = ZERO_BI;
     accountMarket.borrow = ZERO_BI;
+    accountMarket.updatedAtBlock = ZERO_BI;
+    accountMarket.updatedAtTimestamp = ZERO_BI.toI32();
     accountMarket.save();
   }
   return accountMarket;
