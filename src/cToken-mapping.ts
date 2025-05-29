@@ -9,17 +9,16 @@ import {
   Transfer as TransferEvent,
 } from "../generated/templates/cToken/cToken";
 import { cToken as CTokenContract } from "../generated/templates/cToken/cToken";
-import {} from "../generated/schema";
+import { CollectionVault } from "../generated/schema";
 import {
   getOrCreateAccountMarket,
   getOrCreateAccount,
   getOrCreateCTokenMarket,
 } from "./utils/getters";
-import {} from "./utils/const";
+import { accrueSeconds } from "./utils/rewards";
 
 const EXP_SCALE = BigInt.fromI32(10).pow(18);
-// Standard Compound V2 protocol seize share is 2.8%
-const PROTOCOL_SEIZE_SHARE_MANTISSA = BigInt.fromString("28000000000000000"); // 0.028 * 10^18
+const PROTOCOL_SEIZE_SHARE_MANTISSA = BigInt.fromString("28000000000000000");
 
 export function handleAccrueInterest(event: AccrueInterestEvent): void {
   const cashPrior = event.params.cashPrior;
@@ -53,7 +52,6 @@ export function handleAccrueInterest(event: AccrueInterestEvent): void {
 
 export function handleBorrow(event: BorrowEvent): void {
   const borrower = event.params.borrower;
-  //   const borrowAmount = event.params.borrowAmount;
   const accountBorrows = event.params.accountBorrows;
   const totalBorrows = event.params.totalBorrows;
 
@@ -69,45 +67,61 @@ export function handleBorrow(event: BorrowEvent): void {
   market.updatedAtBlock = event.block.number;
   market.updatedAtTimestamp = event.block.timestamp.toI64();
   market.save();
+
+  const account = getOrCreateAccount(borrower);
+  const accountRewardsPerCollection = account.accountRewards.load();
+  if (accountRewardsPerCollection) {
+    for (let i = 0; i < accountRewardsPerCollection.length; i++) {
+      const accRewards = accountRewardsPerCollection[i];
+      if (accRewards) {
+        const collectionVault = CollectionVault.load(
+          accRewards.collectionVault
+        );
+        if (collectionVault) {
+          accrueSeconds(accRewards, collectionVault, event.block.timestamp);
+          accRewards.updatedAtBlock = event.block.number;
+          accRewards.updatedAtTimestamp = event.block.timestamp.toI64();
+          accRewards.save();
+        } else {
+          log.warning(
+            "handleBorrow: Found null CollectionVault for ID {} in AccountRewardsPerCollection for account {}",
+            [accRewards.collectionVault, borrower.toHexString()]
+          );
+        }
+      }
+    }
+  }
 }
 
 export function handleLiquidateBorrow(event: LiquidateBorrowEvent): void {
   const cTokenBorrowedAddress = event.address;
   const liquidatorAddress = event.params.liquidator;
   const borrowerAddress = event.params.borrower;
-  const repayAmount = event.params.repayAmount; // Amount of the underlying borrowed asset repaid by the liquidator
+  const repayAmount = event.params.repayAmount;
   const cTokenCollateralAddress = event.params.cTokenCollateral;
-  const seizeTokens_ct = event.params.seizeTokens; // Total number of collateral cTokens seized from the borrower
+  const seizeTokens_ct = event.params.seizeTokens;
 
-  // --- Load or create market and account entities ---
   const borrowedMarket = getOrCreateCTokenMarket(cTokenBorrowedAddress);
   const collateralMarket = getOrCreateCTokenMarket(cTokenCollateralAddress);
 
-  // Ensure Account entities are created for liquidator and borrower
-  // These calls will fetch existing or create new ones if they don't exist.
   getOrCreateAccount(liquidatorAddress);
   getOrCreateAccount(borrowerAddress);
 
-  // Borrower's account in the BORROWED market (where their debt is)
   const borrowerAccountBorrowedMarket = getOrCreateAccountMarket(
     borrowerAddress,
     cTokenBorrowedAddress
   );
 
-  // Liquidator's account in the COLLATERAL market (where they receive seized assets)
   const liquidatorAccountCollateralMarket = getOrCreateAccountMarket(
     liquidatorAddress,
     cTokenCollateralAddress
   );
 
-  // Borrower's account in the COLLATERAL market (where their collateral is taken from)
   const borrowerAccountCollateralMarket = getOrCreateAccountMarket(
     borrowerAddress,
     cTokenCollateralAddress
   );
 
-  // --- Update Borrower's Debt in Borrowed Market ---
-  // The borrower's debt in the borrowed asset's market is reduced by the repayAmount.
   borrowerAccountBorrowedMarket.borrow =
     borrowerAccountBorrowedMarket.borrow.minus(repayAmount);
   borrowerAccountBorrowedMarket.updatedAtBlock = event.block.number;
@@ -115,8 +129,6 @@ export function handleLiquidateBorrow(event: LiquidateBorrowEvent): void {
     event.block.timestamp.toI64();
   borrowerAccountBorrowedMarket.save();
 
-  // --- Update Borrowed Market State (Total Borrows) ---
-  // The total borrows in the borrowed asset's market are updated.
   const borrowedCTokenContract = CTokenContract.bind(cTokenBorrowedAddress);
   const borrowedTotalBorrowsTry = borrowedCTokenContract.try_totalBorrows();
   if (!borrowedTotalBorrowsTry.reverted) {
@@ -131,10 +143,8 @@ export function handleLiquidateBorrow(event: LiquidateBorrowEvent): void {
   borrowedMarket.updatedAtTimestamp = event.block.timestamp.toI64();
   borrowedMarket.save();
 
-  // --- Handle Collateral Seizure ---
   const collateralCTokenContract = CTokenContract.bind(cTokenCollateralAddress);
 
-  // Get collateral's exchange rate to convert cTokens to underlying
   const exchangeRateStoredTry =
     collateralCTokenContract.try_exchangeRateStored();
   if (exchangeRateStoredTry.reverted) {
@@ -142,19 +152,14 @@ export function handleLiquidateBorrow(event: LiquidateBorrowEvent): void {
       "exchangeRateStored() call reverted in LiquidateBorrow for collateral cToken: {}. Cannot accurately update collateral values.",
       [cTokenCollateralAddress.toHexString()]
     );
-    // If we can't get the exchange rate, we can't accurately update underlying deposit values.
-    // We might still update cToken balances if the schema supported it directly, or make assumptions.
-    // For now, we'll save what we can and return if critical info is missing.
     collateralMarket.updatedAtBlock = event.block.number;
     collateralMarket.updatedAtTimestamp = event.block.timestamp.toI64();
     collateralMarket.save();
     return;
   }
-  const exchangeRateCollateral = exchangeRateStoredTry.value; // This is scaled by 1e18
+  const exchangeRateCollateral = exchangeRateStoredTry.value;
   collateralMarket.exchangeRate = exchangeRateCollateral;
 
-  // Calculate the split of seized collateral cTokens based on protocolSeizeShareMantissa
-  // protocolSeizeTokens_ct = seizeTokens_ct * protocolSeizeShareMantissa / 1e18
   const protocolSeizeShareMantissaResult =
     collateralCTokenContract.try_protocolSeizeShareMantissa();
   let protocolSeizeShareMantissa = PROTOCOL_SEIZE_SHARE_MANTISSA;
@@ -171,18 +176,13 @@ export function handleLiquidateBorrow(event: LiquidateBorrowEvent): void {
     .div(EXP_SCALE);
   const liquidatorSeizeTokens_ct = seizeTokens_ct.minus(protocolSeizeTokens_ct);
 
-  // Convert cToken amounts to their underlying value for the collateral asset
-  // underlying = cTokens * exchangeRate / 1e18
   const underlyingSeizedFromBorrower_total = seizeTokens_ct
     .times(exchangeRateCollateral)
     .div(EXP_SCALE);
   const underlyingToLiquidator = liquidatorSeizeTokens_ct
     .times(exchangeRateCollateral)
     .div(EXP_SCALE);
-  // const underlyingToProtocolReserves = protocolSeizeTokens_ct.times(exchangeRateCollateral).div(EXP_SCALE);
 
-  // Update Borrower's Collateral Deposit (in underlying terms)
-  // The borrower loses the total underlying value of the seized cTokens from their deposit.
   borrowerAccountCollateralMarket.deposit =
     borrowerAccountCollateralMarket.deposit.minus(
       underlyingSeizedFromBorrower_total
@@ -192,8 +192,6 @@ export function handleLiquidateBorrow(event: LiquidateBorrowEvent): void {
     event.block.timestamp.toI64();
   borrowerAccountCollateralMarket.save();
 
-  // Update Liquidator's Collateral Deposit (in underlying terms)
-  // The liquidator receives the underlying value of their share of seized cTokens.
   liquidatorAccountCollateralMarket.deposit =
     liquidatorAccountCollateralMarket.deposit.plus(underlyingToLiquidator);
   liquidatorAccountCollateralMarket.updatedAtBlock = event.block.number;
@@ -201,10 +199,6 @@ export function handleLiquidateBorrow(event: LiquidateBorrowEvent): void {
     event.block.timestamp.toI64();
   liquidatorAccountCollateralMarket.save();
 
-  // --- Update Collateral Market State (TotalSupply and TotalReserves) ---
-  // The totalSupply of the collateral cToken decreases by the amount reserved for the protocol.
-  // The totalReserves of the collateral cToken increase by the underlying value of the protocol's share.
-  // We fetch these directly from the contract post-event as they reflect the latest state.
   const collateralTotalSupplyTry = collateralCTokenContract.try_totalSupply();
   if (!collateralTotalSupplyTry.reverted) {
     collateralMarket.totalSupply = collateralTotalSupplyTry.value;
@@ -229,13 +223,60 @@ export function handleLiquidateBorrow(event: LiquidateBorrowEvent): void {
   collateralMarket.updatedAtBlock = event.block.number;
   collateralMarket.updatedAtTimestamp = event.block.timestamp.toI64();
   collateralMarket.save();
+
+  const liquidatorAccount = getOrCreateAccount(liquidatorAddress);
+  const liquidatorRewards = liquidatorAccount.accountRewards.load();
+  if (liquidatorRewards) {
+    for (let i = 0; i < liquidatorRewards.length; i++) {
+      const accRewards = liquidatorRewards[i];
+      if (accRewards) {
+        const collectionVault = CollectionVault.load(
+          accRewards.collectionVault
+        );
+        if (collectionVault) {
+          accrueSeconds(accRewards, collectionVault, event.block.timestamp);
+          accRewards.updatedAtBlock = event.block.number;
+          accRewards.updatedAtTimestamp = event.block.timestamp.toI64();
+          accRewards.save();
+        } else {
+          log.warning(
+            "handleLiquidateBorrow: Found null CollectionVault for ID {} in AccountRewardsPerCollection for liquidator {}",
+            [accRewards.collectionVault, liquidatorAddress.toHexString()]
+          );
+        }
+      }
+    }
+  }
+
+  const borrowerAccount = getOrCreateAccount(borrowerAddress);
+  const borrowerRewards = borrowerAccount.accountRewards.load();
+  if (borrowerRewards) {
+    for (let i = 0; i < borrowerRewards.length; i++) {
+      const accRewards = borrowerRewards[i];
+      if (accRewards) {
+        const collectionVault = CollectionVault.load(
+          accRewards.collectionVault
+        );
+        if (collectionVault) {
+          accrueSeconds(accRewards, collectionVault, event.block.timestamp);
+          accRewards.updatedAtBlock = event.block.number;
+          accRewards.updatedAtTimestamp = event.block.timestamp.toI64();
+          accRewards.save();
+        } else {
+          log.warning(
+            "handleLiquidateBorrow: Found null CollectionVault for ID {} in AccountRewardsPerCollection for borrower {}",
+            [accRewards.collectionVault, borrowerAddress.toHexString()]
+          );
+        }
+      }
+    }
+  }
 }
 
 export function handleMint(event: MintEvent): void {
   const cTokenContractAddress = event.address;
   const minter = event.params.minter;
   const mintAmount = event.params.mintAmount;
-  //   const mintTokens_ct = event.params.mintTokens; // Amount of cTokens minted
   const market = getOrCreateCTokenMarket(event.address);
   const accountMarket = getOrCreateAccountMarket(minter, cTokenContractAddress);
 
@@ -256,13 +297,36 @@ export function handleMint(event: MintEvent): void {
   market.updatedAtTimestamp = event.block.timestamp.toI64();
   market.updatedAtBlock = event.block.number;
   market.save();
+
+  const account = getOrCreateAccount(minter);
+  const accountRewardsPerCollection = account.accountRewards.load();
+  if (accountRewardsPerCollection) {
+    for (let i = 0; i < accountRewardsPerCollection.length; i++) {
+      const accRewards = accountRewardsPerCollection[i];
+      if (accRewards) {
+        const collectionVault = CollectionVault.load(
+          accRewards.collectionVault
+        );
+        if (collectionVault) {
+          accrueSeconds(accRewards, collectionVault, event.block.timestamp);
+          accRewards.updatedAtBlock = event.block.number;
+          accRewards.updatedAtTimestamp = event.block.timestamp.toI64();
+          accRewards.save();
+        } else {
+          log.warning(
+            "handleBorrow: Found null CollectionVault for ID {} in AccountRewardsPerCollection for account {}",
+            [accRewards.collectionVault, minter.toHexString()]
+          );
+        }
+      }
+    }
+  }
 }
 
 export function handleRedeem(event: RedeemEvent): void {
   const cTokenContractAddress = event.address;
   const redeemer = event.params.redeemer;
   const redeemAmount = event.params.redeemAmount;
-  //   const redeemTokens_ct = event.params.redeemTokens;
   const market = getOrCreateCTokenMarket(event.address);
   const accountMarket = getOrCreateAccountMarket(
     redeemer,
@@ -286,13 +350,36 @@ export function handleRedeem(event: RedeemEvent): void {
   market.updatedAtTimestamp = event.block.timestamp.toI64();
   market.updatedAtBlock = event.block.number;
   market.save();
+
+  const account = getOrCreateAccount(redeemer);
+  const accountRewardsPerCollection = account.accountRewards.load();
+  if (accountRewardsPerCollection) {
+    for (let i = 0; i < accountRewardsPerCollection.length; i++) {
+      const accRewards = accountRewardsPerCollection[i];
+      if (accRewards) {
+        const collectionVault = CollectionVault.load(
+          accRewards.collectionVault
+        );
+        if (collectionVault) {
+          accrueSeconds(accRewards, collectionVault, event.block.timestamp);
+          accRewards.updatedAtBlock = event.block.number;
+          accRewards.updatedAtTimestamp = event.block.timestamp.toI64();
+          accRewards.save();
+        } else {
+          log.warning(
+            "handleBorrow: Found null CollectionVault for ID {} in AccountRewardsPerCollection for account {}",
+            [accRewards.collectionVault, redeemer.toHexString()]
+          );
+        }
+      }
+    }
+  }
 }
 
 export function handleRepayBorrow(event: RepayBorrowEvent): void {
   const cTokenContractAddress = event.address;
   const payerAddress = event.params.payer;
   const borrowerAddress = event.params.borrower;
-  // const actualRepayAmount = event.params.repayAmount;
   const newBorrowerLoanBalance = event.params.accountBorrows;
   const newMarketTotalBorrows = event.params.totalBorrows;
 
@@ -323,6 +410,30 @@ export function handleRepayBorrow(event: RepayBorrowEvent): void {
   market.updatedAtTimestamp = event.block.timestamp.toI64();
   market.updatedAtBlock = event.block.number;
   market.save();
+
+  const account = getOrCreateAccount(borrowerAddress);
+  const accountRewardsPerCollection = account.accountRewards.load();
+  if (accountRewardsPerCollection) {
+    for (let i = 0; i < accountRewardsPerCollection.length; i++) {
+      const accRewards = accountRewardsPerCollection[i];
+      if (accRewards) {
+        const collectionVault = CollectionVault.load(
+          accRewards.collectionVault
+        );
+        if (collectionVault) {
+          accrueSeconds(accRewards, collectionVault, event.block.timestamp);
+          accRewards.updatedAtBlock = event.block.number;
+          accRewards.updatedAtTimestamp = event.block.timestamp.toI64();
+          accRewards.save();
+        } else {
+          log.warning(
+            "handleBorrow: Found null CollectionVault for ID {} in AccountRewardsPerCollection for account {}",
+            [accRewards.collectionVault, borrowerAddress.toHexString()]
+          );
+        }
+      }
+    }
+  }
 }
 
 export function handleTransfer(event: TransferEvent): void {
@@ -373,4 +484,54 @@ export function handleTransfer(event: TransferEvent): void {
   market.updatedAtBlock = event.block.number;
   market.updatedAtTimestamp = event.block.timestamp.toI64();
   market.save();
+
+  // Accrue rewards for 'from' account
+  const fromAccount = getOrCreateAccount(fromAddress);
+  const fromAccountRewards = fromAccount.accountRewards.load();
+  if (fromAccountRewards) {
+    for (let i = 0; i < fromAccountRewards.length; i++) {
+      const accRewards = fromAccountRewards[i];
+      if (accRewards) {
+        const collectionVault = CollectionVault.load(
+          accRewards.collectionVault
+        );
+        if (collectionVault) {
+          accrueSeconds(accRewards, collectionVault, event.block.timestamp);
+          accRewards.updatedAtBlock = event.block.number;
+          accRewards.updatedAtTimestamp = event.block.timestamp.toI64();
+          accRewards.save();
+        } else {
+          log.warning(
+            "handleTransfer: Found null CollectionVault for ID {} in AccountRewardsPerCollection for account {}",
+            [accRewards.collectionVault, fromAddress.toHexString()]
+          );
+        }
+      }
+    }
+  }
+
+  // Accrue rewards for 'to' account
+  const toAccount = getOrCreateAccount(toAddress);
+  const toAccountRewards = toAccount.accountRewards.load();
+  if (toAccountRewards) {
+    for (let i = 0; i < toAccountRewards.length; i++) {
+      const accRewards = toAccountRewards[i];
+      if (accRewards) {
+        const collectionVault = CollectionVault.load(
+          accRewards.collectionVault
+        );
+        if (collectionVault) {
+          accrueSeconds(accRewards, collectionVault, event.block.timestamp);
+          accRewards.updatedAtBlock = event.block.number;
+          accRewards.updatedAtTimestamp = event.block.timestamp.toI64();
+          accRewards.save();
+        } else {
+          log.warning(
+            "handleTransfer: Found null CollectionVault for ID {} in AccountRewardsPerCollection for account {}",
+            [accRewards.collectionVault, toAddress.toHexString()]
+          );
+        }
+      }
+    }
+  }
 }

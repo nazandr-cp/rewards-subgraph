@@ -1,7 +1,7 @@
 import {
   CollectionDeposit as CollectionDepositEvent,
   CollectionWithdraw as CollectionWithdrawEvent,
-} from "../generated/CollectionVault/CollectionVault";
+} from "../generated/templates/CollectionVault/CollectionVault";
 import { log, Address } from "@graphprotocol/graph-ts"; // Added Address
 import { Vault } from "../generated/schema"; // Added Vault for loading
 
@@ -12,6 +12,7 @@ export function handleCollectionDeposit(event: CollectionDepositEvent): void {
   const collectionAddress = event.params.collectionAddress;
   const shares = event.params.shares;
   const assets = event.params.assets;
+  const totalCTokens = event.params.cTokenAmount;
 
   // Load the Vault to get its cTokenMarket address
   const vaultEntity = Vault.load(vaultAddress.toHex());
@@ -26,6 +27,7 @@ export function handleCollectionDeposit(event: CollectionDepositEvent): void {
   const vault = getOrCreateVault(vaultAddress, cTokenMarketForVault);
   vault.totalShares = vault.totalShares.plus(shares);
   vault.totalDeposits = vault.totalDeposits.plus(assets);
+  vault.totalCTokens = vault.totalCTokens.plus(totalCTokens);
   vault.updatedAtBlock = event.block.number;
   vault.updatedAtTimestamp = event.block.timestamp.toI64();
   vault.save();
@@ -35,7 +37,6 @@ export function handleCollectionDeposit(event: CollectionDepositEvent): void {
     vault.totalDeposits.toString(),
   ]);
 
-  // Use the cTokenMarketForVault obtained above
   const collVault = getOrCreateCollectionVault(
     vaultAddress,
     collectionAddress,
@@ -44,6 +45,7 @@ export function handleCollectionDeposit(event: CollectionDepositEvent): void {
 
   collVault.principalShares = collVault.principalShares.plus(shares);
   collVault.principalDeposited = collVault.principalDeposited.plus(assets);
+  collVault.cTokenAmount = collVault.cTokenAmount.plus(totalCTokens);
   collVault.updatedAtBlock = event.block.number;
   collVault.updatedAtTimestamp = event.block.timestamp.toI64();
   collVault.save();
@@ -66,6 +68,7 @@ export function handleCollectionWithdraw(event: CollectionWithdrawEvent): void {
   const collectionAddress = event.params.collectionAddress;
   const shares = event.params.shares;
   const assets = event.params.assets;
+  const totalCTokens = event.params.cTokenAmount;
 
   // Load the Vault to get its cTokenMarket address
   const vaultEntityWithdraw = Vault.load(vaultAddress.toHex());
@@ -82,6 +85,7 @@ export function handleCollectionWithdraw(event: CollectionWithdrawEvent): void {
   const vault = getOrCreateVault(vaultAddress, cTokenMarketForVaultWithdraw);
   vault.totalShares = vault.totalShares.minus(shares);
   vault.totalDeposits = vault.totalDeposits.minus(assets);
+  vault.totalCTokens = vault.totalCTokens.minus(totalCTokens);
   vault.updatedAtBlock = event.block.number;
   vault.updatedAtTimestamp = event.block.timestamp.toI64();
   vault.save();
@@ -90,7 +94,7 @@ export function handleCollectionWithdraw(event: CollectionWithdrawEvent): void {
     vault.totalShares.toString(),
     vault.totalDeposits.toString(),
   ]);
-  // Use the cTokenMarketForVaultWithdraw obtained above
+
   const collVault = getOrCreateCollectionVault(
     vaultAddress,
     collectionAddress,
@@ -98,6 +102,7 @@ export function handleCollectionWithdraw(event: CollectionWithdrawEvent): void {
   );
   collVault.principalShares = collVault.principalShares.minus(shares);
   collVault.principalDeposited = collVault.principalDeposited.minus(assets);
+  collVault.cTokenAmount = collVault.cTokenAmount.minus(totalCTokens);
   collVault.updatedAtBlock = event.block.number;
   collVault.updatedAtTimestamp = event.block.timestamp.toI64();
   collVault.save();

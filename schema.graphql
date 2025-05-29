@@ -41,7 +41,6 @@ type Vault @entity(immutable: false) {
 type Account @entity(immutable: false) {
   id: ID! # User address
   totalSecondsClaimed: BigInt!
-  Collections: [AccountRewardsPerCollection!]! @derivedFrom(field: "account") # User's general collection interactions
   Markets: [AccountMarket!]! @derivedFrom(field: "account") # User's market state across all cToken markets
   rewardClaims: [RewardClaim!]! @derivedFrom(field: "account")
   accountRewards: [AccountRewardsPerCollection!]! @derivedFrom(field: "account") # Detailed reward state per collection-vault
@@ -77,6 +76,7 @@ type CollectionVault @entity(immutable: false) {
   vault: Vault! # The specific vault this configuration and state applies to
   principalShares: BigInt! # Total shares of this collection in this vault (e.g., cTokens)
   principalDeposited: BigInt! # Total amount of underlying asset deposited for this collection in this vault
+  cTokenAmount: BigInt! # Total cTokens issued for this collection in this vault
   isBorrowBased: Boolean! # True if rewards are based on borrow activity, false if deposit based
   rewardSharePercentage: Int! # Percentage of rewards allocated to this collection (e.g., 10000 = 100%)
   fnType: WeightFunctionType! # Type of weighting function (LINEAR or EXPONENTIAL)

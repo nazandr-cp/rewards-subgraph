@@ -4,7 +4,7 @@ import {
   CollectionVault,
   AccountRewardsPerCollection,
 } from "../../generated/schema";
-import { cToken } from "../../generated/cToken/cToken";
+import { cToken } from "../../generated/templates/cToken/cToken";
 
 import { ZERO_BI } from "./const";
 
