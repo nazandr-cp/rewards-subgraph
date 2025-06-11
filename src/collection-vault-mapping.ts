@@ -1,11 +1,13 @@
 import {
   CollectionDeposit as CollectionDepositEvent,
   CollectionWithdraw as CollectionWithdrawEvent,
+  VaultYieldAllocatedToEpoch as VaultYieldAllocatedToEpochEvent, // Added new event
 } from "../generated/templates/CollectionVault/CollectionVault";
-import { log, Address } from "@graphprotocol/graph-ts"; // Added Address
-import { Vault } from "../generated/schema"; // Added Vault for loading
+import { log, Address } from "@graphprotocol/graph-ts";
+import { Vault, Epoch, EpochVaultAllocation } from "../generated/schema"; // Added Epoch, EpochVaultAllocation
 
 import { getOrCreateVault, getOrCreateCollectionVault } from "./utils/getters";
+import { ZERO_BI } from "./utils/const"; // Added ZERO_BI
 
 export function handleCollectionDeposit(event: CollectionDepositEvent): void {
   const vaultAddress = event.address;
@@ -117,4 +119,79 @@ export function handleCollectionWithdraw(event: CollectionWithdrawEvent): void {
       collVault.principalDeposited.toString(),
     ]
   );
+}
+
+/**
+ * @notice Handles the VaultYieldAllocatedToEpoch event from the CollectionsVault contract.
+ * @dev Creates or updates an EpochVaultAllocation entity when a vault allocates its yield to an epoch.
+ *      This event is emitted by CollectionsVault itself, distinct from EpochManager's VaultYieldAllocated.
+ *      This handler assumes Epoch entities are created by EpochManager's EpochStarted event.
+ * @param event The VaultYieldAllocatedToEpoch event.
+ */
+export function handleVaultYieldAllocatedToEpoch(event: VaultYieldAllocatedToEpochEvent): void {
+  const epochId = event.params.epochId.toString();
+  const vaultAddress = event.address.toHexString(); // event.address is the CollectionsVault address
+  const amountAllocated = event.params.amount;
+
+  const epoch = Epoch.load(epochId);
+  if (epoch == null) {
+    log.warning(
+      "handleVaultYieldAllocatedToEpoch: Epoch {} not found for vault {}. Allocation of {} might be orphaned.",
+      [epochId, vaultAddress, amountAllocated.toString()]
+    );
+    // Depending on strictness, could return or create a placeholder Epoch.
+    // For now, we'll proceed, assuming EpochStarted will eventually create it.
+    // If an Epoch entity is strictly required, this handler should ensure it exists or log an error and return.
+    return; // Or handle error more gracefully
+  }
+
+  const vault = Vault.load(vaultAddress);
+  if (vault == null) {
+    log.warning(
+      "handleVaultYieldAllocatedToEpoch: Vault {} not found for epoch {}. Allocation of {} might be orphaned.",
+      [vaultAddress, epochId, amountAllocated.toString()]
+    );
+    // Similar to Epoch, Vault should exist.
+    return; // Or handle error
+  }
+
+  // Create or update EpochVaultAllocation
+  // The ID for EpochVaultAllocation is epoch.id + "-" + vault.id
+  const allocationId = epochId + "-" + vaultAddress;
+  let epochVaultAllocation = EpochVaultAllocation.load(allocationId);
+
+  if (epochVaultAllocation == null) {
+    epochVaultAllocation = new EpochVaultAllocation(allocationId);
+    epochVaultAllocation.epoch = epochId;
+    epochVaultAllocation.vault = vaultAddress;
+    epochVaultAllocation.yieldAllocated = ZERO_BI;
+    epochVaultAllocation.subsidiesDistributed = ZERO_BI; // Initialized to zero
+  }
+
+  epochVaultAllocation.yieldAllocated = epochVaultAllocation.yieldAllocated.plus(amountAllocated);
+  // remainingYield is yieldAllocated - subsidiesDistributed.
+  // It will be updated when subsidies are processed and `subsidiesDistributed` is updated.
+  epochVaultAllocation.remainingYield = epochVaultAllocation.yieldAllocated.minus(
+    epochVaultAllocation.subsidiesDistributed
+  );
+  epochVaultAllocation.save();
+
+  log.info(
+    "VaultYieldAllocatedToEpoch: Vault {} allocated {} to Epoch {}. New total allocation for this pair: {}",
+    [
+      vaultAddress,
+      amountAllocated.toString(),
+      epochId,
+      epochVaultAllocation.yieldAllocated.toString(),
+    ]
+  );
+
+  // Also, update the Epoch's totalYieldAvailable if this event is the source of truth for it
+  // or if EpochManager.VaultYieldAllocated is not guaranteed to cover this.
+  // The current EpochManager.VaultYieldAllocated handler already updates epoch.totalYieldAvailable.
+  // If this event from CollectionsVault is *in addition* or *instead of* the EpochManager one for this purpose,
+  // then update epoch.totalYieldAvailable here too.
+  // Based on the plan, EpochManager.VaultYieldAllocated seems to be the primary one for epoch.totalYieldAvailable.
+  // This event (VaultYieldAllocatedToEpoch from CollectionsVault) primarily confirms the vault's own accounting.
+  // So, we primarily focus on EpochVaultAllocation here.
 }

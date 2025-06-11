@@ -113,3 +113,57 @@ type AccountMarket @entity(immutable: false) {
   updatedAtBlock: BigInt!
   updatedAtTimestamp: Timestamp!
 }
+
+enum EpochStatus {
+  ACTIVE
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+type Epoch @entity(immutable: false) {
+  id: ID! # epoch number
+  startTimestamp: BigInt!
+  endTimestamp: BigInt!
+  totalYieldAvailable: BigInt!
+  totalSubsidiesDistributed: BigInt!
+  status: EpochStatus!
+  eligibleUsers: BigInt!
+  subsidyTransactions: [SubsidyTransaction!]! @derivedFrom(field: "epoch")
+  vaultAllocations: [EpochVaultAllocation!]! @derivedFrom(field: "epoch")
+}
+
+type SubsidyTransaction @entity(immutable: true) {
+  id: ID! # transaction hash + log index
+  epoch: Epoch!
+  user: Account!
+  collection: Collection!
+  vault: Vault!
+  subsidyAmount: BigInt!
+  borrowAmountBefore: BigInt!
+  borrowAmountAfter: BigInt!
+  gasUsed: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type EpochVaultAllocation @entity(immutable: false) {
+  id: ID! # epoch.id + vault.id
+  epoch: Epoch!
+  vault: Vault!
+  yieldAllocated: BigInt!
+  subsidiesDistributed: BigInt!
+  remainingYield: BigInt!
+}
+
+type UserEpochEligibility @entity(immutable: false) {
+  id: ID! # user.id + epoch.id + collection.id
+  user: Account!
+  epoch: Epoch!
+  collection: Collection!
+  nftBalance: BigInt!
+  borrowBalance: BigInt!
+  subsidyReceived: BigInt!
+  isEligible: Boolean!
+}
