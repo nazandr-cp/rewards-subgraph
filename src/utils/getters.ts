@@ -120,7 +120,7 @@ export function getOrCreateCollectionVault(
     cv.vault = vault.id;
     cv.principalShares = ZERO_BI;
     cv.principalDeposited = ZERO_BI;
-    cv.cTokenAmount = ZERO_BI;
+    cv.totalCTokens = ZERO_BI;
     cv.globalDepositIndex = ZERO_BI;
     cv.lastGlobalDepositIndex = ZERO_BI;
     cv.yieldAccrued = ZERO_BI;
