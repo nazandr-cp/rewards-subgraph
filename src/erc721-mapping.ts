@@ -47,7 +47,7 @@ export function handleTransfer(event: TransferEvent): void {
       }
       const userEpochEligibilityFrom = getOrCreateUserEpochEligibility(
         fromAccount.id,
-        activeEpochId,
+        activeEpochId!,
         collection.id
       );
       userEpochEligibilityFrom.nftBalance = userEpochEligibilityFrom.nftBalance.minus(BigInt.fromI32(1));
@@ -63,7 +63,7 @@ export function handleTransfer(event: TransferEvent): void {
       }
       const userEpochEligibilityTo = getOrCreateUserEpochEligibility(
         toAccount.id,
-        activeEpochId,
+        activeEpochId!,
         collection.id
       );
       userEpochEligibilityTo.nftBalance = userEpochEligibilityTo.nftBalance.plus(BigInt.fromI32(1));

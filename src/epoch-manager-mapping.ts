@@ -39,7 +39,10 @@ export function handleEpochStarted(event: EpochStarted): void {
 
   // Update SystemState with active epoch
   // This must happen regardless of whether the epoch was new or existing.
-  const systemState = SystemState.load(SYSTEM_STATE_ID) || new SystemState(SYSTEM_STATE_ID);
+  let systemState = SystemState.load(SYSTEM_STATE_ID);
+  if (systemState === null) {
+    systemState = new SystemState(SYSTEM_STATE_ID);
+  }
   systemState.activeEpochId = epochId;
   systemState.save();
 }
