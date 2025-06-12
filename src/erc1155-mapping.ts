@@ -2,11 +2,11 @@ import { BigInt, log } from "@graphprotocol/graph-ts";
 import {
   TransferSingle as TransferSingleEvent,
   TransferBatch as TransferBatchEvent,
-} from "../generated/templates/ERC1155/ERC1155";
-import { Collection } from "../generated/schema";
+} from "../generated/templates/ERC1155/ERC1155"; // Assuming this path is correct for templates
+import { Collection, SystemState, Account } from "../generated/schema";
 import { accrueSeconds } from "./utils/rewards";
-import { ADDRESS_ZERO_STR } from "./utils/const";
-import { getOrCreateAccountRewardsPerCollection } from "./utils/getters";
+import { ADDRESS_ZERO_STR, SYSTEM_STATE_ID, ZERO_BI } from "./utils/const";
+import { getOrCreateAccountRewardsPerCollection, getOrCreateUserEpochEligibility } from "./utils/getters";
 
 export function handleTransferSingle(event: TransferSingleEvent): void {
   const collectionAddress = event.address;
@@ -35,6 +35,48 @@ export function handleTransferSingle(event: TransferSingleEvent): void {
     return;
   }
 
+  // Update UserEpochEligibility for the active epoch
+  const systemState = SystemState.load(SYSTEM_STATE_ID);
+  let activeEpochId: string | null = null;
+  if (systemState != null && systemState.activeEpochId != null) {
+    activeEpochId = systemState.activeEpochId!;
+  }
+
+  if (activeEpochId != null) {
+    if (fromAddress.toHexString() != ADDRESS_ZERO_STR) {
+      let fromAccount = Account.load(fromAddress.toHexString());
+      if(fromAccount == null) {
+        fromAccount = new Account(fromAddress.toHexString());
+        fromAccount.totalSecondsClaimed = ZERO_BI;
+        fromAccount.save();
+      }
+      const userEpochEligibilityFrom = getOrCreateUserEpochEligibility(
+        fromAccount.id,
+        activeEpochId,
+        collection.id
+      );
+      userEpochEligibilityFrom.nftBalance = userEpochEligibilityFrom.nftBalance.minus(value);
+      userEpochEligibilityFrom.save();
+    }
+
+    if (toAddress.toHexString() != ADDRESS_ZERO_STR) {
+      let toAccount = Account.load(toAddress.toHexString());
+      if(toAccount == null) {
+        toAccount = new Account(toAddress.toHexString());
+        toAccount.totalSecondsClaimed = ZERO_BI;
+        toAccount.save();
+      }
+      const userEpochEligibilityTo = getOrCreateUserEpochEligibility(
+        toAccount.id,
+        activeEpochId,
+        collection.id
+      );
+      userEpochEligibilityTo.nftBalance = userEpochEligibilityTo.nftBalance.plus(value);
+      userEpochEligibilityTo.save();
+    }
+  }
+
+  // Original logic for AccountRewardsPerCollection (related to specific vaults)
   for (let i = 0; i < loadedCollectionVaults.length; i++) {
     const collectionVault = loadedCollectionVaults[i];
 
@@ -103,16 +145,63 @@ export function handleTransferBatch(event: TransferBatchEvent): void {
     return;
   }
 
+  // Update UserEpochEligibility for the active epoch
+  const systemState = SystemState.load(SYSTEM_STATE_ID);
+  let activeEpochId: string | null = null;
+  if (systemState != null && systemState.activeEpochId != null) {
+    activeEpochId = systemState.activeEpochId!;
+  }
+
+  let totalValue = BigInt.fromI32(0);
+  for (let j = 0; j < values.length; j++) {
+    totalValue = totalValue.plus(values[j]);
+  }
+
+  if (activeEpochId != null) {
+    if (fromAddress.toHexString() != ADDRESS_ZERO_STR) {
+      let fromAccount = Account.load(fromAddress.toHexString());
+      if(fromAccount == null) {
+        fromAccount = new Account(fromAddress.toHexString());
+        fromAccount.totalSecondsClaimed = ZERO_BI;
+        fromAccount.save();
+      }
+      const userEpochEligibilityFrom = getOrCreateUserEpochEligibility(
+        fromAccount.id,
+        activeEpochId,
+        collection.id
+      );
+      userEpochEligibilityFrom.nftBalance = userEpochEligibilityFrom.nftBalance.minus(totalValue);
+      userEpochEligibilityFrom.save();
+    }
+
+    if (toAddress.toHexString() != ADDRESS_ZERO_STR) {
+      let toAccount = Account.load(toAddress.toHexString());
+      if(toAccount == null) {
+        toAccount = new Account(toAddress.toHexString());
+        toAccount.totalSecondsClaimed = ZERO_BI;
+        toAccount.save();
+      }
+      const userEpochEligibilityTo = getOrCreateUserEpochEligibility(
+        toAccount.id,
+        activeEpochId,
+        collection.id
+      );
+      userEpochEligibilityTo.nftBalance = userEpochEligibilityTo.nftBalance.plus(totalValue);
+      userEpochEligibilityTo.save();
+    }
+  }
+
   const loadedCollectionVaults = collection.vaults.load();
 
   if (loadedCollectionVaults.length == 0) {
     log.info(
-      "handleTransferBatch: Collection {} is not registered in any CollectionVault. Skipping.",
+      "handleTransferBatch: Collection {} is not registered in any CollectionVault. Skipping AccountRewardsPerCollection update.",
       [collectionAddress.toHexString()]
     );
-    return;
+    return; // If no vaults, no AccountRewardsPerCollection to update. UserEpochEligibility is already handled.
   }
 
+  // Original logic for AccountRewardsPerCollection (related to specific vaults)
   for (let i = 0; i < loadedCollectionVaults.length; i++) {
     const collectionVault = loadedCollectionVaults[i];
 
@@ -134,12 +223,7 @@ export function handleTransferBatch(event: TransferBatchEvent): void {
 
       accrueSeconds(fromAccRewards, collectionVault, timestamp);
 
-      let totalValueFrom = BigInt.fromI32(0);
-      for (let j = 0; j < values.length; j++) {
-        totalValueFrom = totalValueFrom.plus(values[j]);
-      }
-      fromAccRewards.balanceNFT =
-        fromAccRewards.balanceNFT.minus(totalValueFrom);
+      fromAccRewards.balanceNFT = fromAccRewards.balanceNFT.minus(totalValue);
       fromAccRewards.save();
     }
 
@@ -153,11 +237,7 @@ export function handleTransferBatch(event: TransferBatchEvent): void {
 
       accrueSeconds(toAccRewards, collectionVault, timestamp);
 
-      let totalValueTo = BigInt.fromI32(0);
-      for (let j = 0; j < values.length; j++) {
-        totalValueTo = totalValueTo.plus(values[j]);
-      }
-      toAccRewards.balanceNFT = toAccRewards.balanceNFT.plus(totalValueTo);
+      toAccRewards.balanceNFT = toAccRewards.balanceNFT.plus(totalValue);
       toAccRewards.save();
     }
   }

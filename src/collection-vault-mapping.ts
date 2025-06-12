@@ -2,19 +2,20 @@ import {
   CollectionDeposit as CollectionDepositEvent,
   CollectionWithdraw as CollectionWithdrawEvent,
   VaultYieldAllocatedToEpoch as VaultYieldAllocatedToEpochEvent,
+  CollectionYieldAppliedForEpoch as CollectionYieldAppliedForEpochEvent,
 } from "../generated/templates/CollectionVault/CollectionVault";
-import { log, Address, ethereum } from "@graphprotocol/graph-ts";
-import { Vault, Epoch, EpochVaultAllocation } from "../generated/schema";
+import { log, Address, ethereum } from "@graphprotocol/graph-ts"; // Removed BigInt from here
+import { Vault, Epoch, EpochVaultAllocation, CollectionYieldApplication, CTokenMarket } from "../generated/schema";
 
 import { getOrCreateCollectionVault } from "./utils/getters";
-import { ZERO_BI } from "./utils/const";
+import { ZERO_BI, BIGINT_1E18 } from "./utils/const";
 
 export function handleCollectionDeposit(event: CollectionDepositEvent): void {
   const vaultAddress = event.address;
   const collectionAddress = event.params.collectionAddress;
   const shares = event.params.shares;
   const assets = event.params.assets;
-  const totalCTokens = event.params.cTokenAmount;
+  // const totalCTokensFromEvent = event.params.cTokenAmount; // This is shares, not actual cTokens
 
   const vaultEntity = Vault.load(vaultAddress.toHex());
   if (!vaultEntity) {
@@ -23,29 +24,43 @@ export function handleCollectionDeposit(event: CollectionDepositEvent): void {
     ]);
     return;
   }
-  const cTokenMarketForVault = Address.fromString(vaultEntity.cTokenMarket);
+  const cTokenMarketAddress = Address.fromString(vaultEntity.cTokenMarket);
+  const cTokenMarket = CTokenMarket.load(cTokenMarketAddress.toHexString());
+
+  let actualCTokens = ZERO_BI;
+  if (cTokenMarket != null && cTokenMarket.exchangeRate != ZERO_BI) {
+    actualCTokens = assets.times(BIGINT_1E18).div(cTokenMarket.exchangeRate);
+  } else {
+    log.warning("handleCollectionDeposit: CTokenMarket {} not found or exchangeRate is zero for vault {}. cTokenAmount will be based on shares (event.params.cTokenAmount).", [
+      cTokenMarketAddress.toHexString(),
+      vaultAddress.toHex()
+    ]);
+    actualCTokens = event.params.cTokenAmount; // Fallback to event shares if exchange rate unavailable
+  }
+
   const vault = vaultEntity;
   vault.totalShares = vault.totalShares.plus(shares);
   vault.totalDeposits = vault.totalDeposits.plus(assets);
-  vault.totalCTokens = vault.totalCTokens.plus(totalCTokens);
+  vault.totalCTokens = vault.totalCTokens.plus(actualCTokens); // Use calculated actual cTokens
   vault.updatedAtBlock = event.block.number;
   vault.updatedAtTimestamp = event.block.timestamp.toI64();
   vault.save();
-  log.info("Updated Vault {}: totalShares {}, totalDeposits {}", [
+  log.info("Updated Vault {}: totalShares {}, totalDeposits {}, totalCTokens {}", [
     vault.id,
     vault.totalShares.toString(),
     vault.totalDeposits.toString(),
+    vault.totalCTokens.toString()
   ]);
 
   const collVault = getOrCreateCollectionVault(
     vaultAddress,
     collectionAddress,
-    cTokenMarketForVault
+    cTokenMarketAddress
   );
 
   collVault.principalShares = collVault.principalShares.plus(shares);
   collVault.principalDeposited = collVault.principalDeposited.plus(assets);
-  collVault.cTokenAmount = collVault.cTokenAmount.plus(totalCTokens);
+  collVault.cTokenAmount = collVault.cTokenAmount.plus(actualCTokens); // Use calculated actual cTokens
   collVault.updatedAtBlock = event.block.number;
   collVault.updatedAtTimestamp = event.block.timestamp.toI64();
   collVault.save();
@@ -68,7 +83,7 @@ export function handleCollectionWithdraw(event: CollectionWithdrawEvent): void {
   const collectionAddress = event.params.collectionAddress;
   const shares = event.params.shares;
   const assets = event.params.assets;
-  const totalCTokens = event.params.cTokenAmount;
+  // const totalCTokensFromEvent = event.params.cTokenAmount; // This is shares, not actual cTokens
 
   const vaultEntityWithdraw = Vault.load(vaultAddress.toHex());
   if (!vaultEntityWithdraw) {
@@ -77,30 +92,44 @@ export function handleCollectionWithdraw(event: CollectionWithdrawEvent): void {
     ]);
     return;
   }
-  const cTokenMarketForVaultWithdraw = Address.fromString(
+  const cTokenMarketAddressWithdraw = Address.fromString(
     vaultEntityWithdraw.cTokenMarket
   );
+  const cTokenMarketWithdraw = CTokenMarket.load(cTokenMarketAddressWithdraw.toHexString());
+
+  let actualCTokensWithdraw = ZERO_BI;
+  if (cTokenMarketWithdraw != null && cTokenMarketWithdraw.exchangeRate != ZERO_BI) {
+    actualCTokensWithdraw = assets.times(BIGINT_1E18).div(cTokenMarketWithdraw.exchangeRate);
+  } else {
+    log.warning("handleCollectionWithdraw: CTokenMarket {} not found or exchangeRate is zero for vault {}. cTokenAmount will be based on shares (event.params.cTokenAmount).", [
+      cTokenMarketAddressWithdraw.toHexString(),
+      vaultAddress.toHex()
+    ]);
+    actualCTokensWithdraw = event.params.cTokenAmount; // Fallback to event shares
+  }
+
   const vault = vaultEntityWithdraw;
   vault.totalShares = vault.totalShares.minus(shares);
   vault.totalDeposits = vault.totalDeposits.minus(assets);
-  vault.totalCTokens = vault.totalCTokens.minus(totalCTokens);
+  vault.totalCTokens = vault.totalCTokens.minus(actualCTokensWithdraw); // Use calculated actual cTokens
   vault.updatedAtBlock = event.block.number;
   vault.updatedAtTimestamp = event.block.timestamp.toI64();
   vault.save();
-  log.info("Updated Vault {}: totalShares {}, totalDeposits {}", [
+  log.info("Updated Vault {}: totalShares {}, totalDeposits {}, totalCTokens {}", [
     vault.id,
     vault.totalShares.toString(),
     vault.totalDeposits.toString(),
+    vault.totalCTokens.toString()
   ]);
 
   const collVault = getOrCreateCollectionVault(
     vaultAddress,
     collectionAddress,
-    cTokenMarketForVaultWithdraw
+    cTokenMarketAddressWithdraw
   );
   collVault.principalShares = collVault.principalShares.minus(shares);
   collVault.principalDeposited = collVault.principalDeposited.minus(assets);
-  collVault.cTokenAmount = collVault.cTokenAmount.minus(totalCTokens);
+  collVault.cTokenAmount = collVault.cTokenAmount.minus(actualCTokensWithdraw); // Use calculated actual cTokens
   collVault.updatedAtBlock = event.block.number;
   collVault.updatedAtTimestamp = event.block.timestamp.toI64();
   collVault.save();
@@ -239,22 +268,69 @@ export function handleCollectionYieldAccrued(event: ethereum.Event): void {
   collVault.save();
 }
 
-export function handleCollectionYieldAppliedForEpoch(event: ethereum.Event): void {
-  // CollectionYieldAppliedForEpoch(indexed uint256,indexed address,uint16,uint256,uint256)
-  // event.params: epochId, collection, share, yieldApplied, remainingYield
-  
-  const epochId = event.parameters[0].value.toBigInt();
-  const collectionAddress = event.parameters[1].value.toAddress();
-  const yieldApplied = event.parameters[3].value.toBigInt();
-  
-  log.info("CollectionYieldAppliedForEpoch: epochId {}, collection {}, yieldApplied {}", [
-    epochId.toString(),
-    collectionAddress.toHexString(),
-    yieldApplied.toString()
-  ]);
+/**
+ * @notice Handles the CollectionYieldAppliedForEpoch event from the CollectionsVault contract.
+ * @dev Updates the `remainingYield` and `subsidiesDistributed` fields in an `EpochVaultAllocation` entity.
+ *      Also creates a `CollectionYieldApplication` entity for historical record.
+ * @param event The CollectionYieldAppliedForEpoch event.
+ * Event signature: event CollectionYieldAppliedForEpoch(uint256 indexed epochId, address indexed collection, uint16 yieldSharePercentage, uint256 yieldAdded, uint256 newTotalDeposits);
+ * Note: The ABI in CollectionsVault.json has `yieldAdded` and `newTotalDeposits`. The task description mentions `yieldApplied`. Assuming `yieldAdded` is the correct parameter for `yieldApplied`.
+ * The `vault` is `event.address`.
+ */
+export function handleCollectionYieldAppliedForEpoch(event: CollectionYieldAppliedForEpochEvent): void {
+  const epochId = event.params.epochId.toString();
+  const vaultAddress = event.address.toHexString();
+  const collectionAddress = event.params.collection.toHexString();
+  const yieldApplied = event.params.yieldAdded; // Assuming yieldAdded is the yieldApplied for the epoch
 
-  // TODO: Once schema is generated, create CollectionYieldApplication entity
+  log.info(
+    "handleCollectionYieldAppliedForEpoch: epochId {}, vault {}, collection {}, yieldApplied {}",
+    [epochId, vaultAddress, collectionAddress, yieldApplied.toString()]
+  );
+
+  
+    // Update EpochVaultAllocation
+    const epochVaultAllocationId = epochId + "-" + vaultAddress;
+    const epochVaultAllocation = EpochVaultAllocation.load(epochVaultAllocationId); // Changed to const
+  
+    if (epochVaultAllocation == null) {
+      log.warning(
+        "handleCollectionYieldAppliedForEpoch: EpochVaultAllocation {} not found for epoch {} and vault {}. Cannot update subsidiesDistributed.",
+        [epochVaultAllocationId, epochId, vaultAddress]
+      );
+      // Optionally create it, but it should ideally exist from VaultYieldAllocatedToEpoch or EpochManagerVaultYieldAllocated
+      // For now, we will skip updating if it doesn't exist, as it implies a missing prior event.
+    } else {
+      epochVaultAllocation.subsidiesDistributed = epochVaultAllocation.subsidiesDistributed.plus(yieldApplied);
+      epochVaultAllocation.remainingYield = epochVaultAllocation.yieldAllocated.minus(epochVaultAllocation.subsidiesDistributed);
+      epochVaultAllocation.save();
+    log.info(
+      "handleCollectionYieldAppliedForEpoch: Updated EpochVaultAllocation {}: subsidiesDistributed {}, remainingYield {}",
+      [
+        epochVaultAllocationId,
+        epochVaultAllocation.subsidiesDistributed.toString(),
+        epochVaultAllocation.remainingYield.toString(),
+      ]
+    );
+  }
+
+  // Create CollectionYieldApplication entity for historical record
+  const applicationEntityId = event.transaction.hash.toHex() + "-" + event.logIndex.toString();
+  let application = CollectionYieldApplication.load(applicationEntityId);
+  if (application == null) {
+    application = new CollectionYieldApplication(applicationEntityId);
+    application.epochId = event.params.epochId;
+    application.collection = collectionAddress; // Storing collection address string
+    application.yieldApplied = yieldApplied;
+    application.blockNumber = event.block.number;
+    application.timestamp = event.block.timestamp; // Corrected: Use BigInt directly
+    application.transactionHash = event.transaction.hash;
+    application.save();
+
+    log.info("handleCollectionYieldAppliedForEpoch: Created CollectionYieldApplication entity {}", [applicationEntityId]);
+  }
 }
+
 
 export function handleYieldBatchRepaid(event: ethereum.Event): void {
   // YieldBatchRepaid(uint256,indexed address)

@@ -1,9 +1,9 @@
 import { BigInt, log } from "@graphprotocol/graph-ts";
 import { Transfer as TransferEvent } from "../generated/ERC721Collection/ERC721";
-import { Collection } from "../generated/schema";
+import { Collection, SystemState, Account } from "../generated/schema";
 import { accrueSeconds } from "./utils/rewards";
-import { ADDRESS_ZERO_STR } from "./utils/const";
-import { getOrCreateAccountRewardsPerCollection } from "./utils/getters";
+import { ADDRESS_ZERO_STR, SYSTEM_STATE_ID, ZERO_BI } from "./utils/const";
+import { getOrCreateAccountRewardsPerCollection, getOrCreateUserEpochEligibility } from "./utils/getters";
 
 export function handleTransfer(event: TransferEvent): void {
   const collectionAddress = event.address;
@@ -30,6 +30,48 @@ export function handleTransfer(event: TransferEvent): void {
     return;
   }
 
+  // Update UserEpochEligibility for the active epoch
+  const systemState = SystemState.load(SYSTEM_STATE_ID);
+  let activeEpochId: string | null = null;
+  if (systemState != null && systemState.activeEpochId != null) {
+    activeEpochId = systemState.activeEpochId!;
+  }
+
+  if (activeEpochId != null) {
+    if (fromAddress.toHexString() != ADDRESS_ZERO_STR) {
+      let fromAccount = Account.load(fromAddress.toHexString());
+      if(fromAccount == null) {
+        fromAccount = new Account(fromAddress.toHexString());
+        fromAccount.totalSecondsClaimed = ZERO_BI;
+        fromAccount.save();
+      }
+      const userEpochEligibilityFrom = getOrCreateUserEpochEligibility(
+        fromAccount.id,
+        activeEpochId,
+        collection.id
+      );
+      userEpochEligibilityFrom.nftBalance = userEpochEligibilityFrom.nftBalance.minus(BigInt.fromI32(1));
+      userEpochEligibilityFrom.save();
+    }
+
+    if (toAddress.toHexString() != ADDRESS_ZERO_STR) {
+      let toAccount = Account.load(toAddress.toHexString());
+      if(toAccount == null) {
+        toAccount = new Account(toAddress.toHexString());
+        toAccount.totalSecondsClaimed = ZERO_BI;
+        toAccount.save();
+      }
+      const userEpochEligibilityTo = getOrCreateUserEpochEligibility(
+        toAccount.id,
+        activeEpochId,
+        collection.id
+      );
+      userEpochEligibilityTo.nftBalance = userEpochEligibilityTo.nftBalance.plus(BigInt.fromI32(1));
+      userEpochEligibilityTo.save();
+    }
+  }
+
+  // Original logic for AccountRewardsPerCollection (related to specific vaults)
   for (let i = 0; i < loadedCollectionVaults.length; i++) {
     const collectionVault = loadedCollectionVaults[i];
 

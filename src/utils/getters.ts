@@ -7,6 +7,8 @@ import {
   AccountRewardsPerCollection,
   CTokenMarket,
   AccountMarket,
+  UserEpochEligibility,
+  Epoch,
 } from "../../generated/schema";
 
 import { ZERO_BI, ADDRESS_ZERO_STR } from "./const";
@@ -220,4 +222,51 @@ export function getOrCreateAccountMarket(
     accountMarket.save();
   }
   return accountMarket;
+}
+
+export function getOrCreateUserEpochEligibility(
+  accountId: string,
+  epochId: string,
+  collectionId: string
+): UserEpochEligibility {
+  const id = accountId.concat("-").concat(epochId).concat("-").concat(collectionId);
+  let userEpochEligibility = UserEpochEligibility.load(id);
+
+  if (userEpochEligibility == null) {
+    // Ensure Account, Epoch, and Collection exist.
+    // Account should be created by the caller (e.g., in handleTransfer)
+    // Epoch should be created by EpochManager handlers
+    // Collection should be created by Collection-related handlers or dynamically
+    const account = Account.load(accountId);
+    if (account == null) {
+      log.critical("getOrCreateUserEpochEligibility: Account {} not found. Cannot create UserEpochEligibility {}.", [accountId, id]);
+      // This is a critical error, as the account should exist or be created before this call.
+      // Depending on strictness, could throw or return a new unlinked entity.
+      // For now, let's assume the caller ensures Account exists.
+      throw new Error(`Account ${accountId} not found when trying to create UserEpochEligibility ${id}`);
+    }
+
+    const epoch = Epoch.load(epochId);
+    if (epoch == null) {
+      log.critical("getOrCreateUserEpochEligibility: Epoch {} not found. Cannot create UserEpochEligibility {}.", [epochId, id]);
+      throw new Error(`Epoch ${epochId} not found when trying to create UserEpochEligibility ${id}`);
+    }
+
+    const collection = Collection.load(collectionId);
+    if (collection == null) {
+      log.critical("getOrCreateUserEpochEligibility: Collection {} not found. Cannot create UserEpochEligibility {}.", [collectionId, id]);
+      throw new Error(`Collection ${collectionId} not found when trying to create UserEpochEligibility ${id}`);
+    }
+
+    userEpochEligibility = new UserEpochEligibility(id);
+    userEpochEligibility.user = accountId;
+    userEpochEligibility.epoch = epochId;
+    userEpochEligibility.collection = collectionId;
+    userEpochEligibility.nftBalance = ZERO_BI;
+    userEpochEligibility.borrowBalance = ZERO_BI; // Initialize, will be updated by other handlers
+    userEpochEligibility.subsidyReceived = ZERO_BI; // Initialize
+    userEpochEligibility.isEligible = false; // Default, eligibility logic will set this
+    userEpochEligibility.save();
+  }
+  return userEpochEligibility;
 }

@@ -5,8 +5,8 @@ import {
   EpochDurationUpdated,
   AutomatedSystemUpdated,
 } from "../generated/EpochManager/EpochManager";
-import { Epoch, Vault, EpochVaultAllocation } from "../generated/schema";
-import { EPOCH_STATUS_ACTIVE, EPOCH_STATUS_COMPLETED, ZERO_BI } from "./utils/const";
+import { Epoch, Vault, EpochVaultAllocation, SystemState } from "../generated/schema";
+import { EPOCH_STATUS_ACTIVE, EPOCH_STATUS_COMPLETED, ZERO_BI, SYSTEM_STATE_ID } from "./utils/const";
 import { log } from "@graphprotocol/graph-ts";
 
 /**
@@ -16,7 +16,7 @@ import { log } from "@graphprotocol/graph-ts";
  */
 export function handleEpochStarted(event: EpochStarted): void {
   const epochId = event.params.epochId.toString();
-  let epoch = Epoch.load(epochId); // Keep as let if it might be reassigned, though in this logic it's not.
+  let epoch = Epoch.load(epochId);
 
   if (epoch == null) {
     epoch = new Epoch(epochId);
@@ -27,7 +27,21 @@ export function handleEpochStarted(event: EpochStarted): void {
     epoch.status = EPOCH_STATUS_ACTIVE;
     epoch.eligibleUsers = ZERO_BI;
     epoch.save();
+  } else {
+    // If epoch already exists, ensure its status is active and timestamps are updated if necessary.
+    // This might indicate a re-start or an out-of-order event.
+    log.info("handleEpochStarted: Epoch {} already exists. Ensuring it is active and timestamps are current.", [epochId]);
+    epoch.status = EPOCH_STATUS_ACTIVE; // Ensure it's marked active
+    epoch.startTimestamp = event.params.startTime; // Update timestamps
+    epoch.endTimestamp = event.params.endTime;
+    epoch.save();
   }
+
+  // Update SystemState with active epoch
+  // This must happen regardless of whether the epoch was new or existing.
+  const systemState = SystemState.load(SYSTEM_STATE_ID) || new SystemState(SYSTEM_STATE_ID);
+  systemState.activeEpochId = epochId;
+  systemState.save();
 }
 
 /**
@@ -40,10 +54,21 @@ export function handleEpochFinalized(event: EpochFinalized): void {
   const epoch = Epoch.load(epochId);
 
   if (epoch != null) {
-    epoch.totalYieldAvailable = event.params.totalYieldAvailable; // This might be the final accumulated yield
+    epoch.totalYieldAvailable = event.params.totalYieldAvailable;
     epoch.totalSubsidiesDistributed = event.params.totalSubsidiesDistributed;
     epoch.status = EPOCH_STATUS_COMPLETED;
     epoch.save();
+
+    // Update SystemState to remove active epoch, only if this was the active one
+    const systemState = SystemState.load(SYSTEM_STATE_ID);
+    if (systemState != null) {
+      if (systemState.activeEpochId == epochId) { // Only clear if it's the one being finalized
+        systemState.activeEpochId = null;
+        systemState.save();
+      }
+    } else {
+      log.warning("handleEpochFinalized: SystemState entity not found. Cannot clear activeEpochId for epoch {}.", [epochId]);
+    }
   }
   // If epoch is null, it means EpochStarted was missed or this event is out of order.
   // Depending on system design, might need error logging or specific handling.

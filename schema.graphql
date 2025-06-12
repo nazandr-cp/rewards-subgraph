@@ -212,3 +212,9 @@ type CollectionYieldApplication @entity(immutable: true) {
   timestamp: BigInt!
   transactionHash: Bytes!
 }
+
+# Singleton entity to store system-wide state, like the current active epoch
+type SystemState @entity(immutable: false) {
+  id: ID! # Should always be "SYSTEM"
+  activeEpochId: String # Stores the ID of the currently active epoch, nullable
+}
