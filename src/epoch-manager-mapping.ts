@@ -1,12 +1,13 @@
 import {
   EpochStarted,
   EpochFinalized,
+  EpochProcessingStarted,
   VaultYieldAllocated as EpochManagerVaultYieldAllocatedEvent,
   EpochDurationUpdated,
   AutomatedSystemUpdated,
 } from "../generated/EpochManager/EpochManager";
 import { Epoch, Vault, EpochVaultAllocation, SystemState } from "../generated/schema";
-import { EPOCH_STATUS_ACTIVE, EPOCH_STATUS_COMPLETED, ZERO_BI, SYSTEM_STATE_ID } from "./utils/const";
+import { EPOCH_STATUS_ACTIVE, EPOCH_STATUS_PROCESSING, EPOCH_STATUS_COMPLETED, ZERO_BI, SYSTEM_STATE_ID } from "./utils/const";
 import { log } from "@graphprotocol/graph-ts";
 
 /**
@@ -45,6 +46,33 @@ export function handleEpochStarted(event: EpochStarted): void {
   }
   systemState.activeEpochId = epochId;
   systemState.save();
+}
+
+/**
+ * @notice Handles the EpochProcessingStarted event from the EpochManager contract.
+ * @dev Marks an epoch as processing and records the timestamp when processing began.
+ * @param event The EpochProcessingStarted event.
+ */
+export function handleEpochProcessingStarted(event: EpochProcessingStarted): void {
+  const epochId = event.params.epochId.toString();
+  let epoch = Epoch.load(epochId);
+
+  if (epoch == null) {
+    log.warning(
+      "handleEpochProcessingStarted: Epoch {} not found. Creating stub.",
+      [epochId]
+    );
+    epoch = new Epoch(epochId);
+    epoch.startTimestamp = ZERO_BI;
+    epoch.endTimestamp = ZERO_BI;
+    epoch.totalYieldAvailable = ZERO_BI;
+    epoch.totalSubsidiesDistributed = ZERO_BI;
+    epoch.eligibleUsers = ZERO_BI;
+  }
+
+  epoch.status = EPOCH_STATUS_PROCESSING;
+  epoch.processingStartedTimestamp = event.block.timestamp;
+  epoch.save();
 }
 
 /**
@@ -95,13 +123,22 @@ export function handleEpochManagerVaultYieldAllocated(event: EpochManagerVaultYi
   }
 
   const vaultAddress = event.params.vault.toHexString();
-  const vault = Vault.load(vaultAddress);
+  let vault = Vault.load(vaultAddress);
   if (vault == null) {
-    log.error(
-      "handleEpochManagerVaultYieldAllocated: Vault {} not found. Cannot process yield allocation for epoch {}.",
-      [vaultAddress, epochId]
+    log.warning(
+      "handleEpochManagerVaultYieldAllocated: Vault {} not found. Creating stub.",
+      [vaultAddress]
     );
-    return;
+    vault = new Vault(vaultAddress);
+    vault.cTokenMarket = "";
+    vault.totalShares = ZERO_BI;
+    vault.totalDeposits = ZERO_BI;
+    vault.totalCTokens = ZERO_BI;
+    vault.globalDepositIndex = ZERO_BI;
+    vault.totalPrincipalDeposited = ZERO_BI;
+    vault.updatedAtBlock = event.block.number;
+    vault.updatedAtTimestamp = event.block.timestamp.toI64();
+    vault.save();
   }
 
   // Update total yield available in the epoch

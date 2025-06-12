@@ -47,6 +47,8 @@ dataSources:
       eventHandlers:
         - event: EpochStarted(indexed uint256,uint256,uint256)
           handler: handleEpochStarted
+        - event: EpochProcessingStarted(indexed uint256)
+          handler: handleEpochProcessingStarted
         - event: EpochFinalized(indexed uint256,uint256,uint256)
           handler: handleEpochFinalized
         - event: VaultYieldAllocated(indexed uint256,indexed address,uint256)
