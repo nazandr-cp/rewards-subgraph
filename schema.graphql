@@ -78,7 +78,7 @@ type CollectionVault @entity(immutable: false) {
   vault: Vault! # The specific vault this configuration and state applies to
   principalShares: BigInt! # Total shares of this collection in this vault (e.g., cTokens)
   principalDeposited: BigInt! # Total amount of underlying asset deposited for this collection in this vault
-  cTokenAmount: BigInt! # Total cTokens issued for this collection in this vault
+  totalCTokens: BigInt! # Total cTokens issued for this collection in this vault
   globalDepositIndex: BigInt! # Global deposit index for yield tracking
   lastGlobalDepositIndex: BigInt! # Last recorded global deposit index
   yieldAccrued: BigInt! # Total yield accrued for this collection

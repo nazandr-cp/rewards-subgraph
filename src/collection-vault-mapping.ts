@@ -5,7 +5,7 @@ import {
   CollectionYieldAppliedForEpoch as CollectionYieldAppliedForEpochEvent,
 } from "../generated/templates/CollectionVault/CollectionVault";
 import { log, Address, ethereum } from "@graphprotocol/graph-ts"; // Removed BigInt from here
-import { Vault, Epoch, EpochVaultAllocation, CollectionYieldApplication, CTokenMarket } from "../generated/schema";
+import { Vault, Epoch, EpochVaultAllocation, CollectionYieldApplication, CollectionYieldAccrual, SubsidyTransaction, CTokenMarket } from "../generated/schema";
 
 import { getOrCreateCollectionVault } from "./utils/getters";
 import { ZERO_BI, BIGINT_1E18 } from "./utils/const";
@@ -60,7 +60,7 @@ export function handleCollectionDeposit(event: CollectionDepositEvent): void {
 
   collVault.principalShares = collVault.principalShares.plus(shares);
   collVault.principalDeposited = collVault.principalDeposited.plus(assets);
-  collVault.cTokenAmount = collVault.cTokenAmount.plus(actualCTokens); // Use calculated actual cTokens
+  collVault.totalCTokens = collVault.totalCTokens.plus(actualCTokens); // Use calculated actual cTokens
   collVault.updatedAtBlock = event.block.number;
   collVault.updatedAtTimestamp = event.block.timestamp.toI64();
   collVault.save();
@@ -129,7 +129,7 @@ export function handleCollectionWithdraw(event: CollectionWithdrawEvent): void {
   );
   collVault.principalShares = collVault.principalShares.minus(shares);
   collVault.principalDeposited = collVault.principalDeposited.minus(assets);
-  collVault.cTokenAmount = collVault.cTokenAmount.minus(actualCTokensWithdraw); // Use calculated actual cTokens
+  collVault.totalCTokens = collVault.totalCTokens.minus(actualCTokensWithdraw); // Use calculated actual cTokens
   collVault.updatedAtBlock = event.block.number;
   collVault.updatedAtTimestamp = event.block.timestamp.toI64();
   collVault.save();
@@ -263,9 +263,22 @@ export function handleCollectionYieldAccrued(event: ethereum.Event): void {
     cTokenMarketForVault
   );
 
+  collVault.globalDepositIndex = globalDepositIndex;
+  collVault.lastGlobalDepositIndex = lastGlobalDepositIndex;
+  collVault.yieldAccrued = totalAccrued;
   collVault.updatedAtBlock = event.block.number;
   collVault.updatedAtTimestamp = event.block.timestamp.toI64();
   collVault.save();
+
+  const accrualId = event.transaction.hash.toHex() + "-" + event.logIndex.toString();
+  const accrual = new CollectionYieldAccrual(accrualId);
+  accrual.collection = collectionAddress.toHexString();
+  accrual.yieldAmount = yieldAmount;
+  accrual.globalDepositIndex = globalDepositIndex;
+  accrual.blockNumber = event.block.number;
+  accrual.timestamp = event.block.timestamp;
+  accrual.transactionHash = event.transaction.hash;
+  accrual.save();
 }
 
 /**
@@ -335,14 +348,27 @@ export function handleCollectionYieldAppliedForEpoch(event: CollectionYieldAppli
 export function handleYieldBatchRepaid(event: ethereum.Event): void {
   // YieldBatchRepaid(uint256,indexed address)
   // event.params: totalYieldRepaid, collection
-  
+
   const totalYieldRepaid = event.parameters[0].value.toBigInt();
-  const collectionAddress = event.parameters[1].value.toAddress();
-  
-  log.info("YieldBatchRepaid: totalYieldRepaid {}, collection {}", [
+  const recipient = event.parameters[1].value.toAddress();
+
+  log.info("YieldBatchRepaid: totalYieldRepaid {}, recipient {}", [
     totalYieldRepaid.toString(),
-    collectionAddress.toHexString()
+    recipient.toHexString()
   ]);
 
-  // TODO: Once schema is generated, create YieldBatchRepayment entity
+  const subsidyTxId = event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
+  const subsidyTx = new SubsidyTransaction(subsidyTxId);
+  subsidyTx.epoch = "";
+  subsidyTx.user = recipient.toHexString();
+  subsidyTx.collection = "";
+  subsidyTx.vault = event.address.toHexString();
+  subsidyTx.subsidyAmount = totalYieldRepaid;
+  subsidyTx.borrowAmountBefore = ZERO_BI;
+  subsidyTx.borrowAmountAfter = ZERO_BI;
+  subsidyTx.gasUsed = event.receipt != null ? event.receipt!.gasUsed : ZERO_BI;
+  subsidyTx.blockNumber = event.block.number;
+  subsidyTx.timestamp = event.block.timestamp;
+  subsidyTx.transactionHash = event.transaction.hash;
+  subsidyTx.save();
 }
