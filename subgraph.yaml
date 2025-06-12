@@ -88,17 +88,20 @@ dataSources:
           handler: handleEpochStarted
         - event: EpochFinalized(indexed uint256,uint256,uint256)
           handler: handleEpochFinalized
-        - event: VaultYieldAllocated(indexed uint256,indexed address,uint256) # This is from EpochManager
+        - event: VaultYieldAllocated(indexed uint256,indexed address,uint256)
           handler: handleEpochManagerVaultYieldAllocated
-        # Add other EpochManager events if needed, e.g., EpochProcessingStarted if formally added
+        - event: EpochDurationUpdated(uint256)
+          handler: handleEpochDurationUpdated
+        - event: AutomatedSystemUpdated(indexed address)
+          handler: handleAutomatedSystemUpdated
       file: ./src/epoch-manager-mapping.ts
 
   - kind: ethereum
-    name: DebtSubsidyExecutor
+    name: DebtSubsidizer
     network: apechain-curtis # TODO: Update network if different
     source:
       address: "0x0000000000000000000000000000000000000000" # Placeholder address
-      abi: DebtSubsidyExecutor
+      abi: DebtSubsidizer
       startBlock: 0 # Placeholder start block
     mapping:
       kind: ethereum/events
@@ -106,20 +109,48 @@ dataSources:
       language: wasm/assemblyscript
       entities:
         - SubsidyTransaction
-        - Epoch # To update epoch.totalSubsidiesDistributed
-        - Account # To link user
-        - Collection # To link collection
-        - Vault # To link vault
-        - UserEpochEligibility # To update subsidyReceived
+        - Epoch
+        - Account
+        - Collection
+        - Vault
+        - UserEpochEligibility
       abis:
-        - name: DebtSubsidyExecutor
-          file: ./abis/DebtSubsidyExecutor.json
+        - name: DebtSubsidizer
+          file: ./abis/DebtSubsidizer.json
       eventHandlers:
-        - event: DebtSubsidiesExecuted(indexed uint256,indexed address,uint256)
-          handler: handleDebtSubsidiesExecuted
-        - event: SubsidyPaymentFailed(indexed uint256,indexed address,indexed address,uint256)
-          handler: handleSubsidyPaymentFailed
-      file: ./src/debt-subsidy-executor-mapping.ts
+        - event: DebtSubsidized(indexed address,indexed address,indexed address,uint256)
+          handler: handleDebtSubsidized
+        - event: TrustedSignerUpdated(address,address,indexed address)
+          handler: handleTrustedSignerUpdated
+      file: ./src/debt-subsidizer-mapping.ts
+
+  - kind: ethereum
+    name: LendingManager
+    network: apechain-curtis # TODO: Update network if different
+    source:
+      address: "0x0000000000000000000000000000000000000000" # Placeholder address
+      abi: LendingManager
+      startBlock: 0 # Placeholder start block
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Account
+        - Vault
+        - Collection
+        - CollectionVault
+      abis:
+        - name: LendingManager
+          file: ./abis/LendingManager.json
+      eventHandlers:
+        - event: DepositToProtocol(indexed address,uint256)
+          handler: handleDepositToProtocol
+        - event: WithdrawFromProtocol(indexed address,uint256)
+          handler: handleWithdrawFromProtocol
+        - event: PrincipalReset(uint256,indexed address)
+          handler: handlePrincipalReset
+      file: ./src/lending-manager-mapping.ts
 
   - kind: ethereum
     name: ERC721Collection # Example, adjust if you have specific collection data sources
@@ -235,10 +266,16 @@ templates:
         - name: cToken
           file: ./abis/cToken.json
       eventHandlers:
-        - event: CollectionDeposit(indexed address,indexed address,indexed address,uint256,uint256,uint256) # from ICollectionsVault
+        - event: CollectionDeposit(indexed address,indexed address,indexed address,uint256,uint256,uint256)
           handler: handleCollectionDeposit
-        - event: CollectionWithdraw(indexed address,indexed address,indexed address,uint256,uint256,uint256) # from ICollectionsVault
+        - event: CollectionWithdraw(indexed address,indexed address,indexed address,uint256,uint256,uint256)
           handler: handleCollectionWithdraw
-        - event: VaultYieldAllocatedToEpoch(indexed uint256,uint256) # New event from CollectionsVault
+        - event: VaultYieldAllocatedToEpoch(indexed uint256,uint256)
           handler: handleVaultYieldAllocatedToEpoch
+        - event: CollectionYieldAccrued(indexed address,uint256,uint256,uint256,uint256)
+          handler: handleCollectionYieldAccrued
+        - event: CollectionYieldAppliedForEpoch(indexed uint256,indexed address,uint16,uint256,uint256)
+          handler: handleCollectionYieldAppliedForEpoch
+        - event: YieldBatchRepaid(uint256,indexed address)
+          handler: handleYieldBatchRepaid
       file: ./src/collection-vault-mapping.ts

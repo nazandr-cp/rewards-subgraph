@@ -1,13 +1,13 @@
 import {
   CollectionDeposit as CollectionDepositEvent,
   CollectionWithdraw as CollectionWithdrawEvent,
-  VaultYieldAllocatedToEpoch as VaultYieldAllocatedToEpochEvent, // Added new event
+  VaultYieldAllocatedToEpoch as VaultYieldAllocatedToEpochEvent,
 } from "../generated/templates/CollectionVault/CollectionVault";
-import { log, Address } from "@graphprotocol/graph-ts";
-import { Vault, Epoch, EpochVaultAllocation } from "../generated/schema"; // Added Epoch, EpochVaultAllocation
+import { log, Address, ethereum } from "@graphprotocol/graph-ts";
+import { Vault, Epoch, EpochVaultAllocation } from "../generated/schema";
 
 import { getOrCreateVault, getOrCreateCollectionVault } from "./utils/getters";
-import { ZERO_BI } from "./utils/const"; // Added ZERO_BI
+import { ZERO_BI } from "./utils/const";
 
 export function handleCollectionDeposit(event: CollectionDepositEvent): void {
   const vaultAddress = event.address;
@@ -194,4 +194,82 @@ export function handleVaultYieldAllocatedToEpoch(event: VaultYieldAllocatedToEpo
   // Based on the plan, EpochManager.VaultYieldAllocated seems to be the primary one for epoch.totalYieldAvailable.
   // This event (VaultYieldAllocatedToEpoch from CollectionsVault) primarily confirms the vault's own accounting.
   // So, we primarily focus on EpochVaultAllocation here.
+}
+
+export function handleCollectionYieldAccrued(event: ethereum.Event): void {
+  // CollectionYieldAccrued(indexed address,uint256,uint256,uint256,uint256)
+  // event.params: collection, yieldAmount, globalDepositIndex, lastGlobalDepositIndex, totalAccrued
+  
+  const collectionAddress = event.parameters[0].value.toAddress();
+  const yieldAmount = event.parameters[1].value.toBigInt();
+  const globalDepositIndex = event.parameters[2].value.toBigInt();
+  
+  const vaultAddress = event.address;
+  
+  log.info("CollectionYieldAccrued: vault {}, collection {}, yieldAmount {}, globalDepositIndex {}", [
+    vaultAddress.toHexString(),
+    collectionAddress.toHexString(),
+    yieldAmount.toString(),
+    globalDepositIndex.toString()
+  ]);
+
+  // Load the Vault to get its cTokenMarket address
+  const vaultEntity = Vault.load(vaultAddress.toHex());
+  if (!vaultEntity) {
+    log.error("handleCollectionYieldAccrued: Vault {} not found. Cannot proceed.", [
+      vaultAddress.toHex(),
+    ]);
+    return;
+  }
+  const cTokenMarketForVault = Address.fromString(vaultEntity.cTokenMarket);
+
+  // Update CollectionVault with new yield information
+  const collVault = getOrCreateCollectionVault(
+    vaultAddress,
+    collectionAddress,
+    cTokenMarketForVault
+  );
+
+  collVault.updatedAtBlock = event.block.number;
+  collVault.updatedAtTimestamp = event.block.timestamp.toI64();
+  collVault.save();
+  
+  // TODO: Once schema is updated with new fields, add:
+  // collVault.globalDepositIndex = globalDepositIndex;
+  // collVault.lastGlobalDepositIndex = lastGlobalDepositIndex;
+  // collVault.yieldAccrued = collVault.yieldAccrued.plus(yieldAmount);
+  
+  // TODO: Create CollectionYieldAccrual entity once schema is generated
+}
+
+export function handleCollectionYieldAppliedForEpoch(event: ethereum.Event): void {
+  // CollectionYieldAppliedForEpoch(indexed uint256,indexed address,uint16,uint256,uint256)
+  // event.params: epochId, collection, share, yieldApplied, remainingYield
+  
+  const epochId = event.parameters[0].value.toBigInt();
+  const collectionAddress = event.parameters[1].value.toAddress();
+  const yieldApplied = event.parameters[3].value.toBigInt();
+  
+  log.info("CollectionYieldAppliedForEpoch: epochId {}, collection {}, yieldApplied {}", [
+    epochId.toString(),
+    collectionAddress.toHexString(),
+    yieldApplied.toString()
+  ]);
+
+  // TODO: Once schema is generated, create CollectionYieldApplication entity
+}
+
+export function handleYieldBatchRepaid(event: ethereum.Event): void {
+  // YieldBatchRepaid(uint256,indexed address)
+  // event.params: totalYieldRepaid, collection
+  
+  const totalYieldRepaid = event.parameters[0].value.toBigInt();
+  const collectionAddress = event.parameters[1].value.toAddress();
+  
+  log.info("YieldBatchRepaid: totalYieldRepaid {}, collection {}", [
+    totalYieldRepaid.toString(),
+    collectionAddress.toHexString()
+  ]);
+
+  // TODO: Once schema is generated, create YieldBatchRepayment entity
 }

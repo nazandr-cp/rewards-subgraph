@@ -32,6 +32,8 @@ type Vault @entity(immutable: false) {
   totalShares: BigInt! # Total shares issued by this vault
   totalDeposits: BigInt! # Total amount of underlying asset deposited in this vault
   totalCTokens: BigInt! # Total cTokens issued by this vault
+  globalDepositIndex: BigInt! # Global deposit index for yield tracking
+  totalPrincipalDeposited: BigInt! # Total principal deposited across all collections
   collections: [CollectionVault!]! @derivedFrom(field: "vault")
   rewardClaims: [RewardClaim!]! @derivedFrom(field: "vault")
   updatedAtBlock: BigInt!
@@ -77,6 +79,9 @@ type CollectionVault @entity(immutable: false) {
   principalShares: BigInt! # Total shares of this collection in this vault (e.g., cTokens)
   principalDeposited: BigInt! # Total amount of underlying asset deposited for this collection in this vault
   cTokenAmount: BigInt! # Total cTokens issued for this collection in this vault
+  globalDepositIndex: BigInt! # Global deposit index for yield tracking
+  lastGlobalDepositIndex: BigInt! # Last recorded global deposit index
+  yieldAccrued: BigInt! # Total yield accrued for this collection
   isBorrowBased: Boolean! # True if rewards are based on borrow activity, false if deposit based
   rewardSharePercentage: Int! # Percentage of rewards allocated to this collection (e.g., 10000 = 100%)
   fnType: WeightFunctionType! # Type of weighting function (LINEAR or EXPONENTIAL)
@@ -125,6 +130,7 @@ type Epoch @entity(immutable: false) {
   id: ID! # epoch number
   startTimestamp: BigInt!
   endTimestamp: BigInt!
+  processingStartedTimestamp: BigInt # Optional timestamp when epoch processing started
   totalYieldAvailable: BigInt!
   totalSubsidiesDistributed: BigInt!
   status: EpochStatus!
@@ -166,4 +172,43 @@ type UserEpochEligibility @entity(immutable: false) {
   borrowBalance: BigInt!
   subsidyReceived: BigInt!
   isEligible: Boolean!
+}
+
+type TrustedSignerUpdate @entity(immutable: true) {
+  id: ID! # transaction hash + log index
+  oldSigner: Bytes!
+  newSigner: Bytes!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type YieldBatchRepayment @entity(immutable: true) {
+  id: ID! # transaction hash + log index
+  epochId: BigInt!
+  totalYieldRepaid: BigInt!
+  remainingYield: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type CollectionYieldAccrual @entity(immutable: true) {
+  id: ID! # transaction hash + log index
+  collection: Collection!
+  yieldAmount: BigInt!
+  globalDepositIndex: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type CollectionYieldApplication @entity(immutable: true) {
+  id: ID! # transaction hash + log index
+  epochId: BigInt!
+  collection: Collection!
+  yieldApplied: BigInt!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  transactionHash: Bytes!
 }

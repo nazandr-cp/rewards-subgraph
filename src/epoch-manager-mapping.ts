@@ -2,11 +2,12 @@ import {
   EpochStarted,
   EpochFinalized,
   VaultYieldAllocated as EpochManagerVaultYieldAllocatedEvent,
-} from "../generated/EpochManager/EpochManager"; // EpochManager import removed as it's not used directly
-import { Epoch, Vault, EpochVaultAllocation } from "../generated/schema"; // Account import removed
+  EpochDurationUpdated,
+  AutomatedSystemUpdated,
+} from "../generated/EpochManager/EpochManager";
+import { Epoch, Vault, EpochVaultAllocation } from "../generated/schema";
 import { EPOCH_STATUS_ACTIVE, EPOCH_STATUS_COMPLETED, ZERO_BI } from "./utils/const";
-// BigInt, Bytes, store were removed as they are not directly used in this version of the file.
-// If they are needed by future logic, they can be re-added.
+import { log } from "@graphprotocol/graph-ts";
 
 /**
  * @notice Handles the EpochStarted event from the EpochManager contract.
@@ -24,8 +25,7 @@ export function handleEpochStarted(event: EpochStarted): void {
     epoch.totalYieldAvailable = ZERO_BI;
     epoch.totalSubsidiesDistributed = ZERO_BI;
     epoch.status = EPOCH_STATUS_ACTIVE;
-    epoch.eligibleUsers = ZERO_BI; // This will be updated by off-chain logic or other event handlers
-    // subsidyTransactions and vaultAllocations are derived fields
+    epoch.eligibleUsers = ZERO_BI;
     epoch.save();
   }
 }
@@ -98,4 +98,12 @@ export function handleEpochManagerVaultYieldAllocated(event: EpochManagerVaultYi
   // This will be updated when subsidies are distributed.
   epochVaultAllocation.remainingYield = epochVaultAllocation.yieldAllocated.minus(epochVaultAllocation.subsidiesDistributed);
   epochVaultAllocation.save();
+}
+
+export function handleEpochDurationUpdated(event: EpochDurationUpdated): void {
+  log.info("Epoch duration updated to: {}", [event.params.newDuration.toString()]);
+}
+
+export function handleAutomatedSystemUpdated(event: AutomatedSystemUpdated): void {
+  log.info("Automated system updated to: {}", [event.params.newAutomatedSystem.toHexString()]);
 }
