@@ -59,21 +59,20 @@ export function handleEpochManagerVaultYieldAllocated(event: EpochManagerVaultYi
   const epoch = Epoch.load(epochId);
 
   if (epoch == null) {
-    // This shouldn't happen if EpochStarted is processed first.
-    // Consider creating a placeholder epoch or logging an error.
+    log.error(
+      "handleEpochManagerVaultYieldAllocated: Epoch {} not found. Cannot process yield allocation for vault {}.",
+      [epochId, event.params.vault.toHexString()]
+    );
     return;
   }
 
   const vaultAddress = event.params.vault.toHexString();
   const vault = Vault.load(vaultAddress);
   if (vault == null) {
-    // Vault should ideally exist, created by RewardsController's VaultAdded handler.
-    // If not, this allocation cannot be properly associated.
-    // For now, we'll proceed, but this indicates a potential data integrity issue or ordering dependency.
-    // A robust system might create a placeholder Vault or log this.
-    // Let's assume for now that the Vault entity will exist.
-    // If it's critical, one might need to ensure Vault entities are created first.
-    // For this example, we'll skip if vault is not found to prevent errors.
+    log.error(
+      "handleEpochManagerVaultYieldAllocated: Vault {} not found. Cannot process yield allocation for epoch {}.",
+      [vaultAddress, epochId]
+    );
     return;
   }
 

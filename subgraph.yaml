@@ -8,9 +8,9 @@ dataSources:
     name: Comptroller
     network: apechain-curtis # TODO: Update network if different
     source:
-      address: "0x2E40b5B0fD75c659908aa8e38122c797d2A892ae" # TODO: Update with actual address
+      address: "0x2E40b5B0fD75c659908aa8e38122c797d2A892ae" # TODO: Replace with actual Comptroller contract address for production
       abi: Comptroller
-      startBlock: 17504126 # TODO: Update with actual start block
+      startBlock: 17504126 # TODO: Replace with actual deployment block number for production
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -28,51 +28,12 @@ dataSources:
       file: ./src/comptroller-mapping.ts
 
   - kind: ethereum
-    name: RewardsController
-    network: apechain-curtis # TODO: Update network if different
-    source:
-      address: "0xaA13C0fe4B51038E7eA9E402D009b069FdB74471" # TODO: Update with actual address
-      abi: RewardsController
-      startBlock: 17870949 # TODO: Update with actual start block
-    mapping:
-      kind: ethereum/events
-      apiVersion: 0.0.9
-      language: wasm/assemblyscript
-      entities:
-        - Collection
-        - CollectionVault
-        - Account
-        - RewardClaim
-        - Vault
-        - AccountMarket
-        - AccountRewardsPerCollection
-      abis:
-        - name: RewardsController
-          file: ./abis/IRewardsController.json # Make sure this ABI is up-to-date if RewardsController was extended
-        - name: ERC721Metadata
-          file: ./abis/IERC721Metadata.json
-      eventHandlers:
-        - event: VaultAdded(indexed address,indexed address,indexed address)
-          handler: handleVaultAdded
-        - event: NewCollectionWhitelisted(indexed address,indexed address,uint8,uint8,uint16,(uint8,int256,int256))
-          handler: handleNewCollectionWhitelisted
-        - event: WhitelistCollectionRemoved(indexed address,indexed address)
-          handler: handleWhitelistCollectionRemoved
-        - event: CollectionRewardShareUpdated(indexed address,indexed address,uint16,uint16)
-          handler: handleCollectionRewardShareUpdated
-        - event: WeightFunctionSet(indexed address,indexed address,(uint8,int256,int256))
-          handler: handleWeightFunctionSet
-        - event: RewardsClaimed(indexed address,indexed address,indexed address,uint256,uint256)
-          handler: handleRewardClaimed
-      file: ./src/rewards-controller-mapping.ts
-
-  - kind: ethereum
     name: EpochManager
     network: apechain-curtis # TODO: Update network if different
     source:
-      address: "0x0000000000000000000000000000000000000000" # Placeholder address
+      address: "0x0000000000000000000000000000000000000000" # PLACEHOLDER: Replace with actual EpochManager contract address
       abi: EpochManager
-      startBlock: 0 # Placeholder start block
+      startBlock: 0 # PLACEHOLDER: Replace with actual deployment block number
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -100,9 +61,9 @@ dataSources:
     name: DebtSubsidizer
     network: apechain-curtis # TODO: Update network if different
     source:
-      address: "0x0000000000000000000000000000000000000000" # Placeholder address
+      address: "0x0000000000000000000000000000000000000000" # PLACEHOLDER: Replace with actual DebtSubsidizer contract address
       abi: DebtSubsidizer
-      startBlock: 0 # Placeholder start block
+      startBlock: 0 # PLACEHOLDER: Replace with actual deployment block number
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -128,9 +89,9 @@ dataSources:
     name: LendingManager
     network: apechain-curtis # TODO: Update network if different
     source:
-      address: "0x0000000000000000000000000000000000000000" # Placeholder address
+      address: "0x0000000000000000000000000000000000000000" # PLACEHOLDER: Replace with actual LendingManager contract address
       abi: LendingManager
-      startBlock: 0 # Placeholder start block
+      startBlock: 0 # PLACEHOLDER: Replace with actual deployment block number
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -181,9 +142,9 @@ dataSources:
   #   name: ERC1155Collection
   #   network: apechain-curtis # TODO: Update network if different
   #   source:
-  #     address: "0x0000000000000000000000000000000000000000" # Placeholder
+  #     address: "0x0000000000000000000000000000000000000000" # PLACEHOLDER: Replace with actual ERC1155 collection address
   #     abi: ERC1155
-  #     startBlock: 0 # Placeholder
+  #     startBlock: 0 # PLACEHOLDER: Replace with actual deployment block number
   #   mapping:
   #     kind: ethereum/events
   #     apiVersion: 0.0.9
@@ -262,9 +223,9 @@ templates:
         - Vault
       abis:
         - name: CollectionVault
-          file: ./abis/CollectionsVault.json # Changed from ICollectionsVault.json
+          file: ./abis/CollectionsVault.json # NOTE: Verify this ABI file exists and is correct
         - name: cToken
-          file: ./abis/cToken.json
+          file: ./abis/cToken.json # NOTE: Verify this ABI file exists and matches the cToken interface
       eventHandlers:
         - event: CollectionDeposit(indexed address,indexed address,indexed address,uint256,uint256,uint256)
           handler: handleCollectionDeposit

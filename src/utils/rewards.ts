@@ -1,5 +1,6 @@
 import { Address, BigInt, log } from "@graphprotocol/graph-ts";
 import {
+  Account,
   Vault,
   CollectionVault,
   AccountRewardsPerCollection,
@@ -142,4 +143,51 @@ export function accrueSeconds(
 
   arpc.seconds = arpc.seconds.plus(rewardAccruedScaled.div(EXP_SCALE));
   arpc.updatedAtTimestamp = now.toI64();
+}
+
+export function accrueAccountRewards(
+  accountAddress: Address,
+  blockNumber: BigInt,
+  timestamp: BigInt
+): void {
+  const account = Account.load(accountAddress.toHexString());
+  if (!account) {
+    return;
+  }
+  
+  const accountRewardsPerCollection = account.accountRewards.load();
+  if (!accountRewardsPerCollection || accountRewardsPerCollection.length == 0) {
+    return;
+  }
+
+  // Cache to avoid repeated CollectionVault loads within same transaction
+  const loadedVaults = new Array<string>();
+  const cachedVaults = new Array<CollectionVault>();
+  
+  for (let i = 0; i < accountRewardsPerCollection.length; i++) {
+    const accRewards = accountRewardsPerCollection[i];
+    if (!accRewards) continue;
+    
+    let collectionVault: CollectionVault | null = null;
+    
+    // Check cache first
+    const cacheIndex = loadedVaults.indexOf(accRewards.collectionVault);
+    if (cacheIndex >= 0) {
+      collectionVault = cachedVaults[cacheIndex];
+    } else {
+      // Load and cache
+      collectionVault = CollectionVault.load(accRewards.collectionVault);
+      if (collectionVault) {
+        loadedVaults.push(accRewards.collectionVault);
+        cachedVaults.push(collectionVault);
+      }
+    }
+    
+    if (collectionVault) {
+      accrueSeconds(accRewards, collectionVault, timestamp);
+      accRewards.updatedAtBlock = blockNumber;
+      accRewards.updatedAtTimestamp = timestamp.toI64();
+      accRewards.save();
+    }
+  }
 }

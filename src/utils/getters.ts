@@ -91,6 +91,8 @@ export function getOrCreateVault(
     vault.totalShares = ZERO_BI;
     vault.totalDeposits = ZERO_BI;
     vault.totalCTokens = ZERO_BI;
+    vault.globalDepositIndex = ZERO_BI;
+    vault.totalPrincipalDeposited = ZERO_BI;
     vault.updatedAtBlock = ZERO_BI;
     vault.updatedAtTimestamp = ZERO_BI.toI32();
     vault.save();
@@ -103,18 +105,23 @@ export function getOrCreateCollectionVault(
   collectionAddress: Address,
   cTokenMarketAddress: Address
 ): CollectionVault {
-  const vault = getOrCreateVault(vaultAddress, cTokenMarketAddress);
   const collection = getOrCreateCollection(collectionAddress);
-
-  const id = generateCollectionVaultId(vault.id, collection.id);
+  const vaultId = vaultAddress.toHexString();
+  
+  const id = generateCollectionVaultId(vaultId, collection.id);
   let cv = CollectionVault.load(id);
 
   if (cv == null) {
+    const vault = getOrCreateVault(vaultAddress, cTokenMarketAddress);
     cv = new CollectionVault(id);
     cv.collection = collection.id;
     cv.vault = vault.id;
     cv.principalShares = ZERO_BI;
     cv.principalDeposited = ZERO_BI;
+    cv.cTokenAmount = ZERO_BI;
+    cv.globalDepositIndex = ZERO_BI;
+    cv.lastGlobalDepositIndex = ZERO_BI;
+    cv.yieldAccrued = ZERO_BI;
     cv.isBorrowBased = false;
     cv.rewardSharePercentage = 0;
     cv.fnType = "LINEAR";

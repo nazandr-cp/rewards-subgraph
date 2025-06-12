@@ -9,13 +9,12 @@ import {
   Vault,
   TrustedSignerUpdate,
 } from "../generated/schema";
-import { BigInt } from "@graphprotocol/graph-ts";
+import { BigInt, log } from "@graphprotocol/graph-ts";
 
 export function handleDebtSubsidized(event: DebtSubsidized): void {
   const subsidyTxId = event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
-  const subsidyTx = new SubsidyTransaction(subsidyTxId);
 
-  // Load or create required entities
+  // Validate required entities first
   let account = Account.load(event.params.user.toHexString());
   if (account == null) {
     account = new Account(event.params.user.toHexString());
@@ -29,15 +28,17 @@ export function handleDebtSubsidized(event: DebtSubsidized): void {
     collection.name = "";
     collection.symbol = "";
     collection.totalNFTs = BigInt.fromI32(0);
-    collection.collectionType = "ERC721"; // Default, should be updated when collection is properly created
+    collection.collectionType = "ERC721";
     collection.save();
   }
 
   let vault = Vault.load(event.params.vaultAddress.toHexString());
   if (vault == null) {
-    // Vault should exist, but create minimal version if missing
+    log.error("handleDebtSubsidized: Vault {} not found. Creating minimal vault.", [
+      event.params.vaultAddress.toHexString()
+    ]);
     vault = new Vault(event.params.vaultAddress.toHexString());
-    vault.cTokenMarket = ""; // Will need to be updated
+    vault.cTokenMarket = "";
     vault.totalShares = BigInt.fromI32(0);
     vault.totalDeposits = BigInt.fromI32(0);
     vault.totalCTokens = BigInt.fromI32(0);
@@ -46,19 +47,26 @@ export function handleDebtSubsidized(event: DebtSubsidized): void {
     vault.save();
   }
 
-  // Set SubsidyTransaction fields
-  subsidyTx.epoch = ""; // Would need epochId from event or context
+  const subsidyTx = new SubsidyTransaction(subsidyTxId);
+  subsidyTx.epoch = "";
   subsidyTx.user = account.id;
   subsidyTx.collection = collection.id;
   subsidyTx.vault = vault.id;
   subsidyTx.subsidyAmount = event.params.amount;
-  subsidyTx.borrowAmountBefore = BigInt.fromI32(0); // Would need from context
-  subsidyTx.borrowAmountAfter = BigInt.fromI32(0); // Would need from context
+  subsidyTx.borrowAmountBefore = BigInt.fromI32(0);
+  subsidyTx.borrowAmountAfter = BigInt.fromI32(0);
   subsidyTx.gasUsed = event.receipt != null ? event.receipt!.gasUsed : BigInt.fromI32(0);
   subsidyTx.blockNumber = event.block.number;
   subsidyTx.timestamp = event.block.timestamp;
   subsidyTx.transactionHash = event.transaction.hash;
   subsidyTx.save();
+
+  log.info("DebtSubsidized: Created SubsidyTransaction {} for user {} in vault {} with amount {}", [
+    subsidyTxId,
+    event.params.user.toHexString(),
+    event.params.vaultAddress.toHexString(),
+    event.params.amount.toString()
+  ]);
 }
 
 export function handleTrustedSignerUpdated(event: TrustedSignerUpdated): void {

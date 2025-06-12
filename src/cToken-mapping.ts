@@ -9,13 +9,12 @@ import {
   Transfer as TransferEvent,
 } from "../generated/templates/cToken/cToken";
 import { cToken as CTokenContract } from "../generated/templates/cToken/cToken";
-import { CollectionVault } from "../generated/schema";
 import {
   getOrCreateAccountMarket,
   getOrCreateAccount,
   getOrCreateCTokenMarket,
 } from "./utils/getters";
-import { accrueSeconds } from "./utils/rewards";
+import { accrueAccountRewards } from "./utils/rewards";
 
 const EXP_SCALE = BigInt.fromI32(10).pow(18);
 const PROTOCOL_SEIZE_SHARE_MANTISSA = BigInt.fromString("28000000000000000");
@@ -68,29 +67,7 @@ export function handleBorrow(event: BorrowEvent): void {
   market.updatedAtTimestamp = event.block.timestamp.toI64();
   market.save();
 
-  const account = getOrCreateAccount(borrower);
-  const accountRewardsPerCollection = account.accountRewards.load();
-  if (accountRewardsPerCollection) {
-    for (let i = 0; i < accountRewardsPerCollection.length; i++) {
-      const accRewards = accountRewardsPerCollection[i];
-      if (accRewards) {
-        const collectionVault = CollectionVault.load(
-          accRewards.collectionVault
-        );
-        if (collectionVault) {
-          accrueSeconds(accRewards, collectionVault, event.block.timestamp);
-          accRewards.updatedAtBlock = event.block.number;
-          accRewards.updatedAtTimestamp = event.block.timestamp.toI64();
-          accRewards.save();
-        } else {
-          log.warning(
-            "handleBorrow: Found null CollectionVault for ID {} in AccountRewardsPerCollection for account {}",
-            [accRewards.collectionVault, borrower.toHexString()]
-          );
-        }
-      }
-    }
-  }
+  accrueAccountRewards(borrower, event.block.number, event.block.timestamp);
 }
 
 export function handleLiquidateBorrow(event: LiquidateBorrowEvent): void {
@@ -224,53 +201,8 @@ export function handleLiquidateBorrow(event: LiquidateBorrowEvent): void {
   collateralMarket.updatedAtTimestamp = event.block.timestamp.toI64();
   collateralMarket.save();
 
-  const liquidatorAccount = getOrCreateAccount(liquidatorAddress);
-  const liquidatorRewards = liquidatorAccount.accountRewards.load();
-  if (liquidatorRewards) {
-    for (let i = 0; i < liquidatorRewards.length; i++) {
-      const accRewards = liquidatorRewards[i];
-      if (accRewards) {
-        const collectionVault = CollectionVault.load(
-          accRewards.collectionVault
-        );
-        if (collectionVault) {
-          accrueSeconds(accRewards, collectionVault, event.block.timestamp);
-          accRewards.updatedAtBlock = event.block.number;
-          accRewards.updatedAtTimestamp = event.block.timestamp.toI64();
-          accRewards.save();
-        } else {
-          log.warning(
-            "handleLiquidateBorrow: Found null CollectionVault for ID {} in AccountRewardsPerCollection for liquidator {}",
-            [accRewards.collectionVault, liquidatorAddress.toHexString()]
-          );
-        }
-      }
-    }
-  }
-
-  const borrowerAccount = getOrCreateAccount(borrowerAddress);
-  const borrowerRewards = borrowerAccount.accountRewards.load();
-  if (borrowerRewards) {
-    for (let i = 0; i < borrowerRewards.length; i++) {
-      const accRewards = borrowerRewards[i];
-      if (accRewards) {
-        const collectionVault = CollectionVault.load(
-          accRewards.collectionVault
-        );
-        if (collectionVault) {
-          accrueSeconds(accRewards, collectionVault, event.block.timestamp);
-          accRewards.updatedAtBlock = event.block.number;
-          accRewards.updatedAtTimestamp = event.block.timestamp.toI64();
-          accRewards.save();
-        } else {
-          log.warning(
-            "handleLiquidateBorrow: Found null CollectionVault for ID {} in AccountRewardsPerCollection for borrower {}",
-            [accRewards.collectionVault, borrowerAddress.toHexString()]
-          );
-        }
-      }
-    }
-  }
+  accrueAccountRewards(liquidatorAddress, event.block.number, event.block.timestamp);
+  accrueAccountRewards(borrowerAddress, event.block.number, event.block.timestamp);
 }
 
 export function handleMint(event: MintEvent): void {
@@ -298,29 +230,7 @@ export function handleMint(event: MintEvent): void {
   market.updatedAtBlock = event.block.number;
   market.save();
 
-  const account = getOrCreateAccount(minter);
-  const accountRewardsPerCollection = account.accountRewards.load();
-  if (accountRewardsPerCollection) {
-    for (let i = 0; i < accountRewardsPerCollection.length; i++) {
-      const accRewards = accountRewardsPerCollection[i];
-      if (accRewards) {
-        const collectionVault = CollectionVault.load(
-          accRewards.collectionVault
-        );
-        if (collectionVault) {
-          accrueSeconds(accRewards, collectionVault, event.block.timestamp);
-          accRewards.updatedAtBlock = event.block.number;
-          accRewards.updatedAtTimestamp = event.block.timestamp.toI64();
-          accRewards.save();
-        } else {
-          log.warning(
-            "handleBorrow: Found null CollectionVault for ID {} in AccountRewardsPerCollection for account {}",
-            [accRewards.collectionVault, minter.toHexString()]
-          );
-        }
-      }
-    }
-  }
+  accrueAccountRewards(minter, event.block.number, event.block.timestamp);
 }
 
 export function handleRedeem(event: RedeemEvent): void {
@@ -351,29 +261,7 @@ export function handleRedeem(event: RedeemEvent): void {
   market.updatedAtBlock = event.block.number;
   market.save();
 
-  const account = getOrCreateAccount(redeemer);
-  const accountRewardsPerCollection = account.accountRewards.load();
-  if (accountRewardsPerCollection) {
-    for (let i = 0; i < accountRewardsPerCollection.length; i++) {
-      const accRewards = accountRewardsPerCollection[i];
-      if (accRewards) {
-        const collectionVault = CollectionVault.load(
-          accRewards.collectionVault
-        );
-        if (collectionVault) {
-          accrueSeconds(accRewards, collectionVault, event.block.timestamp);
-          accRewards.updatedAtBlock = event.block.number;
-          accRewards.updatedAtTimestamp = event.block.timestamp.toI64();
-          accRewards.save();
-        } else {
-          log.warning(
-            "handleBorrow: Found null CollectionVault for ID {} in AccountRewardsPerCollection for account {}",
-            [accRewards.collectionVault, redeemer.toHexString()]
-          );
-        }
-      }
-    }
-  }
+  accrueAccountRewards(redeemer, event.block.number, event.block.timestamp);
 }
 
 export function handleRepayBorrow(event: RepayBorrowEvent): void {
@@ -411,29 +299,7 @@ export function handleRepayBorrow(event: RepayBorrowEvent): void {
   market.updatedAtBlock = event.block.number;
   market.save();
 
-  const account = getOrCreateAccount(borrowerAddress);
-  const accountRewardsPerCollection = account.accountRewards.load();
-  if (accountRewardsPerCollection) {
-    for (let i = 0; i < accountRewardsPerCollection.length; i++) {
-      const accRewards = accountRewardsPerCollection[i];
-      if (accRewards) {
-        const collectionVault = CollectionVault.load(
-          accRewards.collectionVault
-        );
-        if (collectionVault) {
-          accrueSeconds(accRewards, collectionVault, event.block.timestamp);
-          accRewards.updatedAtBlock = event.block.number;
-          accRewards.updatedAtTimestamp = event.block.timestamp.toI64();
-          accRewards.save();
-        } else {
-          log.warning(
-            "handleBorrow: Found null CollectionVault for ID {} in AccountRewardsPerCollection for account {}",
-            [accRewards.collectionVault, borrowerAddress.toHexString()]
-          );
-        }
-      }
-    }
-  }
+  accrueAccountRewards(borrowerAddress, event.block.number, event.block.timestamp);
 }
 
 export function handleTransfer(event: TransferEvent): void {
@@ -485,53 +351,6 @@ export function handleTransfer(event: TransferEvent): void {
   market.updatedAtTimestamp = event.block.timestamp.toI64();
   market.save();
 
-  // Accrue rewards for 'from' account
-  const fromAccount = getOrCreateAccount(fromAddress);
-  const fromAccountRewards = fromAccount.accountRewards.load();
-  if (fromAccountRewards) {
-    for (let i = 0; i < fromAccountRewards.length; i++) {
-      const accRewards = fromAccountRewards[i];
-      if (accRewards) {
-        const collectionVault = CollectionVault.load(
-          accRewards.collectionVault
-        );
-        if (collectionVault) {
-          accrueSeconds(accRewards, collectionVault, event.block.timestamp);
-          accRewards.updatedAtBlock = event.block.number;
-          accRewards.updatedAtTimestamp = event.block.timestamp.toI64();
-          accRewards.save();
-        } else {
-          log.warning(
-            "handleTransfer: Found null CollectionVault for ID {} in AccountRewardsPerCollection for account {}",
-            [accRewards.collectionVault, fromAddress.toHexString()]
-          );
-        }
-      }
-    }
-  }
-
-  // Accrue rewards for 'to' account
-  const toAccount = getOrCreateAccount(toAddress);
-  const toAccountRewards = toAccount.accountRewards.load();
-  if (toAccountRewards) {
-    for (let i = 0; i < toAccountRewards.length; i++) {
-      const accRewards = toAccountRewards[i];
-      if (accRewards) {
-        const collectionVault = CollectionVault.load(
-          accRewards.collectionVault
-        );
-        if (collectionVault) {
-          accrueSeconds(accRewards, collectionVault, event.block.timestamp);
-          accRewards.updatedAtBlock = event.block.number;
-          accRewards.updatedAtTimestamp = event.block.timestamp.toI64();
-          accRewards.save();
-        } else {
-          log.warning(
-            "handleTransfer: Found null CollectionVault for ID {} in AccountRewardsPerCollection for account {}",
-            [accRewards.collectionVault, toAddress.toHexString()]
-          );
-        }
-      }
-    }
-  }
+  accrueAccountRewards(fromAddress, event.block.number, event.block.timestamp);
+  accrueAccountRewards(toAddress, event.block.number, event.block.timestamp);
 }

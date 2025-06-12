@@ -6,7 +6,7 @@ import {
 import { log, Address, ethereum } from "@graphprotocol/graph-ts";
 import { Vault, Epoch, EpochVaultAllocation } from "../generated/schema";
 
-import { getOrCreateVault, getOrCreateCollectionVault } from "./utils/getters";
+import { getOrCreateCollectionVault } from "./utils/getters";
 import { ZERO_BI } from "./utils/const";
 
 export function handleCollectionDeposit(event: CollectionDepositEvent): void {
@@ -16,7 +16,6 @@ export function handleCollectionDeposit(event: CollectionDepositEvent): void {
   const assets = event.params.assets;
   const totalCTokens = event.params.cTokenAmount;
 
-  // Load the Vault to get its cTokenMarket address
   const vaultEntity = Vault.load(vaultAddress.toHex());
   if (!vaultEntity) {
     log.error("handleCollectionDeposit: Vault {} not found. Cannot proceed.", [
@@ -25,8 +24,7 @@ export function handleCollectionDeposit(event: CollectionDepositEvent): void {
     return;
   }
   const cTokenMarketForVault = Address.fromString(vaultEntity.cTokenMarket);
-
-  const vault = getOrCreateVault(vaultAddress, cTokenMarketForVault);
+  const vault = vaultEntity;
   vault.totalShares = vault.totalShares.plus(shares);
   vault.totalDeposits = vault.totalDeposits.plus(assets);
   vault.totalCTokens = vault.totalCTokens.plus(totalCTokens);
@@ -72,7 +70,6 @@ export function handleCollectionWithdraw(event: CollectionWithdrawEvent): void {
   const assets = event.params.assets;
   const totalCTokens = event.params.cTokenAmount;
 
-  // Load the Vault to get its cTokenMarket address
   const vaultEntityWithdraw = Vault.load(vaultAddress.toHex());
   if (!vaultEntityWithdraw) {
     log.error("handleCollectionWithdraw: Vault {} not found. Cannot proceed.", [
@@ -83,8 +80,7 @@ export function handleCollectionWithdraw(event: CollectionWithdrawEvent): void {
   const cTokenMarketForVaultWithdraw = Address.fromString(
     vaultEntityWithdraw.cTokenMarket
   );
-
-  const vault = getOrCreateVault(vaultAddress, cTokenMarketForVaultWithdraw);
+  const vault = vaultEntityWithdraw;
   vault.totalShares = vault.totalShares.minus(shares);
   vault.totalDeposits = vault.totalDeposits.minus(assets);
   vault.totalCTokens = vault.totalCTokens.minus(totalCTokens);
@@ -135,14 +131,11 @@ export function handleVaultYieldAllocatedToEpoch(event: VaultYieldAllocatedToEpo
 
   const epoch = Epoch.load(epochId);
   if (epoch == null) {
-    log.warning(
-      "handleVaultYieldAllocatedToEpoch: Epoch {} not found for vault {}. Allocation of {} might be orphaned.",
+    log.error(
+      "handleVaultYieldAllocatedToEpoch: Epoch {} not found for vault {}. Allocation of {} cannot be processed.",
       [epochId, vaultAddress, amountAllocated.toString()]
     );
-    // Depending on strictness, could return or create a placeholder Epoch.
-    // For now, we'll proceed, assuming EpochStarted will eventually create it.
-    // If an Epoch entity is strictly required, this handler should ensure it exists or log an error and return.
-    return; // Or handle error more gracefully
+    return;
   }
 
   const vault = Vault.load(vaultAddress);
@@ -200,17 +193,28 @@ export function handleCollectionYieldAccrued(event: ethereum.Event): void {
   // CollectionYieldAccrued(indexed address,uint256,uint256,uint256,uint256)
   // event.params: collection, yieldAmount, globalDepositIndex, lastGlobalDepositIndex, totalAccrued
   
+  if (event.parameters.length < 5) {
+    log.error("handleCollectionYieldAccrued: Insufficient parameters. Expected 5, got {}", [
+      event.parameters.length.toString()
+    ]);
+    return;
+  }
+  
   const collectionAddress = event.parameters[0].value.toAddress();
   const yieldAmount = event.parameters[1].value.toBigInt();
   const globalDepositIndex = event.parameters[2].value.toBigInt();
+  const lastGlobalDepositIndex = event.parameters[3].value.toBigInt();
+  const totalAccrued = event.parameters[4].value.toBigInt();
   
   const vaultAddress = event.address;
   
-  log.info("CollectionYieldAccrued: vault {}, collection {}, yieldAmount {}, globalDepositIndex {}", [
+  log.info("CollectionYieldAccrued: vault {}, collection {}, yieldAmount {}, globalDepositIndex {}, lastGlobalDepositIndex {}, totalAccrued {}", [
     vaultAddress.toHexString(),
     collectionAddress.toHexString(),
     yieldAmount.toString(),
-    globalDepositIndex.toString()
+    globalDepositIndex.toString(),
+    lastGlobalDepositIndex.toString(),
+    totalAccrued.toString()
   ]);
 
   // Load the Vault to get its cTokenMarket address
@@ -233,13 +237,6 @@ export function handleCollectionYieldAccrued(event: ethereum.Event): void {
   collVault.updatedAtBlock = event.block.number;
   collVault.updatedAtTimestamp = event.block.timestamp.toI64();
   collVault.save();
-  
-  // TODO: Once schema is updated with new fields, add:
-  // collVault.globalDepositIndex = globalDepositIndex;
-  // collVault.lastGlobalDepositIndex = lastGlobalDepositIndex;
-  // collVault.yieldAccrued = collVault.yieldAccrued.plus(yieldAmount);
-  
-  // TODO: Create CollectionYieldAccrual entity once schema is generated
 }
 
 export function handleCollectionYieldAppliedForEpoch(event: ethereum.Event): void {
