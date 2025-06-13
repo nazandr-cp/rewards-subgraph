@@ -10,30 +10,30 @@ enum CollectionType {
 
 # General state of a cToken market
 type CTokenMarket @entity(immutable: false) {
-  id: ID! # cToken address
-  decimals: Int! # Number of decimals for the underlying asset
-  totalSupply: BigInt! # Total supply of this cToken
-  totalBorrows: BigInt! # Total borrows of the underlying asset
-  totalReserves: BigInt! # Total reserves of the underlying asset
+  id: ID!
+  decimals: Int!
+  totalSupply: BigInt!
+  totalBorrows: BigInt!
+  totalReserves: BigInt!
   exchangeRate: BigInt!
-  interestAccumulated: BigInt! # Total interest accumulated in this market
-  cashPrior: BigInt! # Cash available in the market before the last transaction
+  interestAccumulated: BigInt!
+  cashPrior: BigInt!
   collateralFactor: BigInt!
   borrowIndex: BigInt!
-  lastExchangeRateTimestamp: Timestamp! # Timestamp of the last exchange rate update
+  lastExchangeRateTimestamp: Timestamp!
   updatedAtBlock: BigInt!
   updatedAtTimestamp: Timestamp!
 }
 
 # Represents a rewards vault, which is Collection vault contract
 type Vault @entity(immutable: false) {
-  id: ID! # Vault address
-  cTokenMarket: CTokenMarket! # The cToken market this vault is associated with
-  totalShares: BigInt! # Total shares issued by this vault
-  totalDeposits: BigInt! # Total amount of underlying asset deposited in this vault
-  totalCTokens: BigInt! # Total cTokens issued by this vault
-  globalDepositIndex: BigInt! # Global deposit index for yield tracking
-  totalPrincipalDeposited: BigInt! # Total principal deposited across all collections
+  id: ID!
+  cTokenMarket: CTokenMarket!
+  totalShares: BigInt!
+  totalDeposits: BigInt!
+  totalCTokens: BigInt!
+  globalDepositIndex: BigInt!
+  totalPrincipalDeposited: BigInt!
   collections: [CollectionVault!]! @derivedFrom(field: "vault")
   rewardClaims: [RewardClaim!]! @derivedFrom(field: "vault")
   updatedAtBlock: BigInt!
@@ -41,80 +41,81 @@ type Vault @entity(immutable: false) {
 }
 
 type Account @entity(immutable: false) {
-  id: ID! # User address
+  id: ID!
   totalSecondsClaimed: BigInt!
-  Markets: [AccountMarket!]! @derivedFrom(field: "account") # User's market state across all cToken markets
+  Markets: [AccountMarket!]! @derivedFrom(field: "account")
   rewardClaims: [RewardClaim!]! @derivedFrom(field: "account")
-  accountRewards: [AccountRewardsPerCollection!]! @derivedFrom(field: "account") # Detailed reward state per collection-vault
+  accountRewards: [AccountRewardsPerCollection!]! @derivedFrom(field: "account")
+  subsidies: [Subsidy!]! @derivedFrom(field: "user")
 }
 
 type RewardClaim @entity(immutable: true) {
-  id: ID! # Transaction hash + log index
+  id: ID!
   account: Account!
   vault: Vault!
-  collection: Collection! # Address of the collection for which reward was claimed
-  seconds: BigInt! # Total reward seconds accrued for this claim
-  nonce: BigInt! # User's nonce for claims from this vault and collection
-  amount: BigInt! # Total reward amount claimed
+  collection: Collection!
+  seconds: BigInt!
+  nonce: BigInt!
+  amount: BigInt!
   blockNumber: BigInt!
   blockTimestamp: Timestamp!
   transactionHash: Bytes!
 }
 
 type Collection @entity(immutable: false) {
-  id: ID! # Collection address
+  id: ID!
   name: String!
   symbol: String!
-  totalNFTs: BigInt! # Total number of NFTs in this collection (overall)
+  totalNFTs: BigInt!
   collectionType: CollectionType!
-  vaults: [CollectionVault!]! @derivedFrom(field: "collection") # All vaults this collection is configured in
-  claims: [RewardClaim!]! @derivedFrom(field: "collection") # All claims related to this collection
+  vaults: [CollectionVault!]! @derivedFrom(field: "collection")
+  claims: [RewardClaim!]! @derivedFrom(field: "collection")
 }
 
 # Represents a collection's reward configuration and deposit/market state within a specific Vault
 type CollectionVault @entity(immutable: false) {
-  id: ID! # Composite ID, e.g., vault.id + "-" + collection.id
+  id: ID!
   collection: Collection!
-  vault: Vault! # The specific vault this configuration and state applies to
-  principalShares: BigInt! # Total shares of this collection in this vault (e.g., cTokens)
-  principalDeposited: BigInt! # Total amount of underlying asset deposited for this collection in this vault
-  totalCTokens: BigInt! # Total cTokens issued for this collection in this vault
-  globalDepositIndex: BigInt! # Global deposit index for yield tracking
-  lastGlobalDepositIndex: BigInt! # Last recorded global deposit index
-  yieldAccrued: BigInt! # Total yield accrued for this collection
-  isBorrowBased: Boolean! # True if rewards are based on borrow activity, false if deposit based
-  rewardSharePercentage: Int! # Percentage of rewards allocated to this collection (e.g., 10000 = 100%)
-  fnType: WeightFunctionType! # Type of weighting function (LINEAR or EXPONENTIAL)
-  p1: BigInt! # Parameter 1 for the weighting function
-  p2: BigInt! # Parameter 2 for the weighting function
-  secondsAccumulated: BigInt! # Total "reward seconds" accumulated for this collection in this vault
-  secondsClaimed: BigInt! # Total "reward seconds" claimed for this collection in this vault
-  totalRewards: BigInt! # Total rewards distributed for this collection in this vault
-  totalRewardsClaimed: BigInt! # Total rewards claimed for this collection in this vault
+  vault: Vault!
+  principalShares: BigInt!
+  principalDeposited: BigInt!
+  totalCTokens: BigInt!
+  globalDepositIndex: BigInt!
+  lastGlobalDepositIndex: BigInt!
+  yieldAccrued: BigInt!
+  isBorrowBased: Boolean!
+  rewardSharePercentage: Int!
+  fnType: WeightFunctionType!
+  p1: BigInt!
+  p2: BigInt!
+  secondsAccumulated: BigInt!
+  secondsClaimed: BigInt!
+  totalRewards: BigInt!
+  totalRewardsClaimed: BigInt!
   updatedAtBlock: BigInt!
   updatedAtTimestamp: Timestamp!
 }
 
 # Tracks an account's specific reward accrual state for a CollectionVault configuration
 type AccountRewardsPerCollection @entity(immutable: false) {
-  id: ID! # Composite ID, e.g., account.id + "-" + collectionVault.id
+  id: ID!
   account: Account!
   vault: Vault!
   collection: Collection!
-  accountMarket: AccountMarket! # Link to the user's market state for this collection in this vault
-  collectionVault: CollectionVault! # Link to the specific collection-vault configuration and state
-  balanceNFT: BigInt! # User's NFT balance relevant for calculating rewards for this CollectionVault
-  seconds: BigInt! # User's accrued "reward seconds" for this specific CollectionVault
+  accountMarket: AccountMarket!
+  collectionVault: CollectionVault!
+  balanceNFT: BigInt!
+  seconds: BigInt!
   updatedAtBlock: BigInt!
   updatedAtTimestamp: Timestamp!
 }
 
 type AccountMarket @entity(immutable: false) {
-  id: ID! # Composite ID, e.g., account.id + "-" + cTokenMarket.id
+  id: ID!
   account: Account!
   cTokenMarket: CTokenMarket!
-  deposit: BigInt! # Total amount of underlying asset deposited by the user in this market
-  borrow: BigInt! # Total amount of underlying asset borrowed by the user in this market
+  deposit: BigInt!
+  borrow: BigInt!
   updatedAtBlock: BigInt!
   updatedAtTimestamp: Timestamp!
 }
@@ -127,20 +128,21 @@ enum EpochStatus {
 }
 
 type Epoch @entity(immutable: false) {
-  id: ID! # epoch number
+  id: ID!
   startTimestamp: BigInt!
   endTimestamp: BigInt!
-  processingStartedTimestamp: BigInt # Optional timestamp when epoch processing started
+  processingStartedTimestamp: BigInt
   totalYieldAvailable: BigInt!
   totalSubsidiesDistributed: BigInt!
   status: EpochStatus!
   eligibleUsers: BigInt!
   subsidyTransactions: [SubsidyTransaction!]! @derivedFrom(field: "epoch")
   vaultAllocations: [EpochVaultAllocation!]! @derivedFrom(field: "epoch")
+  subsidies: [Subsidy!]! @derivedFrom(field: "epoch")
 }
 
 type SubsidyTransaction @entity(immutable: true) {
-  id: ID! # transaction hash + log index
+  id: ID!
   epoch: Epoch!
   user: Account!
   collection: Collection!
@@ -154,8 +156,17 @@ type SubsidyTransaction @entity(immutable: true) {
   transactionHash: Bytes!
 }
 
+type Subsidy @entity(immutable: true) {
+  id: ID!
+  epoch: Epoch!
+  user: Account!
+  amount: BigInt!
+  txHash: Bytes!
+  timestamp: BigInt!
+}
+
 type EpochVaultAllocation @entity(immutable: false) {
-  id: ID! # epoch.id + vault.id
+  id: ID!
   epoch: Epoch!
   vault: Vault!
   yieldAllocated: BigInt!
@@ -164,7 +175,7 @@ type EpochVaultAllocation @entity(immutable: false) {
 }
 
 type UserEpochEligibility @entity(immutable: false) {
-  id: ID! # user.id + epoch.id + collection.id
+  id: ID!
   user: Account!
   epoch: Epoch!
   collection: Collection!
@@ -175,7 +186,7 @@ type UserEpochEligibility @entity(immutable: false) {
 }
 
 type TrustedSignerUpdate @entity(immutable: true) {
-  id: ID! # transaction hash + log index
+  id: ID!
   oldSigner: Bytes!
   newSigner: Bytes!
   blockNumber: BigInt!
@@ -184,7 +195,7 @@ type TrustedSignerUpdate @entity(immutable: true) {
 }
 
 type YieldBatchRepayment @entity(immutable: true) {
-  id: ID! # transaction hash + log index
+  id: ID!
   epochId: BigInt!
   totalYieldRepaid: BigInt!
   remainingYield: BigInt!
@@ -194,7 +205,7 @@ type YieldBatchRepayment @entity(immutable: true) {
 }
 
 type CollectionYieldAccrual @entity(immutable: true) {
-  id: ID! # transaction hash + log index
+  id: ID!
   collection: Collection!
   yieldAmount: BigInt!
   globalDepositIndex: BigInt!
@@ -204,7 +215,7 @@ type CollectionYieldAccrual @entity(immutable: true) {
 }
 
 type CollectionYieldApplication @entity(immutable: true) {
-  id: ID! # transaction hash + log index
+  id: ID!
   epochId: BigInt!
   collection: Collection!
   yieldApplied: BigInt!
@@ -215,6 +226,6 @@ type CollectionYieldApplication @entity(immutable: true) {
 
 # Singleton entity to store system-wide state, like the current active epoch
 type SystemState @entity(immutable: false) {
-  id: ID! # Should always be "SYSTEM"
-  activeEpochId: String # Stores the ID of the currently active epoch, nullable
+  id: ID!
+  activeEpochId: String
 }
