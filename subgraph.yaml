@@ -57,6 +57,8 @@ dataSources:
           handler: handleEpochDurationUpdated
         - event: AutomatedSystemUpdated(indexed address)
           handler: handleAutomatedSystemUpdated
+        - event: EpochFailed(indexed uint256,string)
+          handler: handleEpochFailed
       file: ./src/epoch-manager-mapping.ts
 
   - kind: ethereum
@@ -82,10 +84,14 @@ dataSources:
         - name: DebtSubsidizer
           file: ./abis/DebtSubsidizer.json
       eventHandlers:
-        - event: DebtSubsidized(indexed address,indexed address,indexed address,uint256)
-          handler: handleDebtSubsidized
+        # - event: DebtSubsidized(indexed address,indexed address,indexed address,uint256) # Not found in ABI, commenting out
+        #   handler: handleDebtSubsidized
         - event: TrustedSignerUpdated(address,address,indexed address)
           handler: handleTrustedSignerUpdated
+        - event: MerkleRootUpdated(indexed address,bytes32,indexed address)
+          handler: handleMerkleRootUpdated
+        - event: SubsidyClaimed(indexed address,indexed address,indexed address,uint256)
+          handler: handleSubsidyClaimed
       file: ./src/debt-subsidizer-mapping.ts
 
   - kind: ethereum

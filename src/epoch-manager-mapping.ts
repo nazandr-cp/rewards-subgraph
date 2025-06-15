@@ -2,6 +2,7 @@ import {
   EpochStarted,
   EpochFinalized,
   EpochProcessingStarted,
+  EpochFailed,
   VaultYieldAllocated as EpochManagerVaultYieldAllocatedEvent,
   EpochDurationUpdated,
   AutomatedSystemUpdated,
@@ -10,11 +11,6 @@ import { Epoch, Vault, EpochVaultAllocation, SystemState } from "../generated/sc
 import { EPOCH_STATUS_ACTIVE, EPOCH_STATUS_PROCESSING, EPOCH_STATUS_COMPLETED, ZERO_BI, SYSTEM_STATE_ID } from "./utils/const";
 import { log } from "@graphprotocol/graph-ts";
 
-/**
- * @notice Handles the EpochStarted event from the EpochManager contract.
- * @dev Creates a new Epoch entity when an epoch starts.
- * @param event The EpochStarted event.
- */
 export function handleEpochStarted(event: EpochStarted): void {
   const epochId = event.params.epochId.toString();
   let epoch = Epoch.load(epochId);
@@ -29,17 +25,13 @@ export function handleEpochStarted(event: EpochStarted): void {
     epoch.eligibleUsers = ZERO_BI;
     epoch.save();
   } else {
-    // If epoch already exists, ensure its status is active and timestamps are updated if necessary.
-    // This might indicate a re-start or an out-of-order event.
     log.info("handleEpochStarted: Epoch {} already exists. Ensuring it is active and timestamps are current.", [epochId]);
-    epoch.status = EPOCH_STATUS_ACTIVE; // Ensure it's marked active
-    epoch.startTimestamp = event.params.startTime; // Update timestamps
+    epoch.status = EPOCH_STATUS_ACTIVE;
+    epoch.startTimestamp = event.params.startTime;
     epoch.endTimestamp = event.params.endTime;
     epoch.save();
   }
 
-  // Update SystemState with active epoch
-  // This must happen regardless of whether the epoch was new or existing.
   let systemState = SystemState.load(SYSTEM_STATE_ID);
   if (systemState === null) {
     systemState = new SystemState(SYSTEM_STATE_ID);
@@ -48,11 +40,6 @@ export function handleEpochStarted(event: EpochStarted): void {
   systemState.save();
 }
 
-/**
- * @notice Handles the EpochProcessingStarted event from the EpochManager contract.
- * @dev Marks an epoch as processing and records the timestamp when processing began.
- * @param event The EpochProcessingStarted event.
- */
 export function handleEpochProcessingStarted(event: EpochProcessingStarted): void {
   const epochId = event.params.epochId.toString();
   let epoch = Epoch.load(epochId);
@@ -75,11 +62,6 @@ export function handleEpochProcessingStarted(event: EpochProcessingStarted): voi
   epoch.save();
 }
 
-/**
- * @notice Handles the EpochFinalized event from the EpochManager contract.
- * @dev Updates an existing Epoch entity when an epoch is finalized.
- * @param event The EpochFinalized event.
- */
 export function handleEpochFinalized(event: EpochFinalized): void {
   const epochId = event.params.epochId.toString();
   const epoch = Epoch.load(epochId);
@@ -90,10 +72,9 @@ export function handleEpochFinalized(event: EpochFinalized): void {
     epoch.status = EPOCH_STATUS_COMPLETED;
     epoch.save();
 
-    // Update SystemState to remove active epoch, only if this was the active one
     const systemState = SystemState.load(SYSTEM_STATE_ID);
     if (systemState != null) {
-      if (systemState.activeEpochId == epochId) { // Only clear if it's the one being finalized
+      if (systemState.activeEpochId == epochId) {
         systemState.activeEpochId = null;
         systemState.save();
       }
@@ -101,15 +82,30 @@ export function handleEpochFinalized(event: EpochFinalized): void {
       log.warning("handleEpochFinalized: SystemState entity not found. Cannot clear activeEpochId for epoch {}.", [epochId]);
     }
   }
-  // If epoch is null, it means EpochStarted was missed or this event is out of order.
-  // Depending on system design, might need error logging or specific handling.
 }
 
-/**
- * @notice Handles the VaultYieldAllocated event from the EpochManager contract.
- * @dev Creates or updates an EpochVaultAllocation entity and updates the Epoch's totalYieldAvailable.
- * @param event The VaultYieldAllocated event from EpochManager.
- */
+export function handleEpochFailed(event: EpochFailed): void {
+  const epochId = event.params.epochId.toString();
+  const epoch = Epoch.load(epochId);
+
+  if (epoch == null) {
+    log.warning(
+      "handleEpochFailed: Epoch {} not found. Cannot mark as failed.",
+      [epochId]
+    );
+    return;
+  }
+
+  epoch.status = "FAILED";
+  epoch.endTimestamp = event.block.timestamp;
+  epoch.save();
+
+  log.info("handleEpochFailed: Epoch {} has been marked as FAILED at timestamp {}.", [
+    epochId,
+    event.block.timestamp.toString(),
+  ]);
+}
+
 export function handleEpochManagerVaultYieldAllocated(event: EpochManagerVaultYieldAllocatedEvent): void {
   const epochId = event.params.epochId.toString();
   const epoch = Epoch.load(epochId);
@@ -141,11 +137,9 @@ export function handleEpochManagerVaultYieldAllocated(event: EpochManagerVaultYi
     vault.save();
   }
 
-  // Update total yield available in the epoch
   epoch.totalYieldAvailable = epoch.totalYieldAvailable.plus(event.params.amount);
   epoch.save();
 
-  // Create or update EpochVaultAllocation
   const allocationId = epochId + "-" + vaultAddress;
   let epochVaultAllocation = EpochVaultAllocation.load(allocationId);
 
@@ -154,12 +148,10 @@ export function handleEpochManagerVaultYieldAllocated(event: EpochManagerVaultYi
     epochVaultAllocation.epoch = epochId;
     epochVaultAllocation.vault = vaultAddress;
     epochVaultAllocation.yieldAllocated = ZERO_BI;
-    epochVaultAllocation.subsidiesDistributed = ZERO_BI; // Initialized to zero
+    epochVaultAllocation.subsidiesDistributed = ZERO_BI;
   }
 
   epochVaultAllocation.yieldAllocated = epochVaultAllocation.yieldAllocated.plus(event.params.amount);
-  // remainingYield can be calculated as yieldAllocated - subsidiesDistributed
-  // This will be updated when subsidies are distributed.
   epochVaultAllocation.remainingYield = epochVaultAllocation.yieldAllocated.minus(epochVaultAllocation.subsidiesDistributed);
   epochVaultAllocation.save();
 }

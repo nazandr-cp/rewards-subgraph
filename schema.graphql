@@ -36,6 +36,7 @@ type Vault @entity(immutable: false) {
   totalPrincipalDeposited: BigInt!
   collections: [CollectionVault!]! @derivedFrom(field: "vault")
   rewardClaims: [RewardClaim!]! @derivedFrom(field: "vault")
+  merkleDistributions: [MerkleDistribution!]! @derivedFrom(field: "vault")
   updatedAtBlock: BigInt!
   updatedAtTimestamp: Timestamp!
 }
@@ -139,6 +140,7 @@ type Epoch @entity(immutable: false) {
   subsidyTransactions: [SubsidyTransaction!]! @derivedFrom(field: "epoch")
   vaultAllocations: [EpochVaultAllocation!]! @derivedFrom(field: "epoch")
   subsidies: [Subsidy!]! @derivedFrom(field: "epoch")
+  merkleDistributions: [MerkleDistribution!]! @derivedFrom(field: "epoch")
 }
 
 type SubsidyTransaction @entity(immutable: true) {
@@ -172,6 +174,16 @@ type EpochVaultAllocation @entity(immutable: false) {
   yieldAllocated: BigInt!
   subsidiesDistributed: BigInt!
   remainingYield: BigInt!
+}
+
+type MerkleDistribution @entity(immutable: true) {
+  id: ID! # Format: epochId-vaultAddress
+  epoch: Epoch!
+  vault: Vault!
+  merkleRoot: Bytes!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  transactionHash: Bytes!
 }
 
 type UserEpochEligibility @entity(immutable: false) {
