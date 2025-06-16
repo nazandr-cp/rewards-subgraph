@@ -109,17 +109,10 @@ export function accrueSeconds(
   }
   const cTokenMarketAddress = Address.fromString(vaultEntity.cTokenMarket);
 
-  if (!cv.isBorrowBased) {
-    basePrincipalForReward = currentDepositU(
-      accountAddress,
-      cTokenMarketAddress
-    );
-  } else {
-    basePrincipalForReward = currentBorrowU(
-      accountAddress,
-      cTokenMarketAddress
-    );
-  }
+  basePrincipalForReward = currentBorrowU(
+    accountAddress,
+    cTokenMarketAddress
+  );
 
   const nftHoldingWeight = weight(arpc.balanceNFT, cv);
   const combinedEffectiveValue = basePrincipalForReward.plus(nftHoldingWeight);

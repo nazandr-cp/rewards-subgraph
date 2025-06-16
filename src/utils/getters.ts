@@ -124,7 +124,7 @@ export function getOrCreateCollectionVault(
     cv.globalDepositIndex = ZERO_BI;
     cv.lastGlobalDepositIndex = ZERO_BI;
     cv.yieldAccrued = ZERO_BI;
-    cv.isBorrowBased = false;
+    cv.isBorrowBased = true;
     cv.rewardSharePercentage = 0;
     cv.fnType = "LINEAR";
     cv.p1 = ZERO_BI;

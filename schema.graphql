@@ -35,7 +35,6 @@ type Vault @entity(immutable: false) {
   globalDepositIndex: BigInt!
   totalPrincipalDeposited: BigInt!
   collections: [CollectionVault!]! @derivedFrom(field: "vault")
-  rewardClaims: [RewardClaim!]! @derivedFrom(field: "vault")
   merkleDistributions: [MerkleDistribution!]! @derivedFrom(field: "vault")
   updatedAtBlock: BigInt!
   updatedAtTimestamp: Timestamp!
@@ -44,24 +43,10 @@ type Vault @entity(immutable: false) {
 type Account @entity(immutable: false) {
   id: ID!
   totalSecondsClaimed: BigInt!
-  Markets: [AccountMarket!]! @derivedFrom(field: "account")
-  rewardClaims: [RewardClaim!]! @derivedFrom(field: "account")
+  markets: [AccountMarket!]! @derivedFrom(field: "account")
   accountRewards: [AccountRewardsPerCollection!]! @derivedFrom(field: "account")
-  subsidies: [Subsidy!]! @derivedFrom(field: "user")
 }
 
-type RewardClaim @entity(immutable: true) {
-  id: ID!
-  account: Account!
-  vault: Vault!
-  collection: Collection!
-  seconds: BigInt!
-  nonce: BigInt!
-  amount: BigInt!
-  blockNumber: BigInt!
-  blockTimestamp: Timestamp!
-  transactionHash: Bytes!
-}
 
 type Collection @entity(immutable: false) {
   id: ID!
@@ -70,7 +55,6 @@ type Collection @entity(immutable: false) {
   totalNFTs: BigInt!
   collectionType: CollectionType!
   vaults: [CollectionVault!]! @derivedFrom(field: "collection")
-  claims: [RewardClaim!]! @derivedFrom(field: "collection")
 }
 
 # Represents a collection's reward configuration and deposit/market state within a specific Vault
@@ -139,7 +123,6 @@ type Epoch @entity(immutable: false) {
   eligibleUsers: BigInt!
   subsidyTransactions: [SubsidyTransaction!]! @derivedFrom(field: "epoch")
   vaultAllocations: [EpochVaultAllocation!]! @derivedFrom(field: "epoch")
-  subsidies: [Subsidy!]! @derivedFrom(field: "epoch")
   merkleDistributions: [MerkleDistribution!]! @derivedFrom(field: "epoch")
 }
 
@@ -158,14 +141,6 @@ type SubsidyTransaction @entity(immutable: true) {
   transactionHash: Bytes!
 }
 
-type Subsidy @entity(immutable: true) {
-  id: ID!
-  epoch: Epoch!
-  user: Account!
-  amount: BigInt!
-  txHash: Bytes!
-  timestamp: BigInt!
-}
 
 type EpochVaultAllocation @entity(immutable: false) {
   id: ID!
@@ -206,15 +181,6 @@ type TrustedSignerUpdate @entity(immutable: true) {
   transactionHash: Bytes!
 }
 
-type YieldBatchRepayment @entity(immutable: true) {
-  id: ID!
-  epochId: BigInt!
-  totalYieldRepaid: BigInt!
-  remainingYield: BigInt!
-  blockNumber: BigInt!
-  timestamp: BigInt!
-  transactionHash: Bytes!
-}
 
 type CollectionYieldAccrual @entity(immutable: true) {
   id: ID!
