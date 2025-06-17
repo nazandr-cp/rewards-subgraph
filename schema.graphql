@@ -1,3 +1,5 @@
+# Enums aligned with contract specifications
+
 enum WeightFunctionType {
   LINEAR
   EXPONENTIAL
@@ -8,103 +10,6 @@ enum CollectionType {
   ERC1155
 }
 
-# General state of a cToken market
-type CTokenMarket @entity(immutable: false) {
-  id: ID!
-  decimals: Int!
-  totalSupply: BigInt!
-  totalBorrows: BigInt!
-  totalReserves: BigInt!
-  exchangeRate: BigInt!
-  interestAccumulated: BigInt!
-  cashPrior: BigInt!
-  collateralFactor: BigInt!
-  borrowIndex: BigInt!
-  lastExchangeRateTimestamp: Timestamp!
-  updatedAtBlock: BigInt!
-  updatedAtTimestamp: Timestamp!
-}
-
-# Represents a Collection vault contract
-type Vault @entity(immutable: false) {
-  id: ID!
-  cTokenMarket: CTokenMarket!
-  totalShares: BigInt!
-  totalDeposits: BigInt!
-  totalCTokens: BigInt!
-  globalDepositIndex: BigInt!
-  totalPrincipalDeposited: BigInt!
-  collections: [CollectionVault!]! @derivedFrom(field: "vault")
-  merkleDistributions: [MerkleDistribution!]! @derivedFrom(field: "vault")
-  updatedAtBlock: BigInt!
-  updatedAtTimestamp: Timestamp!
-}
-
-type Account @entity(immutable: false) {
-  id: ID!
-  totalSecondsClaimed: BigInt!
-  markets: [AccountMarket!]! @derivedFrom(field: "account")
-  accountSubsidies: [AccountSubsidiesPerCollection!]!
-    @derivedFrom(field: "account")
-}
-
-type Collection @entity(immutable: false) {
-  id: ID!
-  name: String!
-  symbol: String!
-  totalNFTs: BigInt!
-  collectionType: CollectionType!
-  vaults: [CollectionVault!]! @derivedFrom(field: "collection")
-}
-
-# Represents a collection's subsidy configuration and deposit/market state within a specific Vault
-type CollectionVault @entity(immutable: false) {
-  id: ID!
-  collection: Collection!
-  vault: Vault!
-  principalShares: BigInt!
-  principalDeposited: BigInt!
-  totalCTokens: BigInt!
-  globalDepositIndex: BigInt!
-  lastGlobalDepositIndex: BigInt!
-  yieldAccrued: BigInt!
-  isBorrowBased: Boolean!
-  rewardSharePercentage: Int!
-  fnType: WeightFunctionType!
-  p1: BigInt!
-  p2: BigInt!
-  secondsAccumulated: BigInt!
-  secondsClaimed: BigInt!
-  totalSubsidies: BigInt!
-  totalSubsidiesClaimed: BigInt!
-  updatedAtBlock: BigInt!
-  updatedAtTimestamp: Timestamp!
-}
-
-# Tracks an account's specific subsidy accrual state for a CollectionVault configuration
-type AccountSubsidiesPerCollection @entity(immutable: false) {
-  id: ID!
-  account: Account!
-  vault: Vault!
-  collection: Collection!
-  accountMarket: AccountMarket!
-  collectionVault: CollectionVault!
-  balanceNFT: BigInt!
-  seconds: BigInt!
-  updatedAtBlock: BigInt!
-  updatedAtTimestamp: Timestamp!
-}
-
-type AccountMarket @entity(immutable: false) {
-  id: ID!
-  account: Account!
-  cTokenMarket: CTokenMarket!
-  deposit: BigInt!
-  borrow: BigInt!
-  updatedAtBlock: BigInt!
-  updatedAtTimestamp: Timestamp!
-}
-
 enum EpochStatus {
   ACTIVE
   PROCESSING
@@ -112,87 +17,724 @@ enum EpochStatus {
   FAILED
 }
 
+enum RoleType {
+  ADMIN
+  EPOCH_MANAGER
+  COLLECTION_MANAGER
+  SUBSIDY_MANAGER
+  LENDING_MANAGER
+}
+
+enum LendingStatus {
+  ACTIVE
+  PAUSED
+  LIQUIDATING
+  DEFAULTED
+}
+
+# Core contract entities representing the multi-layered architecture
+
+"""
+Main vault contract managing collection-based lending and subsidies
+"""
+type CollectionsVault @entity(immutable: false) {
+  id: ID!
+  cTokenMarket: CTokenMarket!
+  totalShares: BigInt!
+  totalDeposits: BigInt!
+  totalCTokens: BigInt!
+  globalDepositIndex: BigInt!
+  totalPrincipalDeposited: BigInt!
+
+  # Registry integration
+  collectionRegistry: CollectionRegistry!
+
+  # Manager integrations
+  epochManager: EpochManager!
+  lendingManager: LendingManager!
+  debtSubsidizer: DebtSubsidizer!
+
+  # Derived relationships
+  collectionParticipations: [CollectionParticipation!]!
+    @derivedFrom(field: "vault")
+  merkleDistributions: [MerkleDistribution!]! @derivedFrom(field: "vault")
+  epochAllocations: [EpochVaultAllocation!]! @derivedFrom(field: "vault")
+
+  # Metadata
+  createdAtBlock: BigInt!
+  createdAtTimestamp: BigInt!
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: BigInt!
+}
+
+"""
+Registry managing collection configurations and parameters
+"""
+type CollectionRegistry @entity(immutable: false) {
+  id: ID!
+
+  # Registry state
+  totalCollections: BigInt!
+  totalActiveCollections: BigInt!
+
+  # Access control
+  owner: Bytes!
+  roles: [AccountRoleAssignment!]! @derivedFrom(field: "registry")
+
+  # Managed collections
+  collections: [Collection!]! @derivedFrom(field: "registry")
+
+  # Metadata
+  createdAtBlock: BigInt!
+  createdAtTimestamp: BigInt!
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: BigInt!
+}
+
+"""
+Manager handling epoch lifecycle and transitions
+"""
+type EpochManager @entity(immutable: false) {
+  id: ID!
+
+  # Current epoch state
+  currentEpochId: BigInt!
+  currentEpoch: Epoch
+
+  # Configuration parameters
+  epochDuration: BigInt!
+  processingBuffer: BigInt!
+  minimumYieldThreshold: BigInt!
+
+  # Statistics
+  totalEpochs: BigInt!
+  totalYieldDistributed: BigInt!
+
+  # Access control
+  owner: Bytes!
+  roles: [AccountRoleAssignment!]! @derivedFrom(field: "epochManager")
+
+  # Managed epochs
+  epochs: [Epoch!]! @derivedFrom(field: "epochManager")
+
+  # Vault integration
+  vault: CollectionsVault!
+
+  # Metadata
+  createdAtBlock: BigInt!
+  createdAtTimestamp: BigInt!
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: BigInt!
+}
+
+"""
+Manager handling lending operations and risk management
+"""
+type LendingManager @entity(immutable: false) {
+  id: ID!
+
+  # Lending configuration
+  maxLoanToValue: BigInt!
+  liquidationThreshold: BigInt!
+  liquidationBonus: BigInt!
+
+  # Risk parameters
+  defaultThreshold: BigInt!
+  gracePeriod: BigInt!
+
+  # Statistics
+  totalLoansIssued: BigInt!
+  totalActiveLoans: BigInt!
+  totalDefaultedLoans: BigInt!
+  totalLiquidatedAmount: BigInt!
+
+  # Access control
+  owner: Bytes!
+  roles: [AccountRoleAssignment!]! @derivedFrom(field: "lendingManager")
+
+  # Managed loans
+  loans: [Loan!]! @derivedFrom(field: "lendingManager")
+
+  # Vault integration
+  vault: CollectionsVault!
+
+  # Metadata
+  createdAtBlock: BigInt!
+  createdAtTimestamp: BigInt!
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: BigInt!
+}
+
+"""
+Contract managing debt subsidization logic and distributions
+"""
+type DebtSubsidizer @entity(immutable: false) {
+  id: ID!
+
+  # Subsidy configuration
+  subsidyRate: BigInt!
+  maxSubsidyPerUser: BigInt!
+  subsidyDuration: BigInt!
+
+  # Distribution state
+  totalSubsidiesDistributed: BigInt!
+  totalSubsidiesRemaining: BigInt!
+  totalEligibleUsers: BigInt!
+
+  # Access control
+  owner: Bytes!
+  roles: [AccountRoleAssignment!]! @derivedFrom(field: "debtSubsidizer")
+
+  # Managed subsidies
+  subsidyDistributions: [SubsidyDistribution!]!
+    @derivedFrom(field: "debtSubsidizer")
+
+  # Vault integration
+  vault: CollectionsVault!
+
+  # Metadata
+  createdAtBlock: BigInt!
+  createdAtTimestamp: BigInt!
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: BigInt!
+}
+
+# Access control system
+
+"""
+Role definitions for access control
+"""
+type Role @entity(immutable: true) {
+  id: ID!
+  roleType: RoleType!
+  name: String!
+  description: String!
+
+  # Role assignments
+  assignments: [AccountRoleAssignment!]! @derivedFrom(field: "role")
+
+  # Metadata
+  createdAtBlock: BigInt!
+  createdAtTimestamp: BigInt!
+}
+
+"""
+Account role assignments for access control
+"""
+type AccountRoleAssignment @entity(immutable: false) {
+  id: ID!
+  account: Account!
+  role: Role!
+
+  # Assignment context
+  registry: CollectionRegistry
+  epochManager: EpochManager
+  lendingManager: LendingManager
+  debtSubsidizer: DebtSubsidizer
+
+  # Assignment state
+  isActive: Boolean!
+  grantedBy: Bytes!
+
+  # Metadata
+  grantedAtBlock: BigInt!
+  grantedAtTimestamp: BigInt!
+  revokedAtBlock: BigInt
+  revokedAtTimestamp: BigInt
+}
+
+# Enhanced entities with registry integration
+
+"""
+Enhanced collection entity with registry-managed fields
+"""
+type Collection @entity(immutable: false) {
+  id: ID!
+
+  # Basic collection info
+  contractAddress: Bytes!
+  name: String!
+  symbol: String!
+  totalSupply: BigInt!
+  collectionType: CollectionType!
+
+  # Registry integration
+  registry: CollectionRegistry!
+
+  # Registry-managed configuration
+  isActive: Boolean!
+  yieldSharePercentage: BigInt!
+  weightFunctionType: WeightFunctionType!
+  weightFunctionP1: BigInt!
+  weightFunctionP2: BigInt!
+  minBorrowAmount: BigInt!
+  maxBorrowAmount: BigInt!
+
+  # Collection statistics
+  totalNFTsDeposited: BigInt!
+  totalBorrowVolume: BigInt!
+  totalYieldGenerated: BigInt!
+  totalSubsidiesReceived: BigInt!
+
+  # Derived relationships
+  participations: [CollectionParticipation!]! @derivedFrom(field: "collection")
+  loans: [Loan!]! @derivedFrom(field: "collection")
+  yieldAccruals: [CollectionYieldAccrual!]! @derivedFrom(field: "collection")
+
+  # Metadata
+  registeredAtBlock: BigInt!
+  registeredAtTimestamp: BigInt!
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: BigInt!
+}
+
+"""
+Enhanced epoch entity with complete lifecycle management
+"""
 type Epoch @entity(immutable: false) {
   id: ID!
+  epochNumber: BigInt!
+
+  # Manager integration
+  epochManager: EpochManager!
+
+  # Epoch lifecycle
+  status: EpochStatus!
   startTimestamp: BigInt!
   endTimestamp: BigInt!
   processingStartedTimestamp: BigInt
+  processingCompletedTimestamp: BigInt
+
+  # Yield allocation
   totalYieldAvailable: BigInt!
+  totalYieldAllocated: BigInt!
+  totalYieldDistributed: BigInt!
+  remainingYield: BigInt!
+
+  # Subsidy distribution
   totalSubsidiesDistributed: BigInt!
-  status: EpochStatus!
-  eligibleUsers: BigInt!
-  subsidyTransactions: [SubsidyTransaction!]! @derivedFrom(field: "epoch")
+  totalEligibleUsers: BigInt!
+  totalParticipatingCollections: BigInt!
+
+  # Processing metrics
+  processingGasUsed: BigInt
+  processingTransactionCount: BigInt
+
+  # Derived relationships
   vaultAllocations: [EpochVaultAllocation!]! @derivedFrom(field: "epoch")
+  subsidyDistributions: [SubsidyDistribution!]! @derivedFrom(field: "epoch")
   merkleDistributions: [MerkleDistribution!]! @derivedFrom(field: "epoch")
+  userEligibilities: [UserEpochEligibility!]! @derivedFrom(field: "epoch")
+
+  # Metadata
+  createdAtBlock: BigInt!
+  createdAtTimestamp: BigInt!
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: BigInt!
 }
 
-type SubsidyTransaction @entity(immutable: true) {
+# Renamed and enhanced participation entity
+
+"""
+Represents a collection's participation in vault subsidies (formerly CollectionVault)
+"""
+type CollectionParticipation @entity(immutable: false) {
+  id: ID!
+  collection: Collection!
+  vault: CollectionsVault!
+
+  # Deposit state
+  principalShares: BigInt!
+  principalDeposited: BigInt!
+  totalCTokens: BigInt!
+  globalDepositIndex: BigInt!
+  lastGlobalDepositIndex: BigInt!
+
+  # Yield tracking
+  yieldAccrued: BigInt!
+  yieldClaimed: BigInt!
+  totalYieldGenerated: BigInt!
+
+  # Subsidy configuration
+  isBorrowBased: Boolean!
+  rewardSharePercentage: BigInt!
+  weightFunctionType: WeightFunctionType!
+  weightFunctionP1: BigInt!
+  weightFunctionP2: BigInt!
+
+  # Subsidy tracking
+  secondsAccumulated: BigInt!
+  secondsClaimed: BigInt!
+  totalSubsidies: BigInt!
+  totalSubsidiesClaimed: BigInt!
+
+  # Performance metrics
+  averageAPY: BigInt!
+  totalParticipants: BigInt!
+
+  # Derived relationships
+  accountSubsidies: [AccountSubsidiesPerCollection!]!
+    @derivedFrom(field: "collectionParticipation")
+
+  # Metadata
+  createdAtBlock: BigInt!
+  createdAtTimestamp: BigInt!
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: BigInt!
+}
+
+# Market and account entities
+
+"""
+Compound cToken market state
+"""
+type CTokenMarket @entity(immutable: false) {
+  id: ID!
+  symbol: String!
+  name: String!
+  decimals: Int!
+
+  # Market state
+  totalSupply: BigInt!
+  totalBorrows: BigInt!
+  totalReserves: BigInt!
+  exchangeRate: BigInt!
+  interestAccumulated: BigInt!
+  cashPrior: BigInt!
+  borrowIndex: BigInt!
+
+  # Risk parameters
+  collateralFactor: BigInt!
+  liquidationIncentive: BigInt!
+  reserveFactor: BigInt!
+
+  # Interest rate model
+  baseRatePerBlock: BigInt!
+  multiplierPerBlock: BigInt!
+  jumpMultiplierPerBlock: BigInt!
+  kink: BigInt!
+
+  # Derived relationships
+  vaults: [CollectionsVault!]! @derivedFrom(field: "cTokenMarket")
+  accountMarkets: [AccountMarket!]! @derivedFrom(field: "cTokenMarket")
+
+  # Metadata
+  lastExchangeRateTimestamp: BigInt!
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: BigInt!
+}
+
+"""
+User account with enhanced tracking
+"""
+type Account @entity(immutable: false) {
+  id: ID!
+
+  # Account statistics
+  totalSecondsClaimed: BigInt!
+  totalSubsidiesReceived: BigInt!
+  totalYieldEarned: BigInt!
+  totalBorrowVolume: BigInt!
+
+  # NFT holdings
+  totalNFTsOwned: BigInt!
+  totalCollectionsParticipated: BigInt!
+
+  # Derived relationships
+  markets: [AccountMarket!]! @derivedFrom(field: "account")
+  accountSubsidies: [AccountSubsidiesPerCollection!]!
+    @derivedFrom(field: "account")
+  loans: [Loan!]! @derivedFrom(field: "borrower")
+  roleAssignments: [AccountRoleAssignment!]! @derivedFrom(field: "account")
+  userEligibilities: [UserEpochEligibility!]! @derivedFrom(field: "user")
+
+  # Metadata
+  firstInteractionBlock: BigInt!
+  firstInteractionTimestamp: BigInt!
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: BigInt!
+}
+
+"""
+Account's position in a specific cToken market
+"""
+type AccountMarket @entity(immutable: false) {
+  id: ID!
+  account: Account!
+  cTokenMarket: CTokenMarket!
+
+  # Position data
+  supplyBalance: BigInt!
+  borrowBalance: BigInt!
+  collateralBalance: BigInt!
+
+  # Interest tracking
+  supplyIndex: BigInt!
+  borrowIndex: BigInt!
+
+  # Derived relationships
+  accountSubsidies: [AccountSubsidiesPerCollection!]!
+    @derivedFrom(field: "accountMarket")
+
+  # Metadata
+  enteredMarketBlock: BigInt!
+  enteredMarketTimestamp: BigInt!
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: BigInt!
+}
+
+"""
+Tracks an account's specific subsidy accrual state for a collection participation
+"""
+type AccountSubsidiesPerCollection @entity(immutable: false) {
+  id: ID!
+  account: Account!
+  vault: CollectionsVault!
+  collection: Collection!
+  accountMarket: AccountMarket!
+  collectionParticipation: CollectionParticipation!
+
+  # NFT holding state
+  balanceNFT: BigInt!
+  weightedBalance: BigInt!
+
+  # Subsidy accrual
+  secondsAccumulated: BigInt!
+  secondsClaimed: BigInt!
+  subsidiesAccrued: BigInt!
+  subsidiesClaimed: BigInt!
+
+  # Performance tracking
+  averageHoldingPeriod: BigInt!
+  totalRewardsEarned: BigInt!
+
+  # Metadata
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: BigInt!
+}
+
+# Lending system entities
+
+"""
+Individual loan issued against NFT collateral
+"""
+type Loan @entity(immutable: false) {
+  id: ID!
+  borrower: Account!
+  collection: Collection!
+  lendingManager: LendingManager!
+
+  # Loan terms
+  principalAmount: BigInt!
+  interestRate: BigInt!
+  duration: BigInt!
+  collateralTokenId: BigInt!
+
+  # Loan state
+  status: LendingStatus!
+  outstandingDebt: BigInt!
+  interestAccrued: BigInt!
+
+  # Timeline
+  issuedAtBlock: BigInt!
+  issuedAtTimestamp: BigInt!
+  dueAtTimestamp: BigInt!
+  repaidAtBlock: BigInt
+  repaidAtTimestamp: BigInt
+  liquidatedAtBlock: BigInt
+  liquidatedAtTimestamp: BigInt
+
+  # Metadata
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: BigInt!
+}
+
+# Distribution and yield tracking entities
+
+"""
+Enhanced subsidy distribution entity
+"""
+type SubsidyDistribution @entity(immutable: true) {
   id: ID!
   epoch: Epoch!
+  debtSubsidizer: DebtSubsidizer!
   user: Account!
   collection: Collection!
-  vault: Vault!
+  vault: CollectionsVault!
+
+  # Distribution details
   subsidyAmount: BigInt!
   borrowAmountBefore: BigInt!
   borrowAmountAfter: BigInt!
+  nftBalance: BigInt!
+  weightedContribution: BigInt!
+
+  # Transaction details
   gasUsed: BigInt!
   blockNumber: BigInt!
   timestamp: BigInt!
   transactionHash: Bytes!
 }
 
+"""
+Vault allocation for specific epoch
+"""
 type EpochVaultAllocation @entity(immutable: false) {
   id: ID!
   epoch: Epoch!
-  vault: Vault!
+  vault: CollectionsVault!
+
+  # Allocation details
   yieldAllocated: BigInt!
   subsidiesDistributed: BigInt!
   remainingYield: BigInt!
+
+  # Performance metrics
+  participantCount: BigInt!
+  averageSubsidyPerUser: BigInt!
+  utilizationRate: BigInt!
+
+  # Metadata
+  createdAtBlock: BigInt!
+  createdAtTimestamp: BigInt!
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: BigInt!
 }
 
+"""
+Merkle distribution for efficient batch claims
+"""
 type MerkleDistribution @entity(immutable: true) {
-  id: ID! # Format: epochId-vaultAddress
+  id: ID!
   epoch: Epoch!
-  vault: Vault!
+  vault: CollectionsVault!
+
+  # Merkle data
   merkleRoot: Bytes!
+  totalAmount: BigInt!
+  totalClaims: BigInt!
+
+  # Distribution metadata
   blockNumber: BigInt!
   timestamp: BigInt!
   transactionHash: Bytes!
 }
 
+"""
+User eligibility for epoch rewards
+"""
 type UserEpochEligibility @entity(immutable: false) {
   id: ID!
   user: Account!
   epoch: Epoch!
   collection: Collection!
+
+  # Eligibility criteria
   nftBalance: BigInt!
   borrowBalance: BigInt!
-  subsidyReceived: BigInt!
+  holdingDuration: BigInt!
   isEligible: Boolean!
+
+  # Reward details
+  subsidyReceived: BigInt!
+  yieldShare: BigInt!
+  bonusMultiplier: BigInt!
+
+  # Metadata
+  calculatedAtBlock: BigInt!
+  calculatedAtTimestamp: BigInt!
 }
 
+"""
+Collection yield accrual events
+"""
 type CollectionYieldAccrual @entity(immutable: true) {
   id: ID!
   collection: Collection!
+
+  # Yield details
   yieldAmount: BigInt!
+  cumulativeYield: BigInt!
   globalDepositIndex: BigInt!
+
+  # Source tracking
+  sourceType: String!
+  sourceTransaction: Bytes!
+
+  # Metadata
   blockNumber: BigInt!
   timestamp: BigInt!
   transactionHash: Bytes!
 }
 
+"""
+Collection yield application to users
+"""
 type CollectionYieldApplication @entity(immutable: true) {
   id: ID!
   epochId: BigInt!
   collection: Collection!
+
+  # Application details
   yieldApplied: BigInt!
+  recipientCount: BigInt!
+  averageYieldPerUser: BigInt!
+
+  # Processing details
+  processingGasUsed: BigInt!
   blockNumber: BigInt!
   timestamp: BigInt!
   transactionHash: Bytes!
 }
 
-# Singleton entity to store system-wide state, like the current active epoch
+# System state entities
+
+"""
+System-wide state tracking
+"""
 type SystemState @entity(immutable: false) {
   id: ID!
+
+  # Current system state
   activeEpochId: String
+  totalVaults: BigInt!
+  totalCollections: BigInt!
+  totalUsers: BigInt!
+
+  # System metrics
+  totalValueLocked: BigInt!
+  totalYieldDistributed: BigInt!
+  totalSubsidiesDistributed: BigInt!
+
+  # Performance metrics
+  systemUtilizationRate: BigInt!
+  averageAPY: BigInt!
+
+  # Metadata
+  lastUpdatedBlock: BigInt!
+  lastUpdatedTimestamp: BigInt!
+}
+
+"""
+Daily system metrics for analytics
+"""
+type DailyMetrics @entity(immutable: true) {
+  id: ID!
+  date: String!
+
+  # Volume metrics
+  dailyVolumeUSD: BigInt!
+  dailyTransactionCount: BigInt!
+  dailyActiveUsers: BigInt!
+
+  # Yield metrics
+  dailyYieldDistributed: BigInt!
+  dailySubsidiesDistributed: BigInt!
+
+  # Performance metrics
+  averageAPY: BigInt!
+  utilizationRate: BigInt!
+
+  # Metadata
+  timestamp: BigInt!
 }
