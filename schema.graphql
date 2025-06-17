@@ -25,12 +25,7 @@ enum RoleType {
   LENDING_MANAGER
 }
 
-enum LendingStatus {
-  ACTIVE
-  PAUSED
-  LIQUIDATING
-  DEFAULTED
-}
+
 
 # Core contract entities representing the multi-layered architecture
 
@@ -128,32 +123,27 @@ type EpochManager @entity(immutable: false) {
 }
 
 """
-Manager handling lending operations and risk management
+Manager handling lending operations and risk management for cToken markets
 """
 type LendingManager @entity(immutable: false) {
   id: ID!
 
-  # Lending configuration
-  maxLoanToValue: BigInt!
-  liquidationThreshold: BigInt!
-  liquidationBonus: BigInt!
-
-  # Risk parameters
-  defaultThreshold: BigInt!
-  gracePeriod: BigInt!
+  # cToken market configuration
+  supportedMarkets: BigInt!
+  totalMarketParticipants: BigInt!
+  
+  # Risk parameters for cToken markets
+  globalCollateralFactor: BigInt!
+  liquidationIncentive: BigInt!
 
   # Statistics
-  totalLoansIssued: BigInt!
-  totalActiveLoans: BigInt!
-  totalDefaultedLoans: BigInt!
-  totalLiquidatedAmount: BigInt!
+  totalSupplyVolume: BigInt!
+  totalBorrowVolume: BigInt!
+  totalLiquidationVolume: BigInt!
 
   # Access control
   owner: Bytes!
   roles: [AccountRoleAssignment!]! @derivedFrom(field: "lendingManager")
-
-  # Managed loans
-  loans: [Loan!]! @derivedFrom(field: "lendingManager")
 
   # Vault integration
   vault: CollectionsVault!
@@ -278,7 +268,6 @@ type Collection @entity(immutable: false) {
 
   # Derived relationships
   participations: [CollectionParticipation!]! @derivedFrom(field: "collection")
-  loans: [Loan!]! @derivedFrom(field: "collection")
   yieldAccruals: [CollectionYieldAccrual!]! @derivedFrom(field: "collection")
 
   # Metadata
@@ -332,8 +321,6 @@ type Epoch @entity(immutable: false) {
   updatedAtBlock: BigInt!
   updatedAtTimestamp: BigInt!
 }
-
-# Renamed and enhanced participation entity
 
 """
 Represents a collection's participation in vault subsidies (formerly CollectionVault)
@@ -444,7 +431,6 @@ type Account @entity(immutable: false) {
   markets: [AccountMarket!]! @derivedFrom(field: "account")
   accountSubsidies: [AccountSubsidiesPerCollection!]!
     @derivedFrom(field: "account")
-  loans: [Loan!]! @derivedFrom(field: "borrower")
   roleAssignments: [AccountRoleAssignment!]! @derivedFrom(field: "account")
   userEligibilities: [UserEpochEligibility!]! @derivedFrom(field: "user")
 
@@ -513,41 +499,6 @@ type AccountSubsidiesPerCollection @entity(immutable: false) {
   updatedAtTimestamp: BigInt!
 }
 
-# Lending system entities
-
-"""
-Individual loan issued against NFT collateral
-"""
-type Loan @entity(immutable: false) {
-  id: ID!
-  borrower: Account!
-  collection: Collection!
-  lendingManager: LendingManager!
-
-  # Loan terms
-  principalAmount: BigInt!
-  interestRate: BigInt!
-  duration: BigInt!
-  collateralTokenId: BigInt!
-
-  # Loan state
-  status: LendingStatus!
-  outstandingDebt: BigInt!
-  interestAccrued: BigInt!
-
-  # Timeline
-  issuedAtBlock: BigInt!
-  issuedAtTimestamp: BigInt!
-  dueAtTimestamp: BigInt!
-  repaidAtBlock: BigInt
-  repaidAtTimestamp: BigInt
-  liquidatedAtBlock: BigInt
-  liquidatedAtTimestamp: BigInt
-
-  # Metadata
-  updatedAtBlock: BigInt!
-  updatedAtTimestamp: BigInt!
-}
 
 # Distribution and yield tracking entities
 
