@@ -4,7 +4,7 @@ import {
   Collection,
   Vault,
   CollectionVault,
-  AccountRewardsPerCollection,
+  AccountSubsidiesPerCollection,
   CTokenMarket,
   AccountMarket,
   UserEpochEligibility,
@@ -20,7 +20,7 @@ function generateCollectionVaultId(
   return vaultId.concat("-").concat(collectionId);
 }
 
-function generateAccountRewardsPerCollectionId(
+function generateAccountSubsidiesPerCollectionId(
   accountId: string,
   collectionVaultId: string
 ): string {
@@ -109,7 +109,7 @@ export function getOrCreateCollectionVault(
 ): CollectionVault {
   const collection = getOrCreateCollection(collectionAddress);
   const vaultId = vaultAddress.toHexString();
-  
+
   const id = generateCollectionVaultId(vaultId, collection.id);
   let cv = CollectionVault.load(id);
 
@@ -131,8 +131,8 @@ export function getOrCreateCollectionVault(
     cv.p2 = ZERO_BI;
     cv.secondsAccumulated = ZERO_BI;
     cv.secondsClaimed = ZERO_BI;
-    cv.totalRewards = ZERO_BI;
-    cv.totalRewardsClaimed = ZERO_BI;
+    cv.totalSubsidies = ZERO_BI;
+    cv.totalSubsidiesClaimed = ZERO_BI;
     cv.updatedAtBlock = ZERO_BI;
     cv.updatedAtTimestamp = ZERO_BI.toI32();
     cv.save();
@@ -140,29 +140,29 @@ export function getOrCreateCollectionVault(
   return cv;
 }
 
-export function getOrCreateAccountRewardsPerCollection(
+export function getOrCreateAccountSubsidiesPerCollection(
   accountAddress: Address,
   collectionVaultId: string,
   blockNumber: BigInt,
   timestamp: BigInt
-): AccountRewardsPerCollection {
+): AccountSubsidiesPerCollection {
   const account = getOrCreateAccount(accountAddress);
   const collectionVault = CollectionVault.load(collectionVaultId);
 
   if (collectionVault == null) {
     log.critical(
-      "getOrCreateAccountRewardsPerCollection: CollectionVault {} not found.",
+      "getOrCreateAccountSubsidiesPerCollection: CollectionVault {} not found.",
       [collectionVaultId]
     );
     throw new Error(
-      `CRITICAL: CollectionVault with id ${collectionVaultId} not found in getOrCreateAccountRewardsPerCollection. This should not happen.`
+      `CRITICAL: CollectionVault with id ${collectionVaultId} not found in getOrCreateAccountSubsidiesPerCollection. This should not happen.`
     );
   }
 
   const vaultEntity = Vault.load(collectionVault.vault);
   if (!vaultEntity) {
     throw new Error(
-      `CRITICAL: Vault with id ${collectionVaultId} not found when creating AccountRewardsPerCollection. This should not happen.`
+      `CRITICAL: Vault with id ${collectionVaultId} not found when creating AccountSubsidiesPerCollection. This should not happen.`
     );
   }
 
@@ -175,30 +175,30 @@ export function getOrCreateAccountRewardsPerCollection(
     cTokenMarketForVault
   );
 
-  const id = generateAccountRewardsPerCollectionId(
+  const id = generateAccountSubsidiesPerCollectionId(
     account.id,
     collectionVault.id
   );
-  let arpc = AccountRewardsPerCollection.load(id);
+  let apsc = AccountSubsidiesPerCollection.load(id);
 
-  if (arpc == null) {
-    arpc = new AccountRewardsPerCollection(id);
-    arpc.account = account.id;
-    arpc.vault = collectionVault.vault;
-    arpc.collection = collectionVault.collection;
-    arpc.accountMarket = accountMarket.id;
-    arpc.collectionVault = collectionVault.id;
-    arpc.balanceNFT = ZERO_BI;
-    arpc.seconds = ZERO_BI;
-    arpc.updatedAtBlock = blockNumber;
-    arpc.updatedAtTimestamp = timestamp.toI32();
-    arpc.save();
+  if (apsc == null) {
+    apsc = new AccountSubsidiesPerCollection(id);
+    apsc.account = account.id;
+    apsc.vault = collectionVault.vault;
+    apsc.collection = collectionVault.collection;
+    apsc.accountMarket = accountMarket.id;
+    apsc.collectionVault = collectionVault.id;
+    apsc.balanceNFT = ZERO_BI;
+    apsc.seconds = ZERO_BI;
+    apsc.updatedAtBlock = blockNumber;
+    apsc.updatedAtTimestamp = timestamp.toI32();
+    apsc.save();
   } else {
-    arpc.updatedAtBlock = blockNumber;
-    arpc.updatedAtTimestamp = timestamp.toI32();
-    arpc.save();
+    apsc.updatedAtBlock = blockNumber;
+    apsc.updatedAtTimestamp = timestamp.toI32();
+    apsc.save();
   }
-  return arpc;
+  return apsc;
 }
 
 export function getOrCreateAccountMarket(
@@ -229,7 +229,11 @@ export function getOrCreateUserEpochEligibility(
   epochId: string,
   collectionId: string
 ): UserEpochEligibility {
-  const id = accountId.concat("-").concat(epochId).concat("-").concat(collectionId);
+  const id = accountId
+    .concat("-")
+    .concat(epochId)
+    .concat("-")
+    .concat(collectionId);
   let userEpochEligibility = UserEpochEligibility.load(id);
 
   if (userEpochEligibility == null) {
@@ -239,23 +243,38 @@ export function getOrCreateUserEpochEligibility(
     // Collection should be created by Collection-related handlers or dynamically
     const account = Account.load(accountId);
     if (account == null) {
-      log.critical("getOrCreateUserEpochEligibility: Account {} not found. Cannot create UserEpochEligibility {}.", [accountId, id]);
+      log.critical(
+        "getOrCreateUserEpochEligibility: Account {} not found. Cannot create UserEpochEligibility {}.",
+        [accountId, id]
+      );
       // This is a critical error, as the account should exist or be created before this call.
       // Depending on strictness, could throw or return a new unlinked entity.
       // For now, let's assume the caller ensures Account exists.
-      throw new Error(`Account ${accountId} not found when trying to create UserEpochEligibility ${id}`);
+      throw new Error(
+        `Account ${accountId} not found when trying to create UserEpochEligibility ${id}`
+      );
     }
 
     const epoch = Epoch.load(epochId);
     if (epoch == null) {
-      log.critical("getOrCreateUserEpochEligibility: Epoch {} not found. Cannot create UserEpochEligibility {}.", [epochId, id]);
-      throw new Error(`Epoch ${epochId} not found when trying to create UserEpochEligibility ${id}`);
+      log.critical(
+        "getOrCreateUserEpochEligibility: Epoch {} not found. Cannot create UserEpochEligibility {}.",
+        [epochId, id]
+      );
+      throw new Error(
+        `Epoch ${epochId} not found when trying to create UserEpochEligibility ${id}`
+      );
     }
 
     const collection = Collection.load(collectionId);
     if (collection == null) {
-      log.critical("getOrCreateUserEpochEligibility: Collection {} not found. Cannot create UserEpochEligibility {}.", [collectionId, id]);
-      throw new Error(`Collection ${collectionId} not found when trying to create UserEpochEligibility ${id}`);
+      log.critical(
+        "getOrCreateUserEpochEligibility: Collection {} not found. Cannot create UserEpochEligibility {}.",
+        [collectionId, id]
+      );
+      throw new Error(
+        `Collection ${collectionId} not found when trying to create UserEpochEligibility ${id}`
+      );
     }
 
     userEpochEligibility = new UserEpochEligibility(id);

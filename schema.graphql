@@ -25,7 +25,7 @@ type CTokenMarket @entity(immutable: false) {
   updatedAtTimestamp: Timestamp!
 }
 
-# Represents a rewards vault, which is Collection vault contract
+# Represents a Collection vault contract
 type Vault @entity(immutable: false) {
   id: ID!
   cTokenMarket: CTokenMarket!
@@ -44,9 +44,9 @@ type Account @entity(immutable: false) {
   id: ID!
   totalSecondsClaimed: BigInt!
   markets: [AccountMarket!]! @derivedFrom(field: "account")
-  accountRewards: [AccountRewardsPerCollection!]! @derivedFrom(field: "account")
+  accountSubsidies: [AccountSubsidiesPerCollection!]!
+    @derivedFrom(field: "account")
 }
-
 
 type Collection @entity(immutable: false) {
   id: ID!
@@ -57,7 +57,7 @@ type Collection @entity(immutable: false) {
   vaults: [CollectionVault!]! @derivedFrom(field: "collection")
 }
 
-# Represents a collection's reward configuration and deposit/market state within a specific Vault
+# Represents a collection's subsidy configuration and deposit/market state within a specific Vault
 type CollectionVault @entity(immutable: false) {
   id: ID!
   collection: Collection!
@@ -75,14 +75,14 @@ type CollectionVault @entity(immutable: false) {
   p2: BigInt!
   secondsAccumulated: BigInt!
   secondsClaimed: BigInt!
-  totalRewards: BigInt!
-  totalRewardsClaimed: BigInt!
+  totalSubsidies: BigInt!
+  totalSubsidiesClaimed: BigInt!
   updatedAtBlock: BigInt!
   updatedAtTimestamp: Timestamp!
 }
 
-# Tracks an account's specific reward accrual state for a CollectionVault configuration
-type AccountRewardsPerCollection @entity(immutable: false) {
+# Tracks an account's specific subsidy accrual state for a CollectionVault configuration
+type AccountSubsidiesPerCollection @entity(immutable: false) {
   id: ID!
   account: Account!
   vault: Vault!
@@ -141,7 +141,6 @@ type SubsidyTransaction @entity(immutable: true) {
   transactionHash: Bytes!
 }
 
-
 type EpochVaultAllocation @entity(immutable: false) {
   id: ID!
   epoch: Epoch!
@@ -171,16 +170,6 @@ type UserEpochEligibility @entity(immutable: false) {
   subsidyReceived: BigInt!
   isEligible: Boolean!
 }
-
-type TrustedSignerUpdate @entity(immutable: true) {
-  id: ID!
-  oldSigner: Bytes!
-  newSigner: Bytes!
-  blockNumber: BigInt!
-  timestamp: BigInt!
-  transactionHash: Bytes!
-}
-
 
 type CollectionYieldAccrual @entity(immutable: true) {
   id: ID!

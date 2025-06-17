@@ -1,19 +1,19 @@
 {
-  "name": "rewards",
+  "name": "subsidies",
   "license": "UNLICENSED",
   "scripts": {
     "codegen": "graph codegen",
     "build": "graph build",
-    "deploy": "npx graph deploy --node https://api.studio.thegraph.com/deploy/ rewards",
-    "create-local": "npx graph create --node http://localhost:8020/ rewards",
-    "remove-local": "npx graph remove --node http://localhost:8020/ rewards",
-    "deploy-local": "npx graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 rewards --version-label local",
+    "deploy": "npx graph deploy --node https://api.studio.thegraph.com/deploy/ subsidies",
+    "create-local": "npx graph create --node http://localhost:8020/ subsidies",
+    "remove-local": "npx graph remove --node http://localhost:8020/ subsidies",
+    "deploy-local": "npx graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 subsidies --version-label local",
     "test": "npx graph test",
     "coverage": "npx graph test --coverage",
     "test:integration": "jest --config jest.config.js tests/integration",
     "test:perf:sync": "hyperfine --warmup 1 'echo Placeholder for graph-node sync command'",
     "test:perf:query": "k6 run tests/performance/query_load.k6.js",
-    "test:perf:profile": "graphman profile --gql-url http://localhost:8000/subgraphs/name/rewards-subgraph --queries tests/performance/example_profile_queries.gql"
+    "test:perf:profile": "graphman profile --gql-url http://localhost:8000/subgraphs/name/subsidies-subgraph --queries tests/performance/example_profile_queries.gql"
   },
   "dependencies": {
     "@graphprotocol/graph-cli": "^0.97.1",

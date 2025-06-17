@@ -14,7 +14,7 @@ import {
   getOrCreateAccount,
   getOrCreateCTokenMarket,
 } from "./utils/getters";
-import { accrueAccountRewards } from "./utils/rewards";
+import { accrueAccountSubsidies } from "./utils/subsidies";
 
 const EXP_SCALE = BigInt.fromI32(10).pow(18);
 const PROTOCOL_SEIZE_SHARE_MANTISSA = BigInt.fromString("28000000000000000");
@@ -67,7 +67,7 @@ export function handleBorrow(event: BorrowEvent): void {
   market.updatedAtTimestamp = event.block.timestamp.toI64();
   market.save();
 
-  accrueAccountRewards(borrower, event.block.number, event.block.timestamp);
+  accrueAccountSubsidies(borrower, event.block.number, event.block.timestamp);
 }
 
 export function handleLiquidateBorrow(event: LiquidateBorrowEvent): void {
@@ -201,8 +201,16 @@ export function handleLiquidateBorrow(event: LiquidateBorrowEvent): void {
   collateralMarket.updatedAtTimestamp = event.block.timestamp.toI64();
   collateralMarket.save();
 
-  accrueAccountRewards(liquidatorAddress, event.block.number, event.block.timestamp);
-  accrueAccountRewards(borrowerAddress, event.block.number, event.block.timestamp);
+  accrueAccountSubsidies(
+    liquidatorAddress,
+    event.block.number,
+    event.block.timestamp
+  );
+  accrueAccountSubsidies(
+    borrowerAddress,
+    event.block.number,
+    event.block.timestamp
+  );
 }
 
 export function handleMint(event: MintEvent): void {
@@ -230,7 +238,7 @@ export function handleMint(event: MintEvent): void {
   market.updatedAtBlock = event.block.number;
   market.save();
 
-  accrueAccountRewards(minter, event.block.number, event.block.timestamp);
+  accrueAccountSubsidies(minter, event.block.number, event.block.timestamp);
 }
 
 export function handleRedeem(event: RedeemEvent): void {
@@ -261,7 +269,7 @@ export function handleRedeem(event: RedeemEvent): void {
   market.updatedAtBlock = event.block.number;
   market.save();
 
-  accrueAccountRewards(redeemer, event.block.number, event.block.timestamp);
+  accrueAccountSubsidies(redeemer, event.block.number, event.block.timestamp);
 }
 
 export function handleRepayBorrow(event: RepayBorrowEvent): void {
@@ -299,7 +307,11 @@ export function handleRepayBorrow(event: RepayBorrowEvent): void {
   market.updatedAtBlock = event.block.number;
   market.save();
 
-  accrueAccountRewards(borrowerAddress, event.block.number, event.block.timestamp);
+  accrueAccountSubsidies(
+    borrowerAddress,
+    event.block.number,
+    event.block.timestamp
+  );
 }
 
 export function handleTransfer(event: TransferEvent): void {
@@ -351,6 +363,10 @@ export function handleTransfer(event: TransferEvent): void {
   market.updatedAtTimestamp = event.block.timestamp.toI64();
   market.save();
 
-  accrueAccountRewards(fromAddress, event.block.number, event.block.timestamp);
-  accrueAccountRewards(toAddress, event.block.number, event.block.timestamp);
+  accrueAccountSubsidies(
+    fromAddress,
+    event.block.number,
+    event.block.timestamp
+  );
+  accrueAccountSubsidies(toAddress, event.block.number, event.block.timestamp);
 }

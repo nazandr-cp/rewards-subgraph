@@ -86,11 +86,11 @@ dataSources:
       eventHandlers:
         # - event: DebtSubsidized(indexed address,indexed address,indexed address,uint256) # Not found in ABI, commenting out
         #   handler: handleDebtSubsidized
-        - event: TrustedSignerUpdated(address,address,indexed address)
-          handler: handleTrustedSignerUpdated
+        # - event: TrustedSignerUpdated(address,address,indexed address) # Not found in current ABI
+        #   handler: handleTrustedSignerUpdated
         - event: MerkleRootUpdated(indexed address,bytes32,indexed address)
           handler: handleMerkleRootUpdated
-        - event: SubsidyClaimed(indexed address,indexed address,indexed address,uint256)
+        - event: SubsidyClaimed(indexed address,indexed address,uint256)
           handler: handleSubsidyClaimed
       file: ./src/debt-subsidizer-mapping.ts
 
@@ -162,7 +162,7 @@ templates:
         - AccountVault
         - Collection
         - CollectionVault
-        - AccountRewardsPerCollection
+        - AccountSubsidiesPerCollection
         - Account
         - CTokenMarket
       abis:
@@ -202,7 +202,7 @@ templates:
         - Collection
         - CollectionVault
         - Account
-        - AccountRewardsPerCollection
+        - AccountSubsidiesPerCollection
         - Vault
       abis:
         - name: CollectionVault

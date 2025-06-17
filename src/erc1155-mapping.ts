@@ -2,11 +2,14 @@ import { BigInt, log } from "@graphprotocol/graph-ts";
 import {
   TransferSingle as TransferSingleEvent,
   TransferBatch as TransferBatchEvent,
-} from "../generated/templates/ERC1155/ERC1155"; // Assuming this path is correct for templates
+} from "../generated/ERC1155Collection/ERC1155"; // Adjusted path, assuming similar structure to ERC721
 import { Collection, SystemState, Account } from "../generated/schema";
-import { accrueSeconds } from "./utils/rewards";
+import { accrueSeconds } from "./utils/subsidies";
 import { ADDRESS_ZERO_STR, SYSTEM_STATE_ID, ZERO_BI } from "./utils/const";
-import { getOrCreateAccountRewardsPerCollection, getOrCreateUserEpochEligibility } from "./utils/getters";
+import {
+  getOrCreateAccountSubsidiesPerCollection,
+  getOrCreateUserEpochEligibility,
+} from "./utils/getters";
 
 export function handleTransferSingle(event: TransferSingleEvent): void {
   const collectionAddress = event.address;
@@ -45,7 +48,7 @@ export function handleTransferSingle(event: TransferSingleEvent): void {
   if (activeEpochId != null) {
     if (fromAddress.toHexString() != ADDRESS_ZERO_STR) {
       let fromAccount = Account.load(fromAddress.toHexString());
-      if(fromAccount == null) {
+      if (fromAccount == null) {
         fromAccount = new Account(fromAddress.toHexString());
         fromAccount.totalSecondsClaimed = ZERO_BI;
         fromAccount.save();
@@ -55,13 +58,14 @@ export function handleTransferSingle(event: TransferSingleEvent): void {
         activeEpochId,
         collection.id
       );
-      userEpochEligibilityFrom.nftBalance = userEpochEligibilityFrom.nftBalance.minus(value);
+      userEpochEligibilityFrom.nftBalance =
+        userEpochEligibilityFrom.nftBalance.minus(value);
       userEpochEligibilityFrom.save();
     }
 
     if (toAddress.toHexString() != ADDRESS_ZERO_STR) {
       let toAccount = Account.load(toAddress.toHexString());
-      if(toAccount == null) {
+      if (toAccount == null) {
         toAccount = new Account(toAddress.toHexString());
         toAccount.totalSecondsClaimed = ZERO_BI;
         toAccount.save();
@@ -71,12 +75,13 @@ export function handleTransferSingle(event: TransferSingleEvent): void {
         activeEpochId,
         collection.id
       );
-      userEpochEligibilityTo.nftBalance = userEpochEligibilityTo.nftBalance.plus(value);
+      userEpochEligibilityTo.nftBalance =
+        userEpochEligibilityTo.nftBalance.plus(value);
       userEpochEligibilityTo.save();
     }
   }
 
-  // Original logic for AccountRewardsPerCollection (related to specific vaults)
+  // Original logic for AccountSubsidiesPerCollection (related to specific vaults)
   for (let i = 0; i < loadedCollectionVaults.length; i++) {
     const collectionVault = loadedCollectionVaults[i];
 
@@ -89,31 +94,31 @@ export function handleTransferSingle(event: TransferSingleEvent): void {
     }
 
     if (fromAddress.toHexString() != ADDRESS_ZERO_STR) {
-      const fromAccRewards = getOrCreateAccountRewardsPerCollection(
+      const fromAccSubsidies = getOrCreateAccountSubsidiesPerCollection(
         fromAddress,
         collectionVault.id,
         blockNumber,
         timestamp
       );
 
-      accrueSeconds(fromAccRewards, collectionVault, timestamp);
+      accrueSeconds(fromAccSubsidies, collectionVault, timestamp);
 
-      fromAccRewards.balanceNFT = fromAccRewards.balanceNFT.minus(value);
-      fromAccRewards.save();
+      fromAccSubsidies.balanceNFT = fromAccSubsidies.balanceNFT.minus(value);
+      fromAccSubsidies.save();
     }
 
     if (toAddress.toHexString() != ADDRESS_ZERO_STR) {
-      const toAccRewards = getOrCreateAccountRewardsPerCollection(
+      const toAccSubsidies = getOrCreateAccountSubsidiesPerCollection(
         toAddress,
         collectionVault.id,
         blockNumber,
         timestamp
       );
 
-      accrueSeconds(toAccRewards, collectionVault, timestamp);
+      accrueSeconds(toAccSubsidies, collectionVault, timestamp);
 
-      toAccRewards.balanceNFT = toAccRewards.balanceNFT.plus(value);
-      toAccRewards.save();
+      toAccSubsidies.balanceNFT = toAccSubsidies.balanceNFT.plus(value);
+      toAccSubsidies.save();
     }
   }
 }
@@ -160,7 +165,7 @@ export function handleTransferBatch(event: TransferBatchEvent): void {
   if (activeEpochId != null) {
     if (fromAddress.toHexString() != ADDRESS_ZERO_STR) {
       let fromAccount = Account.load(fromAddress.toHexString());
-      if(fromAccount == null) {
+      if (fromAccount == null) {
         fromAccount = new Account(fromAddress.toHexString());
         fromAccount.totalSecondsClaimed = ZERO_BI;
         fromAccount.save();
@@ -170,13 +175,14 @@ export function handleTransferBatch(event: TransferBatchEvent): void {
         activeEpochId,
         collection.id
       );
-      userEpochEligibilityFrom.nftBalance = userEpochEligibilityFrom.nftBalance.minus(totalValue);
+      userEpochEligibilityFrom.nftBalance =
+        userEpochEligibilityFrom.nftBalance.minus(totalValue);
       userEpochEligibilityFrom.save();
     }
 
     if (toAddress.toHexString() != ADDRESS_ZERO_STR) {
       let toAccount = Account.load(toAddress.toHexString());
-      if(toAccount == null) {
+      if (toAccount == null) {
         toAccount = new Account(toAddress.toHexString());
         toAccount.totalSecondsClaimed = ZERO_BI;
         toAccount.save();
@@ -186,7 +192,8 @@ export function handleTransferBatch(event: TransferBatchEvent): void {
         activeEpochId,
         collection.id
       );
-      userEpochEligibilityTo.nftBalance = userEpochEligibilityTo.nftBalance.plus(totalValue);
+      userEpochEligibilityTo.nftBalance =
+        userEpochEligibilityTo.nftBalance.plus(totalValue);
       userEpochEligibilityTo.save();
     }
   }
@@ -195,13 +202,13 @@ export function handleTransferBatch(event: TransferBatchEvent): void {
 
   if (loadedCollectionVaults.length == 0) {
     log.info(
-      "handleTransferBatch: Collection {} is not registered in any CollectionVault. Skipping AccountRewardsPerCollection update.",
+      "handleTransferBatch: Collection {} is not registered in any CollectionVault. Skipping AccountSubsidiesPerCollection update.",
       [collectionAddress.toHexString()]
     );
-    return; // If no vaults, no AccountRewardsPerCollection to update. UserEpochEligibility is already handled.
+    return; // If no vaults, no AccountSubsidiesPerCollection to update. UserEpochEligibility is already handled.
   }
 
-  // Original logic for AccountRewardsPerCollection (related to specific vaults)
+  // Original logic for AccountSubsidiesPerCollection (related to specific vaults)
   for (let i = 0; i < loadedCollectionVaults.length; i++) {
     const collectionVault = loadedCollectionVaults[i];
 
@@ -214,31 +221,32 @@ export function handleTransferBatch(event: TransferBatchEvent): void {
     }
 
     if (fromAddress.toHexString() != ADDRESS_ZERO_STR) {
-      const fromAccRewards = getOrCreateAccountRewardsPerCollection(
+      const fromAccSubsidies = getOrCreateAccountSubsidiesPerCollection(
         fromAddress,
         collectionVault.id,
         blockNumber,
         timestamp
       );
 
-      accrueSeconds(fromAccRewards, collectionVault, timestamp);
+      accrueSeconds(fromAccSubsidies, collectionVault, timestamp);
 
-      fromAccRewards.balanceNFT = fromAccRewards.balanceNFT.minus(totalValue);
-      fromAccRewards.save();
+      fromAccSubsidies.balanceNFT =
+        fromAccSubsidies.balanceNFT.minus(totalValue);
+      fromAccSubsidies.save();
     }
 
     if (toAddress.toHexString() != ADDRESS_ZERO_STR) {
-      const toAccRewards = getOrCreateAccountRewardsPerCollection(
+      const toAccSubsidies = getOrCreateAccountSubsidiesPerCollection(
         toAddress,
         collectionVault.id,
         blockNumber,
         timestamp
       );
 
-      accrueSeconds(toAccRewards, collectionVault, timestamp);
+      accrueSeconds(toAccSubsidies, collectionVault, timestamp);
 
-      toAccRewards.balanceNFT = toAccRewards.balanceNFT.plus(totalValue);
-      toAccRewards.save();
+      toAccSubsidies.balanceNFT = toAccSubsidies.balanceNFT.plus(totalValue);
+      toAccSubsidies.save();
     }
   }
 }
