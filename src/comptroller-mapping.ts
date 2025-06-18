@@ -1,7 +1,8 @@
-import { MarketListed } from "../generated/Comptroller/Comptroller";
+import { MarketListed, MarketEntered } from "../generated/Comptroller/Comptroller";
 import { cToken } from "../generated/templates";
 import { cToken as CToken } from "../generated/Comptroller/cToken";
 import { getOrCreateCTokenMarket } from "./utils/getters";
+import { log } from "@graphprotocol/graph-ts";
 
 export function handleMarketListed(event: MarketListed): void {
   cToken.create(event.params.cToken);
@@ -26,4 +27,18 @@ export function handleMarketListed(event: MarketListed): void {
   cTokenMarket.updatedAtBlock = event.block.number;
   cTokenMarket.updatedAtTimestamp = event.block.timestamp;
   cTokenMarket.save();
+}
+
+export function handleMarketEntered(event: MarketEntered): void {
+  const user = event.params.account;
+  const cToken = event.params.cToken;
+  
+  log.info("MarketEntered: User {} entered market {}", [
+    user.toHexString(),
+    cToken.toHexString()
+  ]);
+  
+  // Export test data for E2E integration
+  const testData = `{"user": "${user.toHexString()}", "cToken": "${cToken.toHexString()}", "eventType": "MARKET_ENTERED"}`;
+  log.info("E2E_TEST_DATA: MARKET_ENTRY - {}", [testData]);
 }

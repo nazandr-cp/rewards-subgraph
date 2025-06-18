@@ -4,8 +4,16 @@ import {
   VaultYieldAllocatedToEpoch as VaultYieldAllocatedToEpochEvent,
   CollectionYieldAppliedForEpoch as CollectionYieldAppliedForEpochEvent,
 } from "../generated/templates/CollectionVault/CollectionVault";
-import { log, Address, ethereum } from "@graphprotocol/graph-ts"; // Removed BigInt from here
-import { CollectionsVault, Epoch, EpochVaultAllocation, CollectionYieldApplication, CollectionYieldAccrual, SubsidyDistribution, CTokenMarket } from "../generated/schema";
+import { log, Address, ethereum } from "@graphprotocol/graph-ts";
+import {
+  CollectionsVault,
+  Epoch,
+  EpochVaultAllocation,
+  CollectionYieldApplication,
+  CollectionYieldAccrual,
+  SubsidyDistribution,
+  CTokenMarket
+} from "../generated/schema";
 
 import { getOrCreateCollectionVault } from "./utils/getters";
 import { ZERO_BI, BIGINT_1E18 } from "./utils/const";
@@ -76,6 +84,14 @@ export function handleCollectionDeposit(event: CollectionDepositEvent): void {
       collVault.principalDeposited.toString(),
     ]
   );
+
+  // Export test data for E2E integration
+  const testData = `{"depositor": "${event.params.receiver.toHexString()}", "collection": "${collectionAddress.toHexString()}", "vault": "${vaultAddress.toHexString()}", "amount": "${assets.toString()}", "shares": "${shares.toString()}"}`;
+  log.info("E2E_TEST_DATA: DEPOSIT - {}", [testData]);
+}
+
+export function handleDepositForCollection(event: CollectionDepositEvent): void {
+  handleCollectionDeposit(event);
 }
 
 export function handleCollectionWithdraw(event: CollectionWithdrawEvent): void {

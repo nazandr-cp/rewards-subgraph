@@ -68,6 +68,10 @@ export function handleBorrow(event: BorrowEvent): void {
   market.save();
 
   accrueAccountSubsidies(borrower, event.block.number, event.block.timestamp);
+
+  // Export test data for E2E integration
+  const testData = `{"borrower": "${borrower.toHexString()}", "cToken": "${event.address.toHexString()}", "amount": "${event.params.borrowAmount.toString()}", "accountBorrows": "${accountBorrows.toString()}", "totalBorrows": "${totalBorrows.toString()}"}`;
+  log.info("E2E_TEST_DATA: BORROW - {}", [testData]);
 }
 
 export function handleLiquidateBorrow(event: LiquidateBorrowEvent): void {

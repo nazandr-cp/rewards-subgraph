@@ -47,6 +47,10 @@ export function handleEpochStarted(event: EpochStarted): void {
   }
   systemState.activeEpochId = epochId;
   systemState.save();
+
+  // Export test data for E2E integration
+  const testData = `{"epochId": "${epochId}", "eventType": "STARTED", "startTime": "${event.params.startTime.toString()}", "endTime": "${event.params.endTime.toString()}"}`;
+  log.info("E2E_TEST_DATA: EPOCH - {}", [testData]);
 }
 
 export function handleEpochProcessingStarted(event: EpochProcessingStarted): void {
@@ -99,6 +103,10 @@ export function handleEpochFinalized(event: EpochFinalized): void {
     } else {
       log.warning("handleEpochFinalized: SystemState entity not found. Cannot clear activeEpochId for epoch {}.", [epochId]);
     }
+
+    // Export test data for E2E integration
+    const testData = `{"epochId": "${epochId}", "eventType": "FINALIZED", "totalYieldAvailable": "${event.params.totalYieldAvailable.toString()}", "totalSubsidiesDistributed": "${event.params.totalSubsidiesDistributed.toString()}"}`;
+    log.info("E2E_TEST_DATA: EPOCH - {}", [testData]);
   }
 }
 

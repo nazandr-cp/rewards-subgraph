@@ -189,11 +189,15 @@ export function handleSubsidyClaimed(event: SubsidyClaimed): void {
     "SubsidyClaimed: Created SubsidyDistribution {} for user {} in vault {} with amount {}. Epoch total subsidies: {}, VaultAllocation subsidies: {}",
     [
       subsidyTxId,
-      event.params.recipient.toHexString(), // Changed from user to recipient
-      event.params.vaultAddress.toHexString(), // Changed from vault to vaultAddress
+      event.params.recipient.toHexString(),
+      event.params.vaultAddress.toHexString(),
       event.params.amount.toString(),
       epoch.totalSubsidiesDistributed.toString(),
       vaultAllocation.subsidiesDistributed.toString(),
     ]
   );
+
+  // Export test data for E2E integration
+  const testData = `{"user": "${event.params.recipient.toHexString()}", "vault": "${event.params.vaultAddress.toHexString()}", "amount": "${event.params.amount.toString()}", "epoch": "${epoch.id}"}`;
+  log.info("E2E_TEST_DATA: SUBSIDY_CLAIM - {}", [testData]);
 }

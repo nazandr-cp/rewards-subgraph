@@ -755,3 +755,63 @@ type DailyMetrics @entity(immutable: true) {
   # Metadata
   timestamp: BigInt!
 }
+
+# E2E Testing specific entities
+
+"""
+Collection deposit events for E2E testing
+"""
+type CollectionDeposit @entity(immutable: true) {
+  id: ID!
+  depositor: Bytes!
+  collection: Bytes!
+  vault: Bytes!
+  amount: BigInt!
+  shares: BigInt!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+}
+
+"""
+Borrow events from Compound protocol for E2E testing
+"""
+type Borrow @entity(immutable: true) {
+  id: ID!
+  borrower: Bytes!
+  cToken: Bytes!
+  amount: BigInt!
+  accountBorrows: BigInt!
+  totalBorrows: BigInt!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+}
+
+"""
+User balance tracking for E2E testing
+"""
+type UserBalance @entity(immutable: false) {
+  id: ID!
+  user: Bytes!
+  collection: Bytes!
+  vault: Bytes!
+  vaultShares: BigInt!
+  borrowBalance: BigInt!
+  nftBalance: BigInt!
+  lastUpdated: BigInt!
+}
+
+"""
+Yield allocation events for E2E testing
+"""
+type YieldAllocation @entity(immutable: true) {
+  id: ID!
+  epoch: Bytes!
+  vault: Bytes!
+  collection: Bytes!
+  amount: BigInt!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+}

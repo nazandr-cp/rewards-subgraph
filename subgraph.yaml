@@ -17,6 +17,7 @@ dataSources:
       language: wasm/assemblyscript
       entities:
         - CTokenMarket
+        - Borrow
       abis:
         - name: Comptroller
           file: ./abis/Comptroller.json
@@ -25,6 +26,8 @@ dataSources:
       eventHandlers:
         - event: MarketListed(address)
           handler: handleMarketListed
+        - event: MarketEntered(address,address)
+          handler: handleMarketEntered
       file: ./src/comptroller-mapping.ts
 
   - kind: ethereum
@@ -84,10 +87,6 @@ dataSources:
         - name: DebtSubsidizer
           file: ./abis/DebtSubsidizer.json
       eventHandlers:
-        # - event: DebtSubsidized(indexed address,indexed address,indexed address,uint256) # Not found in ABI, commenting out
-        #   handler: handleDebtSubsidized
-        # - event: TrustedSignerUpdated(address,address,indexed address) # Not found in current ABI
-        #   handler: handleTrustedSignerUpdated
         - event: MerkleRootUpdated(indexed address,bytes32,indexed address)
           handler: handleMerkleRootUpdated
         - event: SubsidyClaimed(indexed address,indexed address,uint256)
@@ -212,6 +211,8 @@ templates:
       eventHandlers:
         - event: CollectionDeposit(indexed address,indexed address,indexed address,uint256,uint256,uint256)
           handler: handleCollectionDeposit
+        - event: DepositForCollection(indexed address,indexed address,uint256,uint256)
+          handler: handleDepositForCollection
         - event: CollectionWithdraw(indexed address,indexed address,indexed address,uint256,uint256,uint256)
           handler: handleCollectionWithdraw
         - event: VaultYieldAllocatedToEpoch(indexed uint256,uint256)

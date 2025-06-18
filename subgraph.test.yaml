@@ -1,0 +1,161 @@
+specVersion: 0.0.4
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: CollectionsVault
+    network: anvil
+    source:
+      address: "{{COLLECTIONS_VAULT_ADDRESS}}"
+      abi: CollectionsVault
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      entities:
+        - CollectionsVault
+        - CollectionDeposit
+        - UserBalance
+        - YieldAllocation
+        - EpochVaultAllocation
+      abis:
+        - name: CollectionsVault
+          file: ./abis/CollectionsVault.json
+        - name: cToken
+          file: ./abis/cToken.json
+      eventHandlers:
+        - event: CollectionDeposit(indexed address,indexed address,indexed address,uint256,uint256,uint256)
+          handler: handleCollectionDeposit
+        - event: CollectionWithdraw(indexed address,indexed address,indexed address,uint256,uint256,uint256)
+          handler: handleCollectionWithdraw
+        - event: VaultYieldAllocatedToEpoch(indexed uint256,uint256)
+          handler: handleVaultYieldAllocatedToEpoch
+        - event: CollectionYieldAccrued(indexed address,uint256,uint256,uint256,uint256)
+          handler: handleCollectionYieldAccrued
+        - event: CollectionYieldAppliedForEpoch(indexed uint256,indexed address,uint16,uint256,uint256)
+          handler: handleCollectionYieldAppliedForEpoch
+      file: ./src/collection-vault-mapping.ts
+
+  - kind: ethereum
+    name: DebtSubsidizer
+    network: anvil
+    source:
+      address: "{{DEBT_SUBSIDIZER_ADDRESS}}"
+      abi: DebtSubsidizer
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      entities:
+        - SubsidyDistribution
+        - SubsidyClaim
+        - UserSubsidy
+        - MerkleDistribution
+        - Account
+        - CollectionsVault
+        - Epoch
+      abis:
+        - name: DebtSubsidizer
+          file: ./abis/DebtSubsidizer.json
+      eventHandlers:
+        - event: SubsidyClaimed(indexed address,indexed address,uint256)
+          handler: handleSubsidyClaimed
+        - event: MerkleRootUpdated(indexed address,bytes32,indexed address)
+          handler: handleMerkleRootUpdated
+      file: ./src/debt-subsidizer-mapping.ts
+
+  - kind: ethereum
+    name: EpochManager
+    network: anvil
+    source:
+      address: "{{EPOCH_MANAGER_ADDRESS}}"
+      abi: EpochManager
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      entities:
+        - Epoch
+        - EpochTransition
+        - EpochVaultAllocation
+        - CollectionsVault
+        - SystemState
+      abis:
+        - name: EpochManager
+          file: ./abis/EpochManager.json
+      eventHandlers:
+        - event: EpochStarted(indexed uint256,uint256,uint256)
+          handler: handleEpochStarted
+        - event: EpochProcessingStarted(indexed uint256)
+          handler: handleEpochProcessingStarted
+        - event: EpochFinalized(indexed uint256,uint256,uint256)
+          handler: handleEpochFinalized
+        - event: VaultYieldAllocated(indexed uint256,indexed address,uint256)
+          handler: handleEpochManagerVaultYieldAllocated
+        - event: EpochFailed(indexed uint256,string)
+          handler: handleEpochFailed
+      file: ./src/epoch-manager-mapping.ts
+
+  - kind: ethereum
+    name: CompoundProtocol
+    network: anvil
+    source:
+      address: "{{COMPTROLLER_ADDRESS}}"
+      abi: Comptroller
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      entities:
+        - Borrow
+        - UserDebt
+      abis:
+        - name: Comptroller
+          file: ./abis/Comptroller.json
+        - name: CToken
+          file: ./abis/cToken.json
+      eventHandlers:
+        - event: MarketEntered(address,address)
+          handler: handleMarketEntered
+      file: ./src/compound-mapping.ts
+
+templates:
+  - kind: ethereum/contract
+    name: cToken
+    network: anvil
+    source:
+      abi: cToken
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      file: ./src/cToken-mapping.ts
+      entities:
+        - CTokenMarket
+        - AccountMarket
+        - Account
+        - Borrow
+      abis:
+        - name: cToken
+          file: ./abis/cToken.json
+        - name: ERC20
+          file: ./abis/ERC20.json
+        - name: Comptroller
+          file: ./abis/Comptroller.json
+      eventHandlers:
+        - event: AccrueInterest(uint256,uint256,uint256,uint256)
+          handler: handleAccrueInterest
+        - event: Borrow(address,uint256,uint256,uint256)
+          handler: handleBorrow
+        - event: Mint(address,uint256,uint256)
+          handler: handleMint
+        - event: Redeem(address,uint256,uint256)
+          handler: handleRedeem
+        - event: RepayBorrow(address,address,uint256,uint256,uint256)
+          handler: handleRepayBorrow
+        - event: Transfer(indexed address,indexed address,uint256)
+          handler: handleTransfer
