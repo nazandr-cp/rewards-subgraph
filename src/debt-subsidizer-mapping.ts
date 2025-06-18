@@ -3,9 +3,9 @@ import {
   SubsidyClaimed,
 } from "../generated/DebtSubsidizer/DebtSubsidizer";
 import {
-  SubsidyTransaction,
+  SubsidyDistribution,
   Account,
-  Vault,
+  CollectionsVault,
   Epoch,
   SystemState,
   MerkleDistribution,
@@ -39,21 +39,27 @@ export function handleMerkleRootUpdated(event: MerkleRootUpdated): void {
   }
 
   // --- Load/Create Vault ---
-  let vault = Vault.load(event.params.vaultAddress.toHexString());
+  let vault = CollectionsVault.load(event.params.vaultAddress.toHexString());
   if (vault == null) {
     log.warning(
       "handleMerkleRootUpdated: Vault {} not found. Creating minimal vault for event {}.",
       [event.params.vaultAddress.toHexString(), eventIdBase]
     );
-    vault = new Vault(event.params.vaultAddress.toHexString());
+    vault = new CollectionsVault(event.params.vaultAddress.toHexString());
     vault.cTokenMarket = "UNKNOWN_CTOKEN_MARKET_ID_MERKLE";
     vault.totalShares = BigInt.fromI32(0);
     vault.totalDeposits = BigInt.fromI32(0);
     vault.totalCTokens = BigInt.fromI32(0);
     vault.globalDepositIndex = BigInt.fromI32(0);
     vault.totalPrincipalDeposited = BigInt.fromI32(0);
+    vault.collectionRegistry = "";
+    vault.epochManager = "";
+    vault.lendingManager = "";
+    vault.debtSubsidizer = "";
+    vault.createdAtBlock = event.block.number;
+    vault.createdAtTimestamp = event.block.timestamp;
     vault.updatedAtBlock = event.block.number;
-    vault.updatedAtTimestamp = event.block.timestamp.toI64();
+    vault.updatedAtTimestamp = event.block.timestamp;
     vault.save();
   }
 
@@ -117,7 +123,7 @@ export function handleSubsidyClaimed(event: SubsidyClaimed): void {
   }
 
   // --- Load Vault (must exist) ---
-  const loadedVault = Vault.load(event.params.vaultAddress.toHexString());
+  const loadedVault = CollectionsVault.load(event.params.vaultAddress.toHexString());
   if (loadedVault == null) {
     log.critical(
       "handleSubsidyClaimed: Vault {} not found for event {}. Cannot process.",
@@ -127,14 +133,17 @@ export function handleSubsidyClaimed(event: SubsidyClaimed): void {
   }
 
   const subsidyTxId = "CLAIMTX-" + eventIdBase;
-  const subsidyTx = new SubsidyTransaction(subsidyTxId);
+  const subsidyTx = new SubsidyDistribution(subsidyTxId);
   subsidyTx.epoch = epoch.id;
   subsidyTx.user = account.id;
   subsidyTx.collection = "UNKNOWN_COLLECTION";
   subsidyTx.vault = loadedVault.id;
+  subsidyTx.debtSubsidizer = ""; // Will be set when DebtSubsidizer entity is available
   subsidyTx.subsidyAmount = event.params.amount;
   subsidyTx.borrowAmountBefore = BigInt.fromI32(0);
   subsidyTx.borrowAmountAfter = BigInt.fromI32(0);
+  subsidyTx.nftBalance = BigInt.fromI32(0);
+  subsidyTx.weightedContribution = BigInt.fromI32(0);
   subsidyTx.gasUsed =
     event.receipt != null ? event.receipt!.gasUsed : BigInt.fromI32(0);
   subsidyTx.blockNumber = event.block.number;
@@ -177,7 +186,7 @@ export function handleSubsidyClaimed(event: SubsidyClaimed): void {
   vaultAllocation.save();
 
   log.info(
-    "SubsidyClaimed: Created SubsidyTransaction {} for user {} in vault {} with amount {}. Epoch total subsidies: {}, VaultAllocation subsidies: {}",
+    "SubsidyClaimed: Created SubsidyDistribution {} for user {} in vault {} with amount {}. Epoch total subsidies: {}, VaultAllocation subsidies: {}",
     [
       subsidyTxId,
       event.params.recipient.toHexString(), // Changed from user to recipient

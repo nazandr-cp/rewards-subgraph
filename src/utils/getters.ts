@@ -2,8 +2,8 @@ import { BigInt, Address, log } from "@graphprotocol/graph-ts";
 import {
   Account,
   Collection,
-  Vault,
-  CollectionVault,
+  CollectionsVault,
+  CollectionParticipation,
   AccountSubsidiesPerCollection,
   CTokenMarket,
   AccountMarket,
@@ -60,9 +60,9 @@ export function getOrCreateCTokenMarket(address: Address): CTokenMarket {
     cTokenMarket.cashPrior = ZERO_BI;
     cTokenMarket.collateralFactor = ZERO_BI;
     cTokenMarket.borrowIndex = ZERO_BI;
-    cTokenMarket.lastExchangeRateTimestamp = ZERO_BI.toI32();
+    cTokenMarket.lastExchangeRateTimestamp = ZERO_BI;
     cTokenMarket.updatedAtBlock = ZERO_BI;
-    cTokenMarket.updatedAtTimestamp = ZERO_BI.toI32();
+    cTokenMarket.updatedAtTimestamp = ZERO_BI;
     cTokenMarket.save();
   }
   return cTokenMarket;
@@ -74,7 +74,7 @@ export function getOrCreateCollection(collectionAddress: Address): Collection {
     collection = new Collection(collectionAddress.toHexString());
     collection.name = "Unknown Collection";
     collection.symbol = "UNKN";
-    collection.totalNFTs = ZERO_BI;
+    collection.totalSupply = ZERO_BI;
     collection.collectionType = "ERC721";
     collection.save();
   }
@@ -84,10 +84,10 @@ export function getOrCreateCollection(collectionAddress: Address): Collection {
 export function getOrCreateVault(
   vaultAddress: Address,
   cTokenMarketAddress: Address
-): Vault {
-  let vault = Vault.load(vaultAddress.toHexString());
+): CollectionsVault {
+  let vault = CollectionsVault.load(vaultAddress.toHexString());
   if (vault == null) {
-    vault = new Vault(vaultAddress.toHexString());
+    vault = new CollectionsVault(vaultAddress.toHexString());
     const cTokenMarket = getOrCreateCTokenMarket(cTokenMarketAddress);
     vault.cTokenMarket = cTokenMarket.id;
     vault.totalShares = ZERO_BI;
@@ -95,8 +95,10 @@ export function getOrCreateVault(
     vault.totalCTokens = ZERO_BI;
     vault.globalDepositIndex = ZERO_BI;
     vault.totalPrincipalDeposited = ZERO_BI;
+    vault.createdAtBlock = ZERO_BI;
+    vault.createdAtTimestamp = ZERO_BI;
     vault.updatedAtBlock = ZERO_BI;
-    vault.updatedAtTimestamp = ZERO_BI.toI32();
+    vault.updatedAtTimestamp = ZERO_BI;
     vault.save();
   }
   return vault;
@@ -106,16 +108,16 @@ export function getOrCreateCollectionVault(
   vaultAddress: Address,
   collectionAddress: Address,
   cTokenMarketAddress: Address
-): CollectionVault {
+): CollectionParticipation {
   const collection = getOrCreateCollection(collectionAddress);
   const vaultId = vaultAddress.toHexString();
 
   const id = generateCollectionVaultId(vaultId, collection.id);
-  let cv = CollectionVault.load(id);
+  let cv = CollectionParticipation.load(id);
 
   if (cv == null) {
     const vault = getOrCreateVault(vaultAddress, cTokenMarketAddress);
-    cv = new CollectionVault(id);
+    cv = new CollectionParticipation(id);
     cv.collection = collection.id;
     cv.vault = vault.id;
     cv.principalShares = ZERO_BI;
@@ -125,16 +127,19 @@ export function getOrCreateCollectionVault(
     cv.lastGlobalDepositIndex = ZERO_BI;
     cv.yieldAccrued = ZERO_BI;
     cv.isBorrowBased = true;
-    cv.rewardSharePercentage = 0;
-    cv.fnType = "LINEAR";
-    cv.p1 = ZERO_BI;
-    cv.p2 = ZERO_BI;
+    cv.rewardSharePercentage = ZERO_BI;
+    cv.weightFunctionType = "LINEAR";
+    cv.weightFunctionP1 = ZERO_BI;
+    cv.weightFunctionP2 = ZERO_BI;
     cv.secondsAccumulated = ZERO_BI;
     cv.secondsClaimed = ZERO_BI;
     cv.totalSubsidies = ZERO_BI;
     cv.totalSubsidiesClaimed = ZERO_BI;
     cv.updatedAtBlock = ZERO_BI;
-    cv.updatedAtTimestamp = ZERO_BI.toI32();
+    cv.createdAtBlock = ZERO_BI;
+    cv.createdAtTimestamp = ZERO_BI;
+    cv.updatedAtBlock = ZERO_BI;
+    cv.updatedAtTimestamp = ZERO_BI;
     cv.save();
   }
   return cv;
@@ -147,7 +152,7 @@ export function getOrCreateAccountSubsidiesPerCollection(
   timestamp: BigInt
 ): AccountSubsidiesPerCollection {
   const account = getOrCreateAccount(accountAddress);
-  const collectionVault = CollectionVault.load(collectionVaultId);
+  const collectionVault = CollectionParticipation.load(collectionVaultId);
 
   if (collectionVault == null) {
     log.critical(
@@ -159,7 +164,7 @@ export function getOrCreateAccountSubsidiesPerCollection(
     );
   }
 
-  const vaultEntity = Vault.load(collectionVault.vault);
+  const vaultEntity = CollectionsVault.load(collectionVault.vault);
   if (!vaultEntity) {
     throw new Error(
       `CRITICAL: Vault with id ${collectionVaultId} not found when creating AccountSubsidiesPerCollection. This should not happen.`
@@ -187,15 +192,21 @@ export function getOrCreateAccountSubsidiesPerCollection(
     apsc.vault = collectionVault.vault;
     apsc.collection = collectionVault.collection;
     apsc.accountMarket = accountMarket.id;
-    apsc.collectionVault = collectionVault.id;
+    apsc.collectionParticipation = collectionVault.id;
     apsc.balanceNFT = ZERO_BI;
-    apsc.seconds = ZERO_BI;
+    apsc.secondsAccumulated = ZERO_BI;
+    apsc.secondsClaimed = ZERO_BI;
+    apsc.subsidiesAccrued = ZERO_BI;
+    apsc.subsidiesClaimed = ZERO_BI;
+    apsc.weightedBalance = ZERO_BI;
+    apsc.averageHoldingPeriod = ZERO_BI;
+    apsc.totalRewardsEarned = ZERO_BI;
     apsc.updatedAtBlock = blockNumber;
-    apsc.updatedAtTimestamp = timestamp.toI32();
+    apsc.updatedAtTimestamp = timestamp;
     apsc.save();
   } else {
     apsc.updatedAtBlock = blockNumber;
-    apsc.updatedAtTimestamp = timestamp.toI32();
+    apsc.updatedAtTimestamp = timestamp;
     apsc.save();
   }
   return apsc;
@@ -215,10 +226,15 @@ export function getOrCreateAccountMarket(
     accountMarket = new AccountMarket(id);
     accountMarket.account = account.id;
     accountMarket.cTokenMarket = market.id;
-    accountMarket.deposit = ZERO_BI;
-    accountMarket.borrow = ZERO_BI;
+    accountMarket.supplyBalance = ZERO_BI;
+    accountMarket.borrowBalance = ZERO_BI;
+    accountMarket.collateralBalance = ZERO_BI;
+    accountMarket.supplyIndex = ZERO_BI;
+    accountMarket.borrowIndex = ZERO_BI;
+    accountMarket.enteredMarketBlock = ZERO_BI;
+    accountMarket.enteredMarketTimestamp = ZERO_BI;
     accountMarket.updatedAtBlock = ZERO_BI;
-    accountMarket.updatedAtTimestamp = ZERO_BI.toI32();
+    accountMarket.updatedAtTimestamp = ZERO_BI;
     accountMarket.save();
   }
   return accountMarket;

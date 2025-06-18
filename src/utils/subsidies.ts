@@ -1,28 +1,15 @@
 import { Address, BigInt, log } from "@graphprotocol/graph-ts";
 import {
   Account,
-  Vault,
-  CollectionVault,
+  CollectionsVault,
+  CollectionParticipation,
   AccountSubsidiesPerCollection,
 } from "../../generated/schema";
 import { cToken } from "../../generated/templates/cToken/cToken";
 
 import { ZERO_BI } from "./const";
 
-export enum WeightFunctionType {
-  LINEAR,
-  EXPONENTIAL,
-}
-
 export const EXP_SCALE = BigInt.fromString("1000000000000000000");
-
-export function exponentToBigInt(decimals: i32): BigInt {
-  let bi = BigInt.fromI32(1);
-  for (let i = 0; i < decimals; i++) {
-    bi = bi.times(BigInt.fromI32(10));
-  }
-  return bi;
-}
 
 function approxExponentialTerm(val: BigInt): BigInt {
   const term1 = val;
@@ -69,16 +56,16 @@ export function currentBorrowU(user: Address, cTokenAddr: Address): BigInt {
 
 const MAX_NFT_COUNT_FOR_WEIGHT_CALC = BigInt.fromI32(1000000);
 
-export function weight(nftCount: BigInt, cv: CollectionVault): BigInt {
+export function weight(nftCount: BigInt, cv: CollectionParticipation): BigInt {
   const n_bi = nftCount.gt(MAX_NFT_COUNT_FOR_WEIGHT_CALC)
     ? MAX_NFT_COUNT_FOR_WEIGHT_CALC
     : nftCount;
 
-  if (cv.fnType == "LINEAR") {
-    return cv.p1.times(n_bi).plus(cv.p2);
-  } else if (cv.fnType == "EXPONENTIAL") {
-    const k_bi = cv.p2;
-    const A_bi = cv.p1;
+  if (cv.weightFunctionType == "LINEAR") {
+    return cv.weightFunctionP1.times(n_bi).plus(cv.weightFunctionP2);
+  } else if (cv.weightFunctionType == "EXPONENTIAL") {
+    const k_bi = cv.weightFunctionP2;
+    const A_bi = cv.weightFunctionP1;
     const kn_scaled = k_bi.times(n_bi);
     return A_bi.times(approxExponentialTerm(kn_scaled)).div(EXP_SCALE);
   } else {
@@ -88,21 +75,21 @@ export function weight(nftCount: BigInt, cv: CollectionVault): BigInt {
 
 export function accrueSeconds(
   apsc: AccountSubsidiesPerCollection,
-  cv: CollectionVault,
+  cv: CollectionParticipation,
   now: BigInt
 ): void {
-  const dt = now.minus(BigInt.fromI64(apsc.updatedAtTimestamp));
+  const dt = now.minus(apsc.updatedAtTimestamp);
   if (dt.isZero() || dt.lt(ZERO_BI)) {
     return;
   }
 
   let basePrincipalForSubsidy = ZERO_BI;
   const accountAddress = Address.fromString(apsc.account);
-  const vaultEntity = Vault.load(cv.vault);
+  const vaultEntity = CollectionsVault.load(cv.vault);
 
   if (vaultEntity == null) {
     log.error(
-      "accrueSeconds: Vault entity with ID {} not found for CollectionVault {}. Cannot determine cToken address.",
+      "accrueSeconds: CollectionsVault entity with ID {} not found for CollectionParticipation {}. Cannot determine cToken address.",
       [cv.vault, cv.id]
     );
     return;
@@ -131,8 +118,8 @@ export function accrueSeconds(
     return;
   }
 
-  apsc.seconds = apsc.seconds.plus(subsidyAccruedScaled.div(EXP_SCALE));
-  apsc.updatedAtTimestamp = now.toI64();
+  apsc.secondsAccumulated = apsc.secondsAccumulated.plus(subsidyAccruedScaled.div(EXP_SCALE));
+  apsc.updatedAtTimestamp = now;
 }
 
 export function accrueAccountSubsidies(
@@ -155,23 +142,23 @@ export function accrueAccountSubsidies(
 
   // Cache to avoid repeated CollectionVault loads within same transaction
   const loadedVaults = new Array<string>();
-  const cachedVaults = new Array<CollectionVault>();
+  const cachedVaults = new Array<CollectionParticipation>();
 
   for (let i = 0; i < accountSubsidiesPerCollection.length; i++) {
     const accSubsidies = accountSubsidiesPerCollection[i];
     if (!accSubsidies) continue;
 
-    let collectionVault: CollectionVault | null = null;
+    let collectionVault: CollectionParticipation | null = null;
 
     // Check cache first
-    const cacheIndex = loadedVaults.indexOf(accSubsidies.collectionVault);
+    const cacheIndex = loadedVaults.indexOf(accSubsidies.collectionParticipation);
     if (cacheIndex >= 0) {
       collectionVault = cachedVaults[cacheIndex];
     } else {
       // Load and cache
-      collectionVault = CollectionVault.load(accSubsidies.collectionVault);
+      collectionVault = CollectionParticipation.load(accSubsidies.collectionParticipation);
       if (collectionVault) {
-        loadedVaults.push(accSubsidies.collectionVault);
+        loadedVaults.push(accSubsidies.collectionParticipation);
         cachedVaults.push(collectionVault);
       }
     }
@@ -179,7 +166,7 @@ export function accrueAccountSubsidies(
     if (collectionVault) {
       accrueSeconds(accSubsidies, collectionVault, timestamp);
       accSubsidies.updatedAtBlock = blockNumber;
-      accSubsidies.updatedAtTimestamp = timestamp.toI64();
+      accSubsidies.updatedAtTimestamp = timestamp;
       accSubsidies.save();
     }
   }

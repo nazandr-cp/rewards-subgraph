@@ -5,7 +5,7 @@ import {
   CollectionYieldAppliedForEpoch as CollectionYieldAppliedForEpochEvent,
 } from "../generated/templates/CollectionVault/CollectionVault";
 import { log, Address, ethereum } from "@graphprotocol/graph-ts"; // Removed BigInt from here
-import { Vault, Epoch, EpochVaultAllocation, CollectionYieldApplication, CollectionYieldAccrual, SubsidyTransaction, CTokenMarket } from "../generated/schema";
+import { CollectionsVault, Epoch, EpochVaultAllocation, CollectionYieldApplication, CollectionYieldAccrual, SubsidyDistribution, CTokenMarket } from "../generated/schema";
 
 import { getOrCreateCollectionVault } from "./utils/getters";
 import { ZERO_BI, BIGINT_1E18 } from "./utils/const";
@@ -17,7 +17,7 @@ export function handleCollectionDeposit(event: CollectionDepositEvent): void {
   const assets = event.params.assets;
   // const totalCTokensFromEvent = event.params.cTokenAmount; // This is shares, not actual cTokens
 
-  const vaultEntity = Vault.load(vaultAddress.toHex());
+  const vaultEntity = CollectionsVault.load(vaultAddress.toHex());
   if (!vaultEntity) {
     log.error("handleCollectionDeposit: Vault {} not found. Cannot proceed.", [
       vaultAddress.toHex(),
@@ -43,7 +43,7 @@ export function handleCollectionDeposit(event: CollectionDepositEvent): void {
   vault.totalDeposits = vault.totalDeposits.plus(assets);
   vault.totalCTokens = vault.totalCTokens.plus(actualCTokens); // Use calculated actual cTokens
   vault.updatedAtBlock = event.block.number;
-  vault.updatedAtTimestamp = event.block.timestamp.toI64();
+  vault.updatedAtTimestamp = event.block.timestamp;
   vault.save();
   log.info("Updated Vault {}: totalShares {}, totalDeposits {}, totalCTokens {}", [
     vault.id,
@@ -62,7 +62,7 @@ export function handleCollectionDeposit(event: CollectionDepositEvent): void {
   collVault.principalDeposited = collVault.principalDeposited.plus(assets);
   collVault.totalCTokens = collVault.totalCTokens.plus(actualCTokens); // Use calculated actual cTokens
   collVault.updatedAtBlock = event.block.number;
-  collVault.updatedAtTimestamp = event.block.timestamp.toI64();
+  collVault.updatedAtTimestamp = event.block.timestamp;
   collVault.save();
 
   log.info(
@@ -85,7 +85,7 @@ export function handleCollectionWithdraw(event: CollectionWithdrawEvent): void {
   const assets = event.params.assets;
   // const totalCTokensFromEvent = event.params.cTokenAmount; // This is shares, not actual cTokens
 
-  const vaultEntityWithdraw = Vault.load(vaultAddress.toHex());
+  const vaultEntityWithdraw = CollectionsVault.load(vaultAddress.toHex());
   if (!vaultEntityWithdraw) {
     log.error("handleCollectionWithdraw: Vault {} not found. Cannot proceed.", [
       vaultAddress.toHex(),
@@ -113,7 +113,7 @@ export function handleCollectionWithdraw(event: CollectionWithdrawEvent): void {
   vault.totalDeposits = vault.totalDeposits.minus(assets);
   vault.totalCTokens = vault.totalCTokens.minus(actualCTokensWithdraw); // Use calculated actual cTokens
   vault.updatedAtBlock = event.block.number;
-  vault.updatedAtTimestamp = event.block.timestamp.toI64();
+  vault.updatedAtTimestamp = event.block.timestamp;
   vault.save();
   log.info("Updated Vault {}: totalShares {}, totalDeposits {}, totalCTokens {}", [
     vault.id,
@@ -131,7 +131,7 @@ export function handleCollectionWithdraw(event: CollectionWithdrawEvent): void {
   collVault.principalDeposited = collVault.principalDeposited.minus(assets);
   collVault.totalCTokens = collVault.totalCTokens.minus(actualCTokensWithdraw); // Use calculated actual cTokens
   collVault.updatedAtBlock = event.block.number;
-  collVault.updatedAtTimestamp = event.block.timestamp.toI64();
+  collVault.updatedAtTimestamp = event.block.timestamp;
   collVault.save();
   log.info(
     "CollectionWithdraw: collectionVaultId {}, caller {}, receiver {}, assets {}, shares {}, new principalDeposited {}",
@@ -167,7 +167,7 @@ export function handleVaultYieldAllocatedToEpoch(event: VaultYieldAllocatedToEpo
     return;
   }
 
-  const vault = Vault.load(vaultAddress);
+  const vault = CollectionsVault.load(vaultAddress);
   if (vault == null) {
     log.warning(
       "handleVaultYieldAllocatedToEpoch: Vault {} not found for epoch {}. Allocation of {} might be orphaned.",
@@ -247,7 +247,7 @@ export function handleCollectionYieldAccrued(event: ethereum.Event): void {
   ]);
 
   // Load the Vault to get its cTokenMarket address
-  const vaultEntity = Vault.load(vaultAddress.toHex());
+  const vaultEntity = CollectionsVault.load(vaultAddress.toHex());
   if (!vaultEntity) {
     log.error("handleCollectionYieldAccrued: Vault {} not found. Cannot proceed.", [
       vaultAddress.toHex(),
@@ -267,7 +267,7 @@ export function handleCollectionYieldAccrued(event: ethereum.Event): void {
   collVault.lastGlobalDepositIndex = lastGlobalDepositIndex;
   collVault.yieldAccrued = totalAccrued;
   collVault.updatedAtBlock = event.block.number;
-  collVault.updatedAtTimestamp = event.block.timestamp.toI64();
+  collVault.updatedAtTimestamp = event.block.timestamp;
   collVault.save();
 
   const accrualId = event.transaction.hash.toHex() + "-" + event.logIndex.toString();
@@ -358,7 +358,7 @@ export function handleYieldBatchRepaid(event: ethereum.Event): void {
   ]);
 
   const subsidyTxId = event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
-  const subsidyTx = new SubsidyTransaction(subsidyTxId);
+  const subsidyTx = new SubsidyDistribution(subsidyTxId);
   subsidyTx.epoch = "";
   subsidyTx.user = recipient.toHexString();
   subsidyTx.collection = "";

@@ -25,8 +25,6 @@ enum RoleType {
   LENDING_MANAGER
 }
 
-
-
 # Core contract entities representing the multi-layered architecture
 
 """
@@ -40,22 +38,14 @@ type CollectionsVault @entity(immutable: false) {
   totalCTokens: BigInt!
   globalDepositIndex: BigInt!
   totalPrincipalDeposited: BigInt!
-
-  # Registry integration
   collectionRegistry: CollectionRegistry!
-
-  # Manager integrations
   epochManager: EpochManager!
   lendingManager: LendingManager!
   debtSubsidizer: DebtSubsidizer!
-
-  # Derived relationships
   collectionParticipations: [CollectionParticipation!]!
     @derivedFrom(field: "vault")
   merkleDistributions: [MerkleDistribution!]! @derivedFrom(field: "vault")
   epochAllocations: [EpochVaultAllocation!]! @derivedFrom(field: "vault")
-
-  # Metadata
   createdAtBlock: BigInt!
   createdAtTimestamp: BigInt!
   updatedAtBlock: BigInt!
@@ -131,7 +121,7 @@ type LendingManager @entity(immutable: false) {
   # cToken market configuration
   supportedMarkets: BigInt!
   totalMarketParticipants: BigInt!
-  
+
   # Risk parameters for cToken markets
   globalCollateralFactor: BigInt!
   liquidationIncentive: BigInt!
@@ -161,15 +151,16 @@ Contract managing debt subsidization logic and distributions
 type DebtSubsidizer @entity(immutable: false) {
   id: ID!
 
-  # Subsidy configuration
-  subsidyRate: BigInt!
-  maxSubsidyPerUser: BigInt!
-  subsidyDuration: BigInt!
-
-  # Distribution state
+  # Subsidy pool management
+  totalSubsidyPool: BigInt!
   totalSubsidiesDistributed: BigInt!
   totalSubsidiesRemaining: BigInt!
   totalEligibleUsers: BigInt!
+
+  # Legacy fields (kept for compatibility)
+  subsidyRate: BigInt!
+  maxSubsidyPerUser: BigInt!
+  subsidyDuration: BigInt!
 
   # Access control
   owner: Bytes!
@@ -179,8 +170,11 @@ type DebtSubsidizer @entity(immutable: false) {
   subsidyDistributions: [SubsidyDistribution!]!
     @derivedFrom(field: "debtSubsidizer")
 
-  # Vault integration
-  vault: CollectionsVault!
+  # Vault integrations (updated to support multiple vaults)
+  vaults: [CollectionsVault!]! @derivedFrom(field: "debtSubsidizer")
+  vaultAdditions: [VaultAddition!]! @derivedFrom(field: "debtSubsidizer")
+  whitelistedCollections: [CollectionWhitelist!]!
+    @derivedFrom(field: "debtSubsidizer")
 
   # Metadata
   createdAtBlock: BigInt!
@@ -231,6 +225,74 @@ type AccountRoleAssignment @entity(immutable: false) {
   grantedAtTimestamp: BigInt!
   revokedAtBlock: BigInt
   revokedAtTimestamp: BigInt
+}
+
+# New entities for enhanced debt subsidizer functionality
+
+"""
+Tracks vault additions to the debt subsidizer
+"""
+type VaultAddition @entity(immutable: true) {
+  id: ID!
+  debtSubsidizer: DebtSubsidizer!
+  vaultAddress: Bytes!
+  cTokenAddress: Bytes!
+  lendingManagerAddress: Bytes!
+
+  # Metadata
+  addedAtBlock: BigInt!
+  addedAtTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+"""
+Tracks collection whitelisting in vaults
+"""
+type CollectionWhitelist @entity(immutable: false) {
+  id: ID!
+  debtSubsidizer: DebtSubsidizer!
+  vaultAddress: Bytes!
+  collectionAddress: Bytes!
+  isActive: Boolean!
+
+  # Metadata
+  whitelistedAtBlock: BigInt!
+  whitelistedAtTimestamp: BigInt!
+  removedAtBlock: BigInt
+  removedAtTimestamp: BigInt
+  transactionHash: Bytes!
+}
+
+"""
+Tracks subsidy pool management events
+"""
+type SubsidyPoolEvent @entity(immutable: true) {
+  id: ID!
+  debtSubsidizer: DebtSubsidizer!
+  eventType: String! # "INITIALIZED", "UPDATED"
+  oldAmount: BigInt
+  newAmount: BigInt!
+
+  # Metadata
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+"""
+Tracks eligible user management
+"""
+type EligibleUserEvent @entity(immutable: true) {
+  id: ID!
+  debtSubsidizer: DebtSubsidizer!
+  user: Account!
+  added: Boolean! # true for addition, false for removal
+  totalEligibleUsersAfter: BigInt!
+
+  # Metadata
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  transactionHash: Bytes!
 }
 
 # Enhanced entities with registry integration
@@ -304,6 +366,11 @@ type Epoch @entity(immutable: false) {
   totalSubsidiesDistributed: BigInt!
   totalEligibleUsers: BigInt!
   totalParticipatingCollections: BigInt!
+
+  # Enhanced metrics from updated contracts
+  participantCount: BigInt!
+  processingTimeMs: BigInt
+  estimatedProcessingTime: BigInt
 
   # Processing metrics
   processingGasUsed: BigInt
@@ -498,7 +565,6 @@ type AccountSubsidiesPerCollection @entity(immutable: false) {
   updatedAtBlock: BigInt!
   updatedAtTimestamp: BigInt!
 }
-
 
 # Distribution and yield tracking entities
 

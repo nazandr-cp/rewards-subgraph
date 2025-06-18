@@ -24,6 +24,6 @@ export function handleMarketListed(event: MarketListed): void {
   cTokenMarket.decimals = decimals;
   cTokenMarket.exchangeRate = exchangeRate;
   cTokenMarket.updatedAtBlock = event.block.number;
-  cTokenMarket.updatedAtTimestamp = event.block.timestamp.toI64();
+  cTokenMarket.updatedAtTimestamp = event.block.timestamp;
   cTokenMarket.save();
 }

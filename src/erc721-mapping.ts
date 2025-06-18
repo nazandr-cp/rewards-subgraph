@@ -23,9 +23,9 @@ export function handleTransfer(event: TransferEvent): void {
     return;
   }
 
-  const loadedCollectionVaults = collection.vaults.load();
+  const loadedCollectionParticipations = collection.participations.load();
 
-  if (loadedCollectionVaults.length == 0) {
+  if (loadedCollectionParticipations.length == 0) {
     log.info(
       "handleTransfer: Collection {} is not registered in any CollectionVault. Skipping.",
       [collectionAddress.toHexString()]
@@ -77,12 +77,12 @@ export function handleTransfer(event: TransferEvent): void {
   }
 
   // Original logic for AccountSubsidiesPerCollection (related to specific vaults)
-  for (let i = 0; i < loadedCollectionVaults.length; i++) {
-    const collectionVault = loadedCollectionVaults[i];
+  for (let i = 0; i < loadedCollectionParticipations.length; i++) {
+    const collectionParticipation = loadedCollectionParticipations[i];
 
-    if (collectionVault == null) {
+    if (collectionParticipation == null) {
       log.warning(
-        "handleTransfer: Found a null CollectionVault in collection.vaults for Collection {}. Skipping.",
+        "handleTransfer: Found a null CollectionParticipation in collection.participations for Collection {}. Skipping.",
         [collection.id]
       );
       continue;
@@ -91,12 +91,12 @@ export function handleTransfer(event: TransferEvent): void {
     if (fromAddress.toHexString() != ADDRESS_ZERO_STR) {
       const fromAccSubsidies = getOrCreateAccountSubsidiesPerCollection(
         fromAddress,
-        collectionVault.id,
+        collectionParticipation.id,
         blockNumber,
         timestamp
       );
 
-      accrueSeconds(fromAccSubsidies, collectionVault, timestamp);
+      accrueSeconds(fromAccSubsidies, collectionParticipation, timestamp);
 
       fromAccSubsidies.balanceNFT = fromAccSubsidies.balanceNFT.minus(
         BigInt.fromI32(1)
@@ -107,12 +107,12 @@ export function handleTransfer(event: TransferEvent): void {
     if (toAddress.toHexString() != ADDRESS_ZERO_STR) {
       const toAccSubsidies = getOrCreateAccountSubsidiesPerCollection(
         toAddress,
-        collectionVault.id,
+        collectionParticipation.id,
         blockNumber,
         timestamp
       );
 
-      accrueSeconds(toAccSubsidies, collectionVault, timestamp);
+      accrueSeconds(toAccSubsidies, collectionParticipation, timestamp);
 
       toAccSubsidies.balanceNFT = toAccSubsidies.balanceNFT.plus(
         BigInt.fromI32(1)

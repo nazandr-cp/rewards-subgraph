@@ -43,9 +43,9 @@ export function handleAccrueInterest(event: AccrueInterestEvent): void {
   market.cashPrior = cashPrior;
   market.borrowIndex = borrowIndex;
   market.totalBorrows = totalBorrows;
-  market.lastExchangeRateTimestamp = event.block.timestamp.toI64();
+  market.lastExchangeRateTimestamp = event.block.timestamp;
   market.updatedAtBlock = event.block.number;
-  market.updatedAtTimestamp = event.block.timestamp.toI64();
+  market.updatedAtTimestamp = event.block.timestamp;
   market.save();
 }
 
@@ -57,14 +57,14 @@ export function handleBorrow(event: BorrowEvent): void {
   const market = getOrCreateCTokenMarket(event.address);
   const accountMarket = getOrCreateAccountMarket(borrower, event.address);
 
-  accountMarket.borrow = accountBorrows;
+  accountMarket.borrowBalance = accountBorrows;
   accountMarket.updatedAtBlock = event.block.number;
-  accountMarket.updatedAtTimestamp = event.block.timestamp.toI64();
+  accountMarket.updatedAtTimestamp = event.block.timestamp;
   accountMarket.save();
 
   market.totalBorrows = totalBorrows;
   market.updatedAtBlock = event.block.number;
-  market.updatedAtTimestamp = event.block.timestamp.toI64();
+  market.updatedAtTimestamp = event.block.timestamp;
   market.save();
 
   accrueAccountSubsidies(borrower, event.block.number, event.block.timestamp);
@@ -99,11 +99,11 @@ export function handleLiquidateBorrow(event: LiquidateBorrowEvent): void {
     cTokenCollateralAddress
   );
 
-  borrowerAccountBorrowedMarket.borrow =
-    borrowerAccountBorrowedMarket.borrow.minus(repayAmount);
+  borrowerAccountBorrowedMarket.borrowBalance =
+    borrowerAccountBorrowedMarket.borrowBalance.minus(repayAmount);
   borrowerAccountBorrowedMarket.updatedAtBlock = event.block.number;
   borrowerAccountBorrowedMarket.updatedAtTimestamp =
-    event.block.timestamp.toI64();
+    event.block.timestamp;
   borrowerAccountBorrowedMarket.save();
 
   const borrowedCTokenContract = CTokenContract.bind(cTokenBorrowedAddress);
@@ -117,7 +117,7 @@ export function handleLiquidateBorrow(event: LiquidateBorrowEvent): void {
     );
   }
   borrowedMarket.updatedAtBlock = event.block.number;
-  borrowedMarket.updatedAtTimestamp = event.block.timestamp.toI64();
+  borrowedMarket.updatedAtTimestamp = event.block.timestamp;
   borrowedMarket.save();
 
   const collateralCTokenContract = CTokenContract.bind(cTokenCollateralAddress);
@@ -130,7 +130,7 @@ export function handleLiquidateBorrow(event: LiquidateBorrowEvent): void {
       [cTokenCollateralAddress.toHexString()]
     );
     collateralMarket.updatedAtBlock = event.block.number;
-    collateralMarket.updatedAtTimestamp = event.block.timestamp.toI64();
+    collateralMarket.updatedAtTimestamp = event.block.timestamp;
     collateralMarket.save();
     return;
   }
@@ -160,20 +160,20 @@ export function handleLiquidateBorrow(event: LiquidateBorrowEvent): void {
     .times(exchangeRateCollateral)
     .div(EXP_SCALE);
 
-  borrowerAccountCollateralMarket.deposit =
-    borrowerAccountCollateralMarket.deposit.minus(
+  borrowerAccountCollateralMarket.supplyBalance =
+    borrowerAccountCollateralMarket.supplyBalance.minus(
       underlyingSeizedFromBorrower_total
     );
   borrowerAccountCollateralMarket.updatedAtBlock = event.block.number;
   borrowerAccountCollateralMarket.updatedAtTimestamp =
-    event.block.timestamp.toI64();
+    event.block.timestamp;
   borrowerAccountCollateralMarket.save();
 
-  liquidatorAccountCollateralMarket.deposit =
-    liquidatorAccountCollateralMarket.deposit.plus(underlyingToLiquidator);
+  liquidatorAccountCollateralMarket.supplyBalance =
+    liquidatorAccountCollateralMarket.supplyBalance.plus(underlyingToLiquidator);
   liquidatorAccountCollateralMarket.updatedAtBlock = event.block.number;
   liquidatorAccountCollateralMarket.updatedAtTimestamp =
-    event.block.timestamp.toI64();
+    event.block.timestamp;
   liquidatorAccountCollateralMarket.save();
 
   const collateralTotalSupplyTry = collateralCTokenContract.try_totalSupply();
@@ -198,7 +198,7 @@ export function handleLiquidateBorrow(event: LiquidateBorrowEvent): void {
   }
 
   collateralMarket.updatedAtBlock = event.block.number;
-  collateralMarket.updatedAtTimestamp = event.block.timestamp.toI64();
+  collateralMarket.updatedAtTimestamp = event.block.timestamp;
   collateralMarket.save();
 
   accrueAccountSubsidies(
@@ -220,9 +220,9 @@ export function handleMint(event: MintEvent): void {
   const market = getOrCreateCTokenMarket(event.address);
   const accountMarket = getOrCreateAccountMarket(minter, cTokenContractAddress);
 
-  accountMarket.deposit = accountMarket.deposit.plus(mintAmount);
+  accountMarket.supplyBalance = accountMarket.supplyBalance.plus(mintAmount);
   accountMarket.updatedAtBlock = event.block.number;
-  accountMarket.updatedAtTimestamp = event.block.timestamp.toI64();
+  accountMarket.updatedAtTimestamp = event.block.timestamp;
   accountMarket.save();
 
   const cTokenContract = CTokenContract.bind(cTokenContractAddress);
@@ -234,7 +234,7 @@ export function handleMint(event: MintEvent): void {
       event.address.toHexString(),
     ]);
   }
-  market.updatedAtTimestamp = event.block.timestamp.toI64();
+  market.updatedAtTimestamp = event.block.timestamp;
   market.updatedAtBlock = event.block.number;
   market.save();
 
@@ -251,9 +251,9 @@ export function handleRedeem(event: RedeemEvent): void {
     cTokenContractAddress
   );
 
-  accountMarket.deposit = accountMarket.deposit.minus(redeemAmount);
+  accountMarket.supplyBalance = accountMarket.supplyBalance.minus(redeemAmount);
   accountMarket.updatedAtBlock = event.block.number;
-  accountMarket.updatedAtTimestamp = event.block.timestamp.toI64();
+  accountMarket.updatedAtTimestamp = event.block.timestamp;
   accountMarket.save();
 
   const cTokenContract = CTokenContract.bind(cTokenContractAddress);
@@ -265,7 +265,7 @@ export function handleRedeem(event: RedeemEvent): void {
       event.address.toHexString(),
     ]);
   }
-  market.updatedAtTimestamp = event.block.timestamp.toI64();
+  market.updatedAtTimestamp = event.block.timestamp;
   market.updatedAtBlock = event.block.number;
   market.save();
 
@@ -286,9 +286,9 @@ export function handleRepayBorrow(event: RepayBorrowEvent): void {
     cTokenContractAddress
   );
 
-  borrowerAccountMarket.borrow = newBorrowerLoanBalance;
+  borrowerAccountMarket.borrowBalance = newBorrowerLoanBalance;
   borrowerAccountMarket.updatedAtBlock = event.block.number;
-  borrowerAccountMarket.updatedAtTimestamp = event.block.timestamp.toI64();
+  borrowerAccountMarket.updatedAtTimestamp = event.block.timestamp;
   borrowerAccountMarket.save();
 
   market.totalBorrows = newMarketTotalBorrows;
@@ -303,7 +303,7 @@ export function handleRepayBorrow(event: RepayBorrowEvent): void {
     ]);
   }
 
-  market.updatedAtTimestamp = event.block.timestamp.toI64();
+  market.updatedAtTimestamp = event.block.timestamp;
   market.updatedAtBlock = event.block.number;
   market.save();
 
@@ -329,7 +329,7 @@ export function handleTransfer(event: TransferEvent): void {
       [event.address.toHexString()]
     );
     market.updatedAtBlock = event.block.number;
-    market.updatedAtTimestamp = event.block.timestamp.toI64();
+    market.updatedAtTimestamp = event.block.timestamp;
     market.save();
     return;
   }
@@ -344,23 +344,23 @@ export function handleTransfer(event: TransferEvent): void {
     fromAddress,
     event.address
   );
-  fromAccountMarket.deposit = fromAccountMarket.deposit.minus(
+  fromAccountMarket.supplyBalance = fromAccountMarket.supplyBalance.minus(
     underlyingValueTransferred
   );
   fromAccountMarket.updatedAtBlock = event.block.number;
-  fromAccountMarket.updatedAtTimestamp = event.block.timestamp.toI64();
+  fromAccountMarket.updatedAtTimestamp = event.block.timestamp;
   fromAccountMarket.save();
 
   const toAccountMarket = getOrCreateAccountMarket(toAddress, event.address);
-  toAccountMarket.deposit = toAccountMarket.deposit.plus(
+  toAccountMarket.supplyBalance = toAccountMarket.supplyBalance.plus(
     underlyingValueTransferred
   );
   toAccountMarket.updatedAtBlock = event.block.number;
-  toAccountMarket.updatedAtTimestamp = event.block.timestamp.toI64();
+  toAccountMarket.updatedAtTimestamp = event.block.timestamp;
   toAccountMarket.save();
 
   market.updatedAtBlock = event.block.number;
-  market.updatedAtTimestamp = event.block.timestamp.toI64();
+  market.updatedAtTimestamp = event.block.timestamp;
   market.save();
 
   accrueAccountSubsidies(

@@ -7,7 +7,7 @@ import {
   EpochDurationUpdated,
   AutomatedSystemUpdated,
 } from "../generated/EpochManager/EpochManager";
-import { Epoch, Vault, EpochVaultAllocation, SystemState } from "../generated/schema";
+import { Epoch, CollectionsVault, EpochVaultAllocation, SystemState } from "../generated/schema";
 import { EPOCH_STATUS_ACTIVE, EPOCH_STATUS_PROCESSING, EPOCH_STATUS_COMPLETED, ZERO_BI, SYSTEM_STATE_ID } from "./utils/const";
 import { log } from "@graphprotocol/graph-ts";
 
@@ -17,12 +17,21 @@ export function handleEpochStarted(event: EpochStarted): void {
 
   if (epoch == null) {
     epoch = new Epoch(epochId);
+    epoch.epochNumber = event.params.epochId;
     epoch.startTimestamp = event.params.startTime;
     epoch.endTimestamp = event.params.endTime;
     epoch.totalYieldAvailable = ZERO_BI;
+    epoch.totalYieldAllocated = ZERO_BI;
+    epoch.totalYieldDistributed = ZERO_BI;
+    epoch.remainingYield = ZERO_BI;
     epoch.totalSubsidiesDistributed = ZERO_BI;
+    epoch.totalEligibleUsers = ZERO_BI;
+    epoch.totalParticipatingCollections = ZERO_BI;
     epoch.status = EPOCH_STATUS_ACTIVE;
-    epoch.eligibleUsers = ZERO_BI;
+    epoch.createdAtBlock = event.block.number;
+    epoch.createdAtTimestamp = event.block.timestamp;
+    epoch.updatedAtBlock = event.block.number;
+    epoch.updatedAtTimestamp = event.block.timestamp;
     epoch.save();
   } else {
     log.info("handleEpochStarted: Epoch {} already exists. Ensuring it is active and timestamps are current.", [epochId]);
@@ -50,11 +59,20 @@ export function handleEpochProcessingStarted(event: EpochProcessingStarted): voi
       [epochId]
     );
     epoch = new Epoch(epochId);
+    epoch.epochNumber = event.params.epochId;
     epoch.startTimestamp = ZERO_BI;
     epoch.endTimestamp = ZERO_BI;
     epoch.totalYieldAvailable = ZERO_BI;
+    epoch.totalYieldAllocated = ZERO_BI;
+    epoch.totalYieldDistributed = ZERO_BI;
+    epoch.remainingYield = ZERO_BI;
     epoch.totalSubsidiesDistributed = ZERO_BI;
-    epoch.eligibleUsers = ZERO_BI;
+    epoch.totalEligibleUsers = ZERO_BI;
+    epoch.totalParticipatingCollections = ZERO_BI;
+    epoch.createdAtBlock = event.block.number;
+    epoch.createdAtTimestamp = event.block.timestamp;
+    epoch.updatedAtBlock = event.block.number;
+    epoch.updatedAtTimestamp = event.block.timestamp;
   }
 
   epoch.status = EPOCH_STATUS_PROCESSING;
@@ -119,21 +137,27 @@ export function handleEpochManagerVaultYieldAllocated(event: EpochManagerVaultYi
   }
 
   const vaultAddress = event.params.vault.toHexString();
-  let vault = Vault.load(vaultAddress);
+  let vault = CollectionsVault.load(vaultAddress);
   if (vault == null) {
     log.warning(
       "handleEpochManagerVaultYieldAllocated: Vault {} not found. Creating stub.",
       [vaultAddress]
     );
-    vault = new Vault(vaultAddress);
+    vault = new CollectionsVault(vaultAddress);
     vault.cTokenMarket = "";
     vault.totalShares = ZERO_BI;
     vault.totalDeposits = ZERO_BI;
     vault.totalCTokens = ZERO_BI;
     vault.globalDepositIndex = ZERO_BI;
     vault.totalPrincipalDeposited = ZERO_BI;
+    vault.collectionRegistry = "";
+    vault.epochManager = "";
+    vault.lendingManager = "";
+    vault.debtSubsidizer = "";
+    vault.createdAtBlock = event.block.number;
+    vault.createdAtTimestamp = event.block.timestamp;
     vault.updatedAtBlock = event.block.number;
-    vault.updatedAtTimestamp = event.block.timestamp.toI64();
+    vault.updatedAtTimestamp = event.block.timestamp;
     vault.save();
   }
 
@@ -163,3 +187,4 @@ export function handleEpochDurationUpdated(event: EpochDurationUpdated): void {
 export function handleAutomatedSystemUpdated(event: AutomatedSystemUpdated): void {
   log.info("Automated system updated to: {}", [event.params.newAutomatedSystem.toHexString()]);
 }
+
