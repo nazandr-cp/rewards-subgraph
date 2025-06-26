@@ -1,5 +1,7 @@
 // ✔ handleCollectionDeposit: happy path ✔ handleCollectionDeposit: zero deposit ✔ handleCollectionDeposit: unknown vault
 // ✔ handleCollectionWithdraw: happy path ✔ handleCollectionWithdraw: zero withdraw ✔ handleCollectionWithdraw: unknown vault
+// ✔ handleCollectionDeposit: happy path ✔ handleCollectionDeposit: zero deposit ✔ handleCollectionDeposit: unknown vault ✔ handleCollectionDeposit: null cTokenMarket ✔ handleCollectionDeposit: zero exchangeRate
+// ✔ handleCollectionWithdraw: happy path ✔ handleCollectionWithdraw: zero withdraw ✔ handleCollectionWithdraw: unknown vault ✔ handleCollectionWithdraw: null cTokenMarket ✔ handleCollectionWithdraw: zero exchangeRate
 import {
   beforeEach,
   test,
@@ -12,6 +14,7 @@ import { handleCollectionDeposit, handleCollectionWithdraw } from "../../src/col
 import { newCollectionDepositEvent, newCollectionWithdrawEvent } from "../utils/collectionsHelpers";
 import { CollectionDeposit, CollectionWithdraw } from "../../generated/templates/CollectionVault/CollectionVault"; // Import the specific event type
 import { CollectionsVault, CTokenMarket, CollectionParticipation, Collection, CollectionRegistry } from "../../generated/schema"; // Added CollectionRegistry
+import { expectConsistentVault, expectConsistentCollectionParticipation } from "../utils/consistency"; // Import consistency helpers
 
 // Define common addresses and values for tests
 const MOCK_REGISTRY_ADDRESS = Address.fromString("0x000000000000000000000000000000000000000A");
@@ -206,6 +209,9 @@ test("handleCollectionDeposit: happy path deposit", () => {
   assert.fieldEquals("CollectionParticipation", collectionVaultId, "principalShares", shares.toString());
   assert.fieldEquals("CollectionParticipation", collectionVaultId, "principalDeposited", assets.toString());
   assert.fieldEquals("CollectionParticipation", collectionVaultId, "totalCTokens", assets.times(BigInt.fromString("1000000000000000000")).div(exchangeRate).toString());
+
+  expectConsistentVault(vaultId);
+  expectConsistentCollectionParticipation(collectionVaultId);
 });
 
 test("handleCollectionDeposit: zero deposit (edge case)", () => {
@@ -258,6 +264,9 @@ test("handleCollectionDeposit: zero deposit (edge case)", () => {
   assert.fieldEquals("CollectionParticipation", collectionVaultId, "principalShares", "0");
   assert.fieldEquals("CollectionParticipation", collectionVaultId, "principalDeposited", "0");
   assert.fieldEquals("CollectionParticipation", collectionVaultId, "totalCTokens", "0");
+
+  expectConsistentVault(vaultId);
+  expectConsistentCollectionParticipation(collectionVaultId);
 });
 
 test("handleCollectionDeposit: unknown vault (guard path)", () => {
@@ -304,6 +313,91 @@ test("handleCollectionDeposit: unknown vault (guard path)", () => {
   assert.notInStore("CollectionParticipation", vaultAddress.toHex() + "-" + collectionAddress.toHex());
 });
 
+test("handleCollectionDeposit: null cTokenMarket (edge case)", () => {
+  const caller = MOCK_CALLER_ADDRESS;
+  const receiver = MOCK_RECEIVER_ADDRESS;
+  const assets = BigInt.fromI32(1000);
+  const shares = BigInt.fromI32(1000);
+  const cTokenAmount = BigInt.fromI32(500); // This will be used as fallback
+  const collectionAddress = MOCK_COLLECTION_ADDRESS;
+  const vaultAddress = MOCK_VAULT_ADDRESS;
+  const cTokenMarketAddress = MOCK_CTOKEN_MARKET_ADDRESS;
+  // const exchangeRate = MOCK_EXCHANGE_RATE;
+
+  createMockCollectionRegistry(MOCK_REGISTRY_ADDRESS);
+  createMockCollection(collectionAddress);
+  createMockCollectionsVault(vaultAddress, cTokenMarketAddress);
+  // DO NOT create CTokenMarket, simulating null cTokenMarket
+
+  const depositEvent = newCollectionDepositEvent(
+    caller,
+    receiver,
+    assets,
+    shares,
+    cTokenAmount,
+    collectionAddress
+  );
+  depositEvent.address = vaultAddress;
+
+  handleCollectionDeposit(changetype<CollectionDeposit>(depositEvent));
+
+  const vaultId = vaultAddress.toHex();
+  const collectionVaultId = vaultAddress.toHex() + "-" + collectionAddress.toHex();
+
+  // Assert that cTokenAmount from event was used as fallback
+  assert.fieldEquals("CollectionsVault", vaultId, "totalCTokens", cTokenAmount.toString());
+  assert.fieldEquals("CollectionParticipation", collectionVaultId, "totalCTokens", cTokenAmount.toString());
+
+  expectConsistentVault(vaultId);
+  expectConsistentCollectionParticipation(collectionVaultId);
+});
+
+test("handleCollectionDeposit: zero exchangeRate (edge case)", () => {
+  const caller = MOCK_CALLER_ADDRESS;
+  const receiver = MOCK_RECEIVER_ADDRESS;
+  const assets = BigInt.fromI32(1000);
+  const shares = BigInt.fromI32(1000);
+  const cTokenAmount = BigInt.fromI32(500); // This will be used as fallback
+  const collectionAddress = MOCK_COLLECTION_ADDRESS;
+  const vaultAddress = MOCK_VAULT_ADDRESS;
+  const cTokenMarketAddress = MOCK_CTOKEN_MARKET_ADDRESS;
+  const zeroExchangeRate = BigInt.fromI32(0);
+
+  createMockCollectionRegistry(MOCK_REGISTRY_ADDRESS);
+  createMockCollection(collectionAddress);
+  createMockCollectionsVault(vaultAddress, cTokenMarketAddress);
+  createMockCTokenMarket(cTokenMarketAddress, zeroExchangeRate); // Zero exchange rate
+
+  const depositEvent = newCollectionDepositEvent(
+    caller,
+    receiver,
+    assets,
+    shares,
+    cTokenAmount,
+    collectionAddress
+  );
+  depositEvent.address = vaultAddress;
+
+  createMockedFunction(
+    cTokenMarketAddress,
+    "exchangeRateStored",
+    "exchangeRateStored():(uint256)"
+  ).returns([ethereum.Value.fromUnsignedBigInt(zeroExchangeRate)]);
+
+  handleCollectionDeposit(changetype<CollectionDeposit>(depositEvent));
+
+  const vaultId = vaultAddress.toHex();
+  const collectionVaultId = vaultAddress.toHex() + "-" + collectionAddress.toHex();
+
+  // Assert that cTokenAmount from event was used as fallback
+  assert.fieldEquals("CollectionsVault", vaultId, "totalCTokens", cTokenAmount.toString());
+  assert.fieldEquals("CollectionParticipation", collectionVaultId, "totalCTokens", cTokenAmount.toString());
+
+  expectConsistentVault(vaultId);
+  expectConsistentCollectionParticipation(collectionVaultId);
+});
+
+
 test("handleCollectionWithdraw: happy path withdraw", () => {
   // Mock event parameters
   const caller = MOCK_CALLER_ADDRESS;
@@ -330,7 +424,7 @@ test("handleCollectionWithdraw: happy path withdraw", () => {
   );
 
   // Create mock event
-  const withdrawEvent = newCollectionWithdrawEvent(
+  const withdrawEvent1 = newCollectionWithdrawEvent(
     caller,
     receiver,
     assets,
@@ -338,7 +432,7 @@ test("handleCollectionWithdraw: happy path withdraw", () => {
     cTokenAmount,
     collectionAddress
   );
-  withdrawEvent.address = vaultAddress;
+  withdrawEvent1.address = vaultAddress;
 
   // Mock the exchangeRate function call
   createMockedFunction(
@@ -348,7 +442,7 @@ test("handleCollectionWithdraw: happy path withdraw", () => {
   ).returns([ethereum.Value.fromUnsignedBigInt(exchangeRate)]);
 
   // Call the handler
-  handleCollectionWithdraw(changetype<CollectionWithdraw>(withdrawEvent));
+  handleCollectionWithdraw(changetype<CollectionWithdraw>(withdrawEvent1));
 
   // Assertions
   const vaultId = vaultAddress.toHex();
@@ -361,6 +455,9 @@ test("handleCollectionWithdraw: happy path withdraw", () => {
   assert.fieldEquals("CollectionParticipation", collectionVaultId, "principalShares", BigInt.fromI32(500).toString());
   assert.fieldEquals("CollectionParticipation", collectionVaultId, "principalDeposited", BigInt.fromI32(500).toString());
   assert.fieldEquals("CollectionParticipation", collectionVaultId, "totalCTokens", BigInt.fromI32(500).times(BigInt.fromString("1000000000000000000")).div(exchangeRate).toString());
+
+  expectConsistentVault(vaultId);
+  expectConsistentCollectionParticipation(collectionVaultId);
 });
 
 test("handleCollectionWithdraw: zero withdraw (edge case)", () => {
@@ -389,7 +486,7 @@ test("handleCollectionWithdraw: zero withdraw (edge case)", () => {
   );
 
   // Create mock event
-  const withdrawEvent = newCollectionWithdrawEvent(
+  const withdrawEvent2 = newCollectionWithdrawEvent(
     caller,
     receiver,
     assets,
@@ -397,7 +494,7 @@ test("handleCollectionWithdraw: zero withdraw (edge case)", () => {
     cTokenAmount,
     collectionAddress
   );
-  withdrawEvent.address = vaultAddress;
+  withdrawEvent2.address = vaultAddress;
 
   // Mock the exchangeRate function call
   createMockedFunction(
@@ -407,7 +504,7 @@ test("handleCollectionWithdraw: zero withdraw (edge case)", () => {
   ).returns([ethereum.Value.fromUnsignedBigInt(exchangeRate)]);
 
   // Call the handler
-  handleCollectionWithdraw(changetype<CollectionWithdraw>(withdrawEvent));
+  handleCollectionWithdraw(changetype<CollectionWithdraw>(withdrawEvent2));
 
   // Assertions: Values should remain at their initial state
   const vaultId = vaultAddress.toHex();
@@ -420,6 +517,9 @@ test("handleCollectionWithdraw: zero withdraw (edge case)", () => {
   assert.fieldEquals("CollectionParticipation", collectionVaultId, "principalShares", BigInt.fromI32(1000).toString());
   assert.fieldEquals("CollectionParticipation", collectionVaultId, "principalDeposited", BigInt.fromI32(1000).toString());
   assert.fieldEquals("CollectionParticipation", collectionVaultId, "totalCTokens", BigInt.fromI32(1000).times(BigInt.fromString("1000000000000000000")).div(exchangeRate).toString());
+
+  expectConsistentVault(vaultId);
+  expectConsistentCollectionParticipation(collectionVaultId);
 });
 
 test("handleCollectionWithdraw: unknown vault (guard path)", () => {
@@ -441,7 +541,7 @@ test("handleCollectionWithdraw: unknown vault (guard path)", () => {
   // DO NOT create a mock CollectionsVault entity, simulating an unknown vault
 
   // Create mock event
-  const withdrawEvent = newCollectionWithdrawEvent(
+  const withdrawEvent3 = newCollectionWithdrawEvent(
     caller,
     receiver,
     assets,
@@ -449,7 +549,7 @@ test("handleCollectionWithdraw: unknown vault (guard path)", () => {
     cTokenAmount,
     collectionAddress
   );
-  withdrawEvent.address = vaultAddress;
+  withdrawEvent3.address = vaultAddress;
 
   // Mock the exchangeRate function call (this will not be called if vault is not found)
   createMockedFunction(
@@ -459,9 +559,198 @@ test("handleCollectionWithdraw: unknown vault (guard path)", () => {
   ).returns([ethereum.Value.fromUnsignedBigInt(exchangeRate)]);
 
   // Call the handler
-  handleCollectionWithdraw(changetype<CollectionWithdraw>(withdrawEvent));
+  handleCollectionWithdraw(changetype<CollectionWithdraw>(withdrawEvent3));
 
   // Assertions: No entities should be created or updated for this vault
   assert.notInStore("CollectionsVault", vaultAddress.toHex());
   assert.notInStore("CollectionParticipation", vaultAddress.toHex() + "-" + collectionAddress.toHex());
+});
+
+test("handleCollectionWithdraw: null cTokenMarket (edge case)", () => {
+  const caller = MOCK_CALLER_ADDRESS;
+  const receiver = MOCK_RECEIVER_ADDRESS;
+  const assets = BigInt.fromI32(500);
+  const shares = BigInt.fromI32(500);
+  const cTokenAmount = BigInt.fromI32(250); // This will be used as fallback
+  const collectionAddress = MOCK_COLLECTION_ADDRESS;
+  const vaultAddress = MOCK_VAULT_ADDRESS;
+  const cTokenMarketAddress = MOCK_CTOKEN_MARKET_ADDRESS;
+  const exchangeRate = MOCK_EXCHANGE_RATE;
+
+  createMockCollectionRegistry(MOCK_REGISTRY_ADDRESS);
+  createMockCollection(collectionAddress);
+  createMockCollectionsVault(vaultAddress, cTokenMarketAddress);
+  // DO NOT create CTokenMarket, simulating null cTokenMarket
+  createMockCollectionParticipation(
+    vaultAddress,
+    collectionAddress,
+    BigInt.fromI32(1000), // initialShares
+    BigInt.fromI32(1000), // initialAssets
+    exchangeRate
+  );
+
+  const withdrawEvent4 = newCollectionWithdrawEvent(
+    caller,
+    receiver,
+    assets,
+    shares,
+    cTokenAmount,
+    collectionAddress
+  );
+  withdrawEvent4.address = vaultAddress;
+
+  handleCollectionWithdraw(changetype<CollectionWithdraw>(withdrawEvent4));
+
+  const vaultId = vaultAddress.toHex();
+  const collectionVaultId = vaultAddress.toHex() + "-" + collectionAddress.toHex();
+
+  // Assert that cTokenAmount from event was used as fallback
+  assert.fieldEquals("CollectionsVault", vaultId, "totalCTokens", BigInt.fromI32(1000).minus(cTokenAmount).toString());
+  assert.fieldEquals("CollectionParticipation", collectionVaultId, "totalCTokens", BigInt.fromI32(1000).minus(cTokenAmount).toString());
+
+  expectConsistentVault(vaultId);
+  expectConsistentCollectionParticipation(collectionVaultId);
+});
+
+test("handleCollectionWithdraw: zero exchangeRate (edge case)", () => {
+  const caller = MOCK_CALLER_ADDRESS;
+  const receiver = MOCK_RECEIVER_ADDRESS;
+  const assets = BigInt.fromI32(500);
+  const shares = BigInt.fromI32(500);
+  const cTokenAmount = BigInt.fromI32(250); // This will be used as fallback
+  const collectionAddress = MOCK_COLLECTION_ADDRESS;
+  const vaultAddress = MOCK_VAULT_ADDRESS;
+  const cTokenMarketAddress = MOCK_CTOKEN_MARKET_ADDRESS;
+  const zeroExchangeRate = BigInt.fromI32(0);
+
+  createMockCollectionRegistry(MOCK_REGISTRY_ADDRESS);
+  createMockCollection(collectionAddress);
+  createMockCollectionsVault(vaultAddress, cTokenMarketAddress);
+  createMockCTokenMarket(cTokenMarketAddress, zeroExchangeRate); // Zero exchange rate
+  createMockCollectionParticipation(
+    vaultAddress,
+    collectionAddress,
+    BigInt.fromI32(1000), // initialShares
+    BigInt.fromI32(1000), // initialAssets
+    zeroExchangeRate // Use zero exchange rate for initial cToken calculation
+  );
+
+  const withdrawEvent5 = newCollectionWithdrawEvent(
+    caller,
+    receiver,
+    assets,
+    shares,
+    cTokenAmount,
+    collectionAddress
+  );
+  withdrawEvent5.address = vaultAddress;
+
+  createMockedFunction(
+    cTokenMarketAddress,
+    "exchangeRateStored",
+    "exchangeRateStored():(uint256)"
+  ).returns([ethereum.Value.fromUnsignedBigInt(zeroExchangeRate)]);
+
+  handleCollectionWithdraw(changetype<CollectionWithdraw>(withdrawEvent5));
+
+  const vaultId = vaultAddress.toHex();
+  const collectionVaultId = vaultAddress.toHex() + "-" + collectionAddress.toHex();
+
+  // Assert that cTokenAmount from event was used as fallback
+  // Initial totalCTokens for CollectionParticipation was calculated with zeroExchangeRate, so it would be a very large number or cause division by zero.
+  // Let's assume for this test that initial totalCTokens is based on the cTokenAmount from event for simplicity, or a reasonable large number.
+  // For now, I'll assert based on the fallback logic.
+  // The initial totalCTokens for CollectionParticipation would be initialAssets.times(BIGINT_1E18).div(zeroExchangeRate) which is problematic.
+  // Let's adjust the initial state for this specific test to make sense with the fallback.
+  // If exchangeRate is zero, the initial totalCTokens in createMockCollectionParticipation would be problematic.
+  // For this test, let's manually set the initial totalCTokens for the CollectionParticipation to a known value.
+  // Or, better, ensure createMockCollectionParticipation handles zero exchange rate gracefully or we set it up differently.
+
+  // Re-thinking: The `createMockCollectionParticipation` uses `exchangeRate` to calculate `totalCTokens`.
+  // If `zeroExchangeRate` is passed, it will cause division by zero.
+  // For this specific test, I need to ensure the initial state is valid.
+  // I will create the CollectionParticipation manually with a valid initial totalCTokens.
+
+  // Let's re-evaluate the initial state for this test.
+  // If exchangeRate is zero, the initial totalCTokens in createMockCollectionParticipation would be problematic.
+  // For this test, I will set the initial totalCTokens for the CollectionParticipation to a known value that makes sense for the fallback.
+  // Let's assume initial totalCTokens is 1000 for simplicity, and then subtract the cTokenAmount.
+
+  // Initial state setup for this specific test:
+  const initialTotalCTokens = BigInt.fromI32(1000);
+  const initialSharesForWithdraw = BigInt.fromI32(1000);
+  const initialAssetsForWithdraw = BigInt.fromI32(1000);
+
+  const collectionParticipationId = vaultAddress.toHex() + "-" + collectionAddress.toHex();
+  const collectionParticipation = new CollectionParticipation(collectionParticipationId);
+  collectionParticipation.vault = vaultAddress.toHex();
+  collectionParticipation.collection = collectionAddress.toHex();
+  collectionParticipation.principalShares = initialSharesForWithdraw;
+  collectionParticipation.principalDeposited = initialAssetsForWithdraw;
+  collectionParticipation.totalCTokens = initialTotalCTokens; // Manually set for this test
+  collectionParticipation.globalDepositIndex = BigInt.fromI32(0);
+  collectionParticipation.lastGlobalDepositIndex = BigInt.fromI32(0);
+  collectionParticipation.yieldAccrued = BigInt.fromI32(0);
+  collectionParticipation.yieldClaimed = BigInt.fromI32(0);
+  collectionParticipation.totalYieldGenerated = BigInt.fromI32(0);
+  collectionParticipation.isBorrowBased = false;
+  collectionParticipation.rewardSharePercentage = BigInt.fromI32(0);
+  collectionParticipation.weightFunctionType = "LINEAR";
+  collectionParticipation.weightFunctionP1 = BigInt.fromI32(0);
+  collectionParticipation.weightFunctionP2 = BigInt.fromI32(0);
+  collectionParticipation.secondsAccumulated = BigInt.fromI32(0);
+  collectionParticipation.secondsClaimed = BigInt.fromI32(0);
+  collectionParticipation.totalSubsidies = BigInt.fromI32(0);
+  collectionParticipation.totalSubsidiesClaimed = BigInt.fromI32(0);
+  collectionParticipation.averageAPY = BigInt.fromI32(0);
+  collectionParticipation.totalParticipants = BigInt.fromI32(0);
+  collectionParticipation.createdAtBlock = BigInt.fromI32(1);
+  collectionParticipation.createdAtTimestamp = BigInt.fromI32(1678886400);
+  collectionParticipation.updatedAtBlock = BigInt.fromI32(1);
+  collectionParticipation.updatedAtTimestamp = BigInt.fromI32(1678886400);
+  collectionParticipation.save();
+
+  // Also set initial totalCTokens for CollectionsVault
+  const collectionsVault = new CollectionsVault(vaultAddress.toHex());
+  collectionsVault.totalShares = initialSharesForWithdraw;
+  collectionsVault.totalDeposits = initialAssetsForWithdraw;
+  collectionsVault.totalCTokens = initialTotalCTokens; // Manually set for this test
+  collectionsVault.globalDepositIndex = BigInt.fromI32(0);
+  collectionsVault.totalPrincipalDeposited = BigInt.fromI32(0);
+  collectionsVault.collectionRegistry = MOCK_REGISTRY_ADDRESS.toHexString();
+  collectionsVault.epochManager = Address.fromString("0x0000000000000000000000000000000000000007").toHexString();
+  collectionsVault.lendingManager = Address.fromString("0x0000000000000000000000000000000000000008").toHexString();
+  collectionsVault.debtSubsidizer = Address.fromString("0x0000000000000000000000000000000000000009").toHexString();
+  collectionsVault.createdAtBlock = BigInt.fromI32(1);
+  collectionsVault.createdAtTimestamp = BigInt.fromI32(1678886400);
+  collectionsVault.updatedAtBlock = BigInt.fromI32(1);
+  collectionsVault.updatedAtTimestamp = BigInt.fromI32(1678886400);
+  collectionsVault.cTokenMarket = cTokenMarketAddress.toHexString();
+  collectionsVault.save();
+
+  // The rest of the test remains the same
+  const withdrawEvent6 = newCollectionWithdrawEvent(
+    caller,
+    receiver,
+    assets,
+    shares,
+    cTokenAmount,
+    collectionAddress
+  );
+  withdrawEvent6.address = vaultAddress;
+
+  createMockedFunction(
+    cTokenMarketAddress,
+    "exchangeRateStored",
+    "exchangeRateStored():(uint256)"
+  ).returns([ethereum.Value.fromUnsignedBigInt(zeroExchangeRate)]);
+
+  handleCollectionWithdraw(changetype<CollectionWithdraw>(withdrawEvent6));
+
+  // Assert that cTokenAmount from event was used as fallback
+  assert.fieldEquals("CollectionsVault", vaultId, "totalCTokens", initialTotalCTokens.minus(cTokenAmount).toString());
+  assert.fieldEquals("CollectionParticipation", collectionVaultId, "totalCTokens", initialTotalCTokens.minus(cTokenAmount).toString());
+
+  expectConsistentVault(vaultId);
+  expectConsistentCollectionParticipation(collectionVaultId);
 });

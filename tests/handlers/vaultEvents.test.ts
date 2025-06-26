@@ -3,7 +3,6 @@ import {
   test,
   assert,
   clearStore,
-  createMockedFunction,
 } from "matchstick-as/assembly/index";
 import { Address, BigInt, Bytes, ethereum } from "@graphprotocol/graph-ts";
 import {
@@ -37,7 +36,7 @@ const MOCK_COLLECTION_ADDRESS = Address.fromString("0x00000000000000000000000000
 const MOCK_VAULT_ADDRESS = Address.fromString("0x0000000000000000000000000000000000000004");
 const MOCK_CTOKEN_MARKET_ADDRESS = Address.fromString("0x0000000000000000000000000000000000000005");
 const MOCK_EXCHANGE_RATE = BigInt.fromI32(1000000000);
-const MOCK_CALLER_ADDRESS = Address.fromString("0x0000000000000000000000000000000000000001");
+// const MOCK_CALLER_ADDRESS = Address.fromString("0x0000000000000000000000000000000000000001");
 const MOCK_RECEIVER_ADDRESS = Address.fromString("0x0000000000000000000000000000000000000002");
 const MOCK_EPOCH_MANAGER_ADDRESS = Address.fromString("0x0000000000000000000000000000000000000006");
 const MOCK_DEBT_SUBSIDIZER_ADDRESS = Address.fromString("0x0000000000000000000000000000000000000009");
@@ -344,7 +343,7 @@ test("handleCollectionYieldAccrued: zero yield amount (edge case)", () => {
 test("handleCollectionYieldAppliedForEpoch: happy path", () => {
   const epochId = BigInt.fromI32(1);
   const collectionAddress = MOCK_COLLECTION_ADDRESS;
-  const yieldSharePercentage = 100;
+  const yieldSharePercentage = BigInt.fromI32(100);
   const yieldAdded = BigInt.fromI32(500);
   const newTotalDeposits = BigInt.fromI32(10000);
   const vaultAddress = MOCK_VAULT_ADDRESS;
@@ -377,7 +376,7 @@ test("handleCollectionYieldAppliedForEpoch: happy path", () => {
 test("handleCollectionYieldAppliedForEpoch: unknown EpochVaultAllocation (guard path)", () => {
   const epochId = BigInt.fromI32(1);
   const collectionAddress = MOCK_COLLECTION_ADDRESS;
-  const yieldSharePercentage = 100;
+  const yieldSharePercentage = BigInt.fromI32(100);
   const yieldAdded = BigInt.fromI32(500);
   const newTotalDeposits = BigInt.fromI32(10000);
   const vaultAddress = MOCK_VAULT_ADDRESS;
@@ -406,7 +405,7 @@ test("handleCollectionYieldAppliedForEpoch: unknown EpochVaultAllocation (guard 
 test("handleCollectionYieldAppliedForEpoch: zero yield applied (edge case)", () => {
   const epochId = BigInt.fromI32(1);
   const collectionAddress = MOCK_COLLECTION_ADDRESS;
-  const yieldSharePercentage = 100;
+  const yieldSharePercentage = BigInt.fromI32(100);
   const yieldAdded = BigInt.fromI32(0);
   const newTotalDeposits = BigInt.fromI32(10000);
   const vaultAddress = MOCK_VAULT_ADDRESS;

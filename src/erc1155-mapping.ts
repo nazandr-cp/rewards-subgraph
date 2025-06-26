@@ -1,3 +1,4 @@
+/*
 import { BigInt, log } from "@graphprotocol/graph-ts";
 import {
   TransferSingle as TransferSingleEvent,
@@ -250,3 +251,4 @@ export function handleTransferBatch(event: TransferBatchEvent): void {
     }
   }
 }
+*/

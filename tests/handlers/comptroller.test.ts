@@ -1,9 +1,8 @@
 import { beforeEach, test, assert, clearStore, createMockedFunction } from "matchstick-as/assembly/index";
-import { Address, BigInt } from "@graphprotocol/graph-ts";
+import { Address, BigInt, ethereum } from "@graphprotocol/graph-ts";
 import { handleMarketListed, handleMarketEntered } from "../../src/comptroller-mapping";
 import { MarketListed, MarketEntered } from "../../generated/Comptroller/Comptroller";
 import { newMarketListedEvent, newMarketEnteredEvent } from "../utils/tokenHelpers";
-import { CTokenMarket } from "../../generated/schema";
 
 const CTOKEN = Address.fromString("0x00000000000000000000000000000000000000b1");
 const USER = Address.fromString("0x00000000000000000000000000000000000000b2");

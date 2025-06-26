@@ -8,12 +8,16 @@
         "src/*"
       ]
     },
-    "types": []
+    "types": [
+      "matchstick-as",
+      "@graphprotocol/graph-ts"
+    ]
   },
   "include": [
     "src",
     "hardhat_scripts",
     "tests/handlers", // Only include handler tests for Matchstick compilation
+    "tests/utils", // Include test utility files for Matchstick compilation
     "as-globals.d.ts" // Include custom AssemblyScript globals
   ],
   "exclude": [

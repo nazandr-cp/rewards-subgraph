@@ -203,19 +203,21 @@ export function getOrCreateAccountSubsidiesPerCollection(
 
   if (collectionVault == null) {
     log.critical(
-      "getOrCreateAccountSubsidiesPerCollection: CollectionVault {} not found.",
+      "getOrCreateAccountSubsidiesPerCollection: CollectionVault {} not found. This should not happen.",
       [collectionVaultId]
     );
-    // throw new Error(
-    //   `CRITICAL: CollectionVault with id ${collectionVaultId} not found in getOrCreateAccountSubsidiesPerCollection. This should not happen.`
-    // );
+    // Return a dummy object to satisfy TypeScript, as log.critical is expected to halt execution.
+    return new AccountSubsidiesPerCollection(collectionVaultId);
   }
 
   const vaultEntity = CollectionsVault.load(collectionVault.vault);
-  if (!vaultEntity) {
-    // throw new Error(
-    //   `CRITICAL: Vault with id ${collectionVaultId} not found when creating AccountSubsidiesPerCollection. This should not happen.`
-    // );
+  if (vaultEntity == null) {
+    log.critical(
+      "getOrCreateAccountSubsidiesPerCollection: Vault with id {} not found when creating AccountSubsidiesPerCollection. This should not happen.",
+      [collectionVault.vault]
+    );
+    // Return a dummy object to satisfy TypeScript, as log.critical is expected to halt execution.
+    return new AccountSubsidiesPerCollection(collectionVaultId);
   }
 
   const cTokenMarketForVault = vaultEntity.cTokenMarket

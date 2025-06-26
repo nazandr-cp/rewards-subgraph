@@ -1,5 +1,5 @@
 import { beforeEach, test, assert, clearStore, createMockedFunction } from "matchstick-as/assembly/index";
-import { Address, BigInt } from "@graphprotocol/graph-ts";
+import { Address, BigInt, ethereum } from "@graphprotocol/graph-ts";
 import {
   handleMint,
   handleRedeem,
@@ -165,5 +165,5 @@ test("handleLiquidateBorrow", () => {
   ]);
   handleLiquidateBorrow(changetype<LiquidateBorrow>(event));
   const id = OTHER_ADDRESS.toHexString() + "-" + COLLATERAL_ADDRESS.toHexString();
-  assert.entityExists("AccountMarket", id);
+  assert.fieldEquals("AccountMarket", id, "id", id);
 });
