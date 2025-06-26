@@ -35,6 +35,15 @@ export function getOrCreateAccount(accountAddress: Address): Account {
   if (account == null) {
     account = new Account(accountAddress.toHexString());
     account.totalSecondsClaimed = ZERO_BI;
+    account.totalSubsidiesReceived = ZERO_BI;
+    account.totalYieldEarned = ZERO_BI;
+    account.totalBorrowVolume = ZERO_BI;
+    account.totalNFTsOwned = ZERO_BI;
+    account.totalCollectionsParticipated = ZERO_BI;
+    account.firstInteractionBlock = ZERO_BI;
+    account.firstInteractionTimestamp = ZERO_BI;
+    account.updatedAtBlock = ZERO_BI;
+    account.updatedAtTimestamp = ZERO_BI;
     account.save();
     log.info("getOrCreateAccount: Created new account with ID: {}", [
       account.id,
@@ -51,6 +60,8 @@ export function getOrCreateCTokenMarket(address: Address): CTokenMarket {
   let cTokenMarket = CTokenMarket.load(address.toHexString());
   if (cTokenMarket == null) {
     cTokenMarket = new CTokenMarket(address.toHexString());
+    cTokenMarket.symbol = "UNKNOWN";
+    cTokenMarket.name = "UNKNOWN";
     cTokenMarket.decimals = 0;
     cTokenMarket.totalSupply = ZERO_BI;
     cTokenMarket.totalBorrows = ZERO_BI;
@@ -63,6 +74,12 @@ export function getOrCreateCTokenMarket(address: Address): CTokenMarket {
     cTokenMarket.lastExchangeRateTimestamp = ZERO_BI;
     cTokenMarket.updatedAtBlock = ZERO_BI;
     cTokenMarket.updatedAtTimestamp = ZERO_BI;
+    cTokenMarket.liquidationIncentive = ZERO_BI;
+    cTokenMarket.reserveFactor = ZERO_BI;
+    cTokenMarket.baseRatePerBlock = ZERO_BI;
+    cTokenMarket.multiplierPerBlock = ZERO_BI;
+    cTokenMarket.jumpMultiplierPerBlock = ZERO_BI;
+    cTokenMarket.kink = ZERO_BI;
     cTokenMarket.save();
   }
   return cTokenMarket;
@@ -72,10 +89,31 @@ export function getOrCreateCollection(collectionAddress: Address): Collection {
   let collection = Collection.load(collectionAddress.toHexString());
   if (collection == null) {
     collection = new Collection(collectionAddress.toHexString());
+    collection.contractAddress = collectionAddress;
     collection.name = "Unknown Collection";
     collection.symbol = "UNKN";
     collection.totalSupply = ZERO_BI;
     collection.collectionType = "ERC721";
+    // Registry integration
+    collection.registry = ""; // Set to a valid CollectionRegistry ID if available
+    // Registry-managed configuration
+    collection.isActive = false;
+    collection.yieldSharePercentage = ZERO_BI;
+    collection.weightFunctionType = "LINEAR";
+    collection.weightFunctionP1 = ZERO_BI;
+    collection.weightFunctionP2 = ZERO_BI;
+    collection.minBorrowAmount = ZERO_BI;
+    collection.maxBorrowAmount = ZERO_BI;
+    // Collection statistics
+    collection.totalNFTsDeposited = ZERO_BI;
+    collection.totalBorrowVolume = ZERO_BI;
+    collection.totalYieldGenerated = ZERO_BI;
+    collection.totalSubsidiesReceived = ZERO_BI;
+    // Metadata
+    collection.registeredAtBlock = ZERO_BI;
+    collection.registeredAtTimestamp = ZERO_BI;
+    collection.updatedAtBlock = ZERO_BI;
+    collection.updatedAtTimestamp = ZERO_BI;
     collection.save();
   }
   return collection;
@@ -95,6 +133,12 @@ export function getOrCreateVault(
     vault.totalCTokens = ZERO_BI;
     vault.globalDepositIndex = ZERO_BI;
     vault.totalPrincipalDeposited = ZERO_BI;
+    // Registry and manager references (set to empty or placeholder, update as needed)
+    vault.collectionRegistry = "";
+    vault.epochManager = "";
+    vault.lendingManager = "";
+    vault.debtSubsidizer = "";
+    // Metadata
     vault.createdAtBlock = ZERO_BI;
     vault.createdAtTimestamp = ZERO_BI;
     vault.updatedAtBlock = ZERO_BI;
@@ -126,6 +170,8 @@ export function getOrCreateCollectionVault(
     cv.globalDepositIndex = ZERO_BI;
     cv.lastGlobalDepositIndex = ZERO_BI;
     cv.yieldAccrued = ZERO_BI;
+    cv.yieldClaimed = ZERO_BI;
+    cv.totalYieldGenerated = ZERO_BI;
     cv.isBorrowBased = true;
     cv.rewardSharePercentage = ZERO_BI;
     cv.weightFunctionType = "LINEAR";
@@ -135,7 +181,8 @@ export function getOrCreateCollectionVault(
     cv.secondsClaimed = ZERO_BI;
     cv.totalSubsidies = ZERO_BI;
     cv.totalSubsidiesClaimed = ZERO_BI;
-    cv.updatedAtBlock = ZERO_BI;
+    cv.averageAPY = ZERO_BI;
+    cv.totalParticipants = ZERO_BI;
     cv.createdAtBlock = ZERO_BI;
     cv.createdAtTimestamp = ZERO_BI;
     cv.updatedAtBlock = ZERO_BI;
@@ -194,11 +241,11 @@ export function getOrCreateAccountSubsidiesPerCollection(
     apsc.accountMarket = accountMarket.id;
     apsc.collectionParticipation = collectionVault.id;
     apsc.balanceNFT = ZERO_BI;
+    apsc.weightedBalance = ZERO_BI;
     apsc.secondsAccumulated = ZERO_BI;
     apsc.secondsClaimed = ZERO_BI;
     apsc.subsidiesAccrued = ZERO_BI;
     apsc.subsidiesClaimed = ZERO_BI;
-    apsc.weightedBalance = ZERO_BI;
     apsc.averageHoldingPeriod = ZERO_BI;
     apsc.totalRewardsEarned = ZERO_BI;
     apsc.updatedAtBlock = blockNumber;
@@ -263,9 +310,6 @@ export function getOrCreateUserEpochEligibility(
         "getOrCreateUserEpochEligibility: Account {} not found. Cannot create UserEpochEligibility {}.",
         [accountId, id]
       );
-      // This is a critical error, as the account should exist or be created before this call.
-      // Depending on strictness, could throw or return a new unlinked entity.
-      // For now, let's assume the caller ensures Account exists.
       throw new Error(
         `Account ${accountId} not found when trying to create UserEpochEligibility ${id}`
       );
@@ -298,9 +342,14 @@ export function getOrCreateUserEpochEligibility(
     userEpochEligibility.epoch = epochId;
     userEpochEligibility.collection = collectionId;
     userEpochEligibility.nftBalance = ZERO_BI;
-    userEpochEligibility.borrowBalance = ZERO_BI; // Initialize, will be updated by other handlers
-    userEpochEligibility.subsidyReceived = ZERO_BI; // Initialize
-    userEpochEligibility.isEligible = false; // Default, eligibility logic will set this
+    userEpochEligibility.borrowBalance = ZERO_BI;
+    userEpochEligibility.holdingDuration = ZERO_BI;
+    userEpochEligibility.isEligible = false;
+    userEpochEligibility.subsidyReceived = ZERO_BI;
+    userEpochEligibility.yieldShare = ZERO_BI;
+    userEpochEligibility.bonusMultiplier = ZERO_BI;
+    userEpochEligibility.calculatedAtBlock = ZERO_BI;
+    userEpochEligibility.calculatedAtTimestamp = ZERO_BI;
     userEpochEligibility.save();
   }
   return userEpochEligibility;

@@ -22,6 +22,13 @@ export function handleMarketListed(event: MarketListed): void {
   }
   const exchangeRate = exchangeRateTry.value;
   const cTokenMarket = getOrCreateCTokenMarket(event.params.cToken);
+
+  // Set symbol and name (required fields)
+  const symbolResult = cTokenContract.try_symbol();
+  cTokenMarket.symbol = symbolResult.reverted ? "UNKNOWN" : symbolResult.value;
+  const nameResult = cTokenContract.try_name();
+  cTokenMarket.name = nameResult.reverted ? "UNKNOWN" : nameResult.value;
+
   cTokenMarket.decimals = decimals;
   cTokenMarket.exchangeRate = exchangeRate;
   cTokenMarket.updatedAtBlock = event.block.number;

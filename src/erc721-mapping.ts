@@ -1,11 +1,12 @@
 import { BigInt, log } from "@graphprotocol/graph-ts";
 import { Transfer as TransferEvent } from "../generated/ERC721Collection/ERC721";
-import { Collection, SystemState, Account } from "../generated/schema";
+import { SystemState, Account } from "../generated/schema";
 import { accrueSeconds } from "./utils/subsidies";
 import { ADDRESS_ZERO_STR, SYSTEM_STATE_ID, ZERO_BI } from "./utils/const";
 import {
   getOrCreateAccountSubsidiesPerCollection,
   getOrCreateUserEpochEligibility,
+  getOrCreateCollection,
 } from "./utils/getters";
 
 export function handleTransfer(event: TransferEvent): void {
@@ -15,13 +16,8 @@ export function handleTransfer(event: TransferEvent): void {
   const timestamp = event.block.timestamp;
   const blockNumber = event.block.number;
 
-  const collection = Collection.load(collectionAddress.toHexString());
-  if (collection == null) {
-    log.warning("handleTransfer: Collection {} not found. Skipping transfer.", [
-      collectionAddress.toHexString(),
-    ]);
-    return;
-  }
+  // Use getOrCreateCollection to ensure the entity exists
+  const collection = getOrCreateCollection(collectionAddress);
 
   const loadedCollectionParticipations = collection.participations.load();
 

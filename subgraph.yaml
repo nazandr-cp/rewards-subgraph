@@ -8,9 +8,9 @@ dataSources:
     name: Comptroller
     network: apechain-curtis
     source:
-      address: "0x2E40b5B0fD75c659908aa8e38122c797d2A892ae"
+      address: "0x7E81fAaF1132A17DCc0C76b1280E0C0e598D5635"
       abi: Comptroller
-      startBlock: 17504126
+      startBlock: 19549350
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -34,9 +34,9 @@ dataSources:
     name: EpochManager
     network: apechain-curtis
     source:
-      address: "0x0000000000000000000000000000000000000000"
+      address: "0x149E784EDc3eaa05837D4De71B979fA9eAD3aC76"
       abi: EpochManager
-      startBlock: 0
+      startBlock: 19549350
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -68,9 +68,9 @@ dataSources:
     name: DebtSubsidizer
     network: apechain-curtis
     source:
-      address: "0x0000000000000000000000000000000000000000"
+      address: "0x6ebe8F36AA3865BBA247A6b1A055Fce3E65Db183"
       abi: DebtSubsidizer
-      startBlock: 0
+      startBlock: 19549350
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -97,9 +97,9 @@ dataSources:
     name: LendingManager
     network: apechain-curtis
     source:
-      address: "0x0000000000000000000000000000000000000000"
+      address: "0xBD17876D480B065Bf4B5839f0973771f68403FBD"
       abi: LendingManager
-      startBlock: 0
+      startBlock: 19549350
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -125,9 +125,9 @@ dataSources:
     name: ERC721Collection # Example, adjust if you have specific collection data sources
     network: apechain-curtis
     source:
-      address: "0xf97F713c919655636C0cE006f53a5Be03FA8815a"
+      address: "0xc7CfdB8290571cAA6DF7d4693059aB9E853e22EB"
       abi: ERC721
-      startBlock: 17504228
+      startBlock: 19549350
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -211,8 +211,6 @@ templates:
       eventHandlers:
         - event: CollectionDeposit(indexed address,indexed address,indexed address,uint256,uint256,uint256)
           handler: handleCollectionDeposit
-        - event: DepositForCollection(indexed address,indexed address,uint256,uint256)
-          handler: handleDepositForCollection
         - event: CollectionWithdraw(indexed address,indexed address,indexed address,uint256,uint256,uint256)
           handler: handleCollectionWithdraw
         - event: VaultYieldAllocatedToEpoch(indexed uint256,uint256)
