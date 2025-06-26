@@ -1,5 +1,5 @@
 import { BigInt } from "@graphprotocol/graph-ts";
-import { weight } from "../../src/utils/subsidies";
+import { weight } from "../src/utils/weight";
 
 // Mock CollectionParticipation as it's a generated entity
 class MockCollectionParticipation {
