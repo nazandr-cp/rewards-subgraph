@@ -4,7 +4,7 @@ import {
   VaultYieldAllocatedToEpoch as VaultYieldAllocatedToEpochEvent,
   CollectionYieldAppliedForEpoch as CollectionYieldAppliedForEpochEvent,
 } from "../generated/templates/CollectionVault/CollectionVault";
-import { log, Address, ethereum } from "@graphprotocol/graph-ts";
+import { log, Address, BigInt, Bytes, ethereum } from "@graphprotocol/graph-ts";
 import {
   CollectionsVault,
   Epoch,

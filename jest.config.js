@@ -1,6 +1,6 @@
 module.exports = {
     testEnvironment: 'node',
-    testMatch: ['**/tests/integration/**/*.test.ts'],
+    testMatch: ['**/tests/integration/**/*.test.ts', '**/jest-tests/**/*.test.ts'],
     transform: {
         '^.+\\.tsx?$': [
             'ts-jest',
@@ -12,6 +12,11 @@ module.exports = {
     },
     transformIgnorePatterns: [
         // Allow transpiling specific problematic ESM modules in node_modules
-        '/node_modules/(?!graphql-request|other-esm-module-if-needed)/',
+        '/node_modules/',
     ],
+    moduleNameMapper: {
+        '^@graphprotocol/graph-ts$': '<rootDir>/tests/__mocks__/@graphprotocol/graph-ts.ts',
+        '^../../generated/schema$': '<rootDir>/tests/__mocks__/generated/schema.ts',
+        '^../../generated/templates/cToken/cToken$': '<rootDir>/tests/__mocks__/generated/templates/cToken/cToken.ts',
+    },
 };
