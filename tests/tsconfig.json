@@ -19,6 +19,12 @@
         "paths": {
             "../../src/*": [
                 "../src/*"
+            ],
+            "../../generated/*": [
+                "../tests/__mocks__/generated/*"
+            ],
+            "../../generated/templates/cToken/cToken": [
+                "../tests/__mocks__/generated/templates/cToken/cToken"
             ]
         }
     },
