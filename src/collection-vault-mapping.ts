@@ -12,10 +12,11 @@ import {
   CollectionYieldAccrual,
   SubsidyDistribution,
   CTokenMarket,
-  EpochVaultAllocation
+  EpochVaultAllocation,
+  CollectionDeposit
 } from "../generated/schema";
 
-import { getOrCreateCollectionVault, getOrCreateEpochVaultAllocation } from "./utils/getters";
+import { getOrCreateCollectionVault, getOrCreateEpochVaultAllocation, getOrCreateAccount } from "./utils/getters";
 import { ZERO_BI, BIGINT_1E18 } from "./utils/const";
 
 // Helper functions for struct access
@@ -82,6 +83,13 @@ export function handleCollectionDeposit(event: CollectionDepositEvent): void {
   collVault.updatedAtTimestamp = event.block.timestamp;
   collVault.save();
 
+  // Update Account statistics
+  const account = getOrCreateAccount(event.params.receiver);
+  account.totalYieldEarned = account.totalYieldEarned.plus(assets);
+  account.updatedAtBlock = event.block.number;
+  account.updatedAtTimestamp = event.block.timestamp;
+  account.save();
+
   log.info(
     "CollectionDeposit: collectionVaultId {}, caller {}, receiver {}, assets {}, shares {}, new principalDeposited {}",
     [
@@ -93,6 +101,19 @@ export function handleCollectionDeposit(event: CollectionDepositEvent): void {
       collVault.principalDeposited.toString(),
     ]
   );
+
+  // Create CollectionDeposit entity for E2E testing
+  const depositId = event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
+  const deposit = new CollectionDeposit(depositId);
+  deposit.depositor = event.params.receiver;
+  deposit.collection = collectionAddress;
+  deposit.vault = vaultAddress;
+  deposit.amount = assets;
+  deposit.shares = shares;
+  deposit.timestamp = event.block.timestamp;
+  deposit.blockNumber = event.block.number;
+  deposit.transactionHash = event.transaction.hash;
+  deposit.save();
 
   // Export test data for E2E integration
   const testData = `{"depositor": "${event.params.receiver.toHexString()}", "collection": "${collectionAddress.toHexString()}", "vault": "${vaultAddress.toHexString()}", "amount": "${assets.toString()}", "shares": "${shares.toString()}"}`;

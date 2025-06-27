@@ -15,6 +15,9 @@ import {
   getOrCreateCTokenMarket,
 } from "./utils/getters";
 import { accrueAccountSubsidies } from "./utils/subsidies";
+import {
+  Borrow,
+} from "../generated/schema";
 
 const EXP_SCALE = BigInt.fromI32(10).pow(18);
 const PROTOCOL_SEIZE_SHARE_MANTISSA = BigInt.fromString("28000000000000000");
@@ -51,26 +54,47 @@ export function handleAccrueInterest(event: AccrueInterestEvent): void {
 
 export function handleBorrow(event: BorrowEvent): void {
   const borrower = event.params.borrower;
+  const borrowAmount = event.params.borrowAmount;
   const accountBorrows = event.params.accountBorrows;
   const totalBorrows = event.params.totalBorrows;
 
   const market = getOrCreateCTokenMarket(event.address);
   const accountMarket = getOrCreateAccountMarket(borrower, event.address);
+  const account = getOrCreateAccount(borrower);
 
   accountMarket.borrowBalance = accountBorrows;
   accountMarket.updatedAtBlock = event.block.number;
   accountMarket.updatedAtTimestamp = event.block.timestamp;
   accountMarket.save();
 
+  // Update Account statistics
+  account.totalBorrowVolume = account.totalBorrowVolume.plus(borrowAmount);
+  account.updatedAtBlock = event.block.number;
+  account.updatedAtTimestamp = event.block.timestamp;
+  account.save();
+
   market.totalBorrows = totalBorrows;
   market.updatedAtBlock = event.block.number;
   market.updatedAtTimestamp = event.block.timestamp;
   market.save();
 
+  // Create Borrow E2E entity
+  const borrowId = event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
+  const borrowEntity = new Borrow(borrowId);
+  borrowEntity.borrower = borrower;
+  borrowEntity.cToken = event.address;
+  borrowEntity.amount = borrowAmount;
+  borrowEntity.accountBorrows = accountBorrows;
+  borrowEntity.totalBorrows = totalBorrows;
+  borrowEntity.timestamp = event.block.timestamp;
+  borrowEntity.blockNumber = event.block.number;
+  borrowEntity.transactionHash = event.transaction.hash;
+  borrowEntity.save();
+
   accrueAccountSubsidies(borrower, event.block.number, event.block.timestamp);
 
   // Export test data for E2E integration
-  const testData = `{"borrower": "${borrower.toHexString()}", "cToken": "${event.address.toHexString()}", "amount": "${event.params.borrowAmount.toString()}", "accountBorrows": "${accountBorrows.toString()}", "totalBorrows": "${totalBorrows.toString()}"}`;
+  const testData = `{"borrower": "${borrower.toHexString()}", "cToken": "${event.address.toHexString()}", "amount": "${borrowAmount.toString()}", "accountBorrows": "${accountBorrows.toString()}", "totalBorrows": "${totalBorrows.toString()}"}`;
   log.info("E2E_TEST_DATA: BORROW - {}", [testData]);
 }
 

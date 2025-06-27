@@ -1,15 +1,79 @@
 import {
   MerkleRootUpdated,
   SubsidyClaimed,
+  VaultAdded,
 } from "../generated/DebtSubsidizer/DebtSubsidizer";
 import {
   SubsidyDistribution,
   Epoch,
+  DebtSubsidizer,
+  VaultAddition,
 } from "../generated/schema";
 import { BigInt, log, Address } from "@graphprotocol/graph-ts";
+import { CollectionVault } from "../generated/templates";
 
 import { getOrCreateVault, getOrCreateAccount, getOrCreateSystemState, getOrCreateEpochVaultAllocation, getOrCreateMerkleDistribution } from "./utils/getters";
-import { ADDRESS_ZERO_STR } from "./utils/const";
+import { ADDRESS_ZERO_STR, ZERO_BI } from "./utils/const";
+
+export function handleVaultAdded(event: VaultAdded): void {
+  const vaultAddress = event.params.vaultAddress;
+  const cTokenAddress = event.params.cTokenAddress;
+  const lendingManagerAddress = event.params.lendingManagerAddress;
+
+  // Create CollectionVault template instance to start indexing vault events
+  CollectionVault.create(vaultAddress);
+
+  // Create or update the DebtSubsidizer entity
+  let debtSubsidizer = DebtSubsidizer.load(event.address.toHexString());
+  if (debtSubsidizer == null) {
+    debtSubsidizer = new DebtSubsidizer(event.address.toHexString());
+    debtSubsidizer.totalSubsidyPool = ZERO_BI;
+    debtSubsidizer.totalSubsidiesDistributed = ZERO_BI;
+    debtSubsidizer.totalSubsidiesRemaining = ZERO_BI;
+    debtSubsidizer.totalEligibleUsers = ZERO_BI;
+    debtSubsidizer.subsidyRate = ZERO_BI;
+    debtSubsidizer.maxSubsidyPerUser = ZERO_BI;
+    debtSubsidizer.subsidyDuration = ZERO_BI;
+    debtSubsidizer.owner = event.transaction.from;
+    debtSubsidizer.createdAtBlock = event.block.number;
+    debtSubsidizer.createdAtTimestamp = event.block.timestamp;
+  }
+  debtSubsidizer.updatedAtBlock = event.block.number;
+  debtSubsidizer.updatedAtTimestamp = event.block.timestamp;
+  debtSubsidizer.save();
+
+  // Create VaultAddition entity
+  const vaultAdditionId = event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
+  const vaultAddition = new VaultAddition(vaultAdditionId);
+  vaultAddition.debtSubsidizer = debtSubsidizer.id;
+  vaultAddition.vaultAddress = vaultAddress;
+  vaultAddition.cTokenAddress = cTokenAddress;
+  vaultAddition.lendingManagerAddress = lendingManagerAddress;
+  vaultAddition.addedAtBlock = event.block.number;
+  vaultAddition.addedAtTimestamp = event.block.timestamp;
+  vaultAddition.transactionHash = event.transaction.hash;
+  vaultAddition.save();
+
+  // Create or update the vault entity
+  const vault = getOrCreateVault(vaultAddress, cTokenAddress);
+  vault.lendingManager = lendingManagerAddress.toHexString();
+  vault.debtSubsidizer = debtSubsidizer.id;
+  vault.createdAtBlock = event.block.number;
+  vault.createdAtTimestamp = event.block.timestamp;
+  vault.updatedAtBlock = event.block.number;
+  vault.updatedAtTimestamp = event.block.timestamp;
+  vault.save();
+
+  log.info(
+    "VaultAdded: Created CollectionVault template for vault {} with cToken {} and lendingManager {}. DebtSubsidizer: {}",
+    [
+      vaultAddress.toHexString(),
+      cTokenAddress.toHexString(),
+      lendingManagerAddress.toHexString(),
+      debtSubsidizer.id,
+    ]
+  );
+}
 
 export function handleMerkleRootUpdated(event: MerkleRootUpdated): void {
   const eventIdBase =

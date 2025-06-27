@@ -91,6 +91,8 @@ dataSources:
           handler: handleMerkleRootUpdated
         - event: SubsidyClaimed(indexed address,indexed address,uint256)
           handler: handleSubsidyClaimed
+        - event: VaultAdded(indexed address,indexed address,indexed address)
+          handler: handleVaultAdded
       file: ./src/debt-subsidizer-mapping.ts
 
   - kind: ethereum
