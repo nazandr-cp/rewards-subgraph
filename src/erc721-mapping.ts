@@ -1,12 +1,13 @@
 import { BigInt, log } from "@graphprotocol/graph-ts";
 import { Transfer as TransferEvent } from "../generated/ERC721Collection/ERC721";
-import { SystemState, Account } from "../generated/schema";
 import { accrueSeconds } from "./utils/subsidies";
-import { ADDRESS_ZERO_STR, SYSTEM_STATE_ID, ZERO_BI } from "./utils/const";
+import { ADDRESS_ZERO_STR } from "./utils/const";
 import {
   getOrCreateAccountSubsidiesPerCollection,
   getOrCreateUserEpochEligibility,
   getOrCreateCollection,
+  getOrCreateSystemState,
+  getOrCreateAccount,
 } from "./utils/getters";
 
 export function handleTransfer(event: TransferEvent): void {
@@ -30,23 +31,15 @@ export function handleTransfer(event: TransferEvent): void {
   }
 
   // Update UserEpochEligibility for the active epoch
-  const systemState = SystemState.load(SYSTEM_STATE_ID);
-  let activeEpochId: string | null = null;
-  if (systemState != null && systemState.activeEpochId != null) {
-    activeEpochId = systemState.activeEpochId!;
-  }
+  const systemState = getOrCreateSystemState();
+  const activeEpochId: string | null = systemState.activeEpochId;
 
   if (activeEpochId != null) {
     if (fromAddress.toHexString() != ADDRESS_ZERO_STR) {
-      let fromAccount = Account.load(fromAddress.toHexString());
-      if (fromAccount == null) {
-        fromAccount = new Account(fromAddress.toHexString());
-        fromAccount.totalSecondsClaimed = ZERO_BI;
-        fromAccount.save();
-      }
+      const fromAccount = getOrCreateAccount(fromAddress);
       const userEpochEligibilityFrom = getOrCreateUserEpochEligibility(
         fromAccount.id,
-        activeEpochId!,
+        activeEpochId as string,
         collection.id
       );
       userEpochEligibilityFrom.nftBalance =
@@ -55,15 +48,10 @@ export function handleTransfer(event: TransferEvent): void {
     }
 
     if (toAddress.toHexString() != ADDRESS_ZERO_STR) {
-      let toAccount = Account.load(toAddress.toHexString());
-      if (toAccount == null) {
-        toAccount = new Account(toAddress.toHexString());
-        toAccount.totalSecondsClaimed = ZERO_BI;
-        toAccount.save();
-      }
+      const toAccount = getOrCreateAccount(toAddress);
       const userEpochEligibilityTo = getOrCreateUserEpochEligibility(
         toAccount.id,
-        activeEpochId!,
+        activeEpochId as string,
         collection.id
       );
       userEpochEligibilityTo.nftBalance =

@@ -7,9 +7,10 @@ import {
   EpochDurationUpdated,
   AutomatedSystemUpdated,
 } from "../generated/EpochManager/EpochManager";
-import { Epoch, CollectionsVault, EpochVaultAllocation, SystemState } from "../generated/schema";
-import { EPOCH_STATUS_ACTIVE, EPOCH_STATUS_PROCESSING, EPOCH_STATUS_COMPLETED, ZERO_BI, SYSTEM_STATE_ID } from "./utils/const";
+import { Epoch, CollectionsVault } from "../generated/schema";
+import { EPOCH_STATUS_ACTIVE, EPOCH_STATUS_PROCESSING, EPOCH_STATUS_COMPLETED, ZERO_BI } from "./utils/const";
 import { log } from "@graphprotocol/graph-ts";
+import { getOrCreateSystemState, getOrCreateEpochVaultAllocation } from "./utils/getters";
 
 export function handleEpochStarted(event: EpochStarted): void {
   const epochId = event.params.epochId.toString();
@@ -44,20 +45,7 @@ export function handleEpochStarted(event: EpochStarted): void {
     epoch.save();
   }
 
-  let systemState = SystemState.load(SYSTEM_STATE_ID);
-  if (systemState === null) {
-    systemState = new SystemState(SYSTEM_STATE_ID);
-    systemState.totalVaults = ZERO_BI;
-    systemState.totalCollections = ZERO_BI;
-    systemState.totalUsers = ZERO_BI;
-    systemState.totalValueLocked = ZERO_BI;
-    systemState.totalYieldDistributed = ZERO_BI;
-    systemState.totalSubsidiesDistributed = ZERO_BI;
-    systemState.systemUtilizationRate = ZERO_BI;
-    systemState.averageAPY = ZERO_BI;
-    systemState.lastUpdatedBlock = event.block.number;
-    systemState.lastUpdatedTimestamp = event.block.timestamp;
-  }
+  const systemState = getOrCreateSystemState();
   systemState.activeEpochId = epochId;
   systemState.save();
 
@@ -112,14 +100,10 @@ export function handleEpochFinalized(event: EpochFinalized): void {
     }
     epoch.save();
 
-    const systemState = SystemState.load(SYSTEM_STATE_ID);
-    if (systemState != null) {
-      if (systemState.activeEpochId == epochId) {
-        systemState.activeEpochId = null;
-        systemState.save();
-      }
-    } else {
-      log.warning("handleEpochFinalized: SystemState entity not found. Cannot clear activeEpochId for epoch {}.", [epochId]);
+    const systemState = getOrCreateSystemState();
+    if (systemState.activeEpochId == epochId) {
+      systemState.activeEpochId = null;
+      systemState.save();
     }
 
     // Export test data for E2E integration
@@ -193,27 +177,12 @@ export function handleEpochManagerVaultYieldAllocated(event: EpochManagerVaultYi
   epoch.totalYieldAvailable = epoch.totalYieldAvailable.plus(event.params.amount);
   epoch.save();
 
-  const allocationId = epochId + "-" + vaultAddress;
-  let epochVaultAllocation = EpochVaultAllocation.load(allocationId);
-
-  if (epochVaultAllocation == null) {
-    epochVaultAllocation = new EpochVaultAllocation(allocationId);
-    epochVaultAllocation.epoch = epochId;
-    epochVaultAllocation.vault = vaultAddress;
-    epochVaultAllocation.yieldAllocated = ZERO_BI;
-    epochVaultAllocation.subsidiesDistributed = ZERO_BI;
-    epochVaultAllocation.remainingYield = ZERO_BI;
-    epochVaultAllocation.participantCount = ZERO_BI;
-    epochVaultAllocation.averageSubsidyPerUser = ZERO_BI;
-    epochVaultAllocation.utilizationRate = ZERO_BI;
-    epochVaultAllocation.createdAtBlock = event.block.number;
-    epochVaultAllocation.createdAtTimestamp = event.block.timestamp;
-    epochVaultAllocation.updatedAtBlock = event.block.number;
-    epochVaultAllocation.updatedAtTimestamp = event.block.timestamp;
-  }
+  const epochVaultAllocation = getOrCreateEpochVaultAllocation(epochId, vaultAddress);
 
   epochVaultAllocation.yieldAllocated = epochVaultAllocation.yieldAllocated.plus(event.params.amount);
   epochVaultAllocation.remainingYield = epochVaultAllocation.yieldAllocated.minus(epochVaultAllocation.subsidiesDistributed);
+  epochVaultAllocation.updatedAtBlock = event.block.number;
+  epochVaultAllocation.updatedAtTimestamp = event.block.timestamp;
   epochVaultAllocation.save();
 }
 

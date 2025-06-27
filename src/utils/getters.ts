@@ -1,4 +1,4 @@
-import { BigInt, Address, log } from "@graphprotocol/graph-ts";
+import { BigInt, Address, log, Bytes } from "@graphprotocol/graph-ts";
 import {
   Account,
   Collection,
@@ -9,9 +9,12 @@ import {
   AccountMarket,
   UserEpochEligibility,
   Epoch,
+  SystemState,
+  EpochVaultAllocation,
+  MerkleDistribution,
 } from "../../generated/schema";
 
-import { ZERO_BI, ADDRESS_ZERO_STR } from "./const";
+import { ZERO_BI, ADDRESS_ZERO_STR, SYSTEM_STATE_ID } from "./const";
 
 function generateCollectionVaultId(
   vaultId: string,
@@ -351,4 +354,64 @@ export function getOrCreateUserEpochEligibility(
     userEpochEligibility.save();
   }
   return userEpochEligibility;
+}
+// Get or create SystemState singleton
+export function getOrCreateSystemState(): SystemState {
+  let systemState = SystemState.load(SYSTEM_STATE_ID);
+  if (systemState == null) {
+    systemState = new SystemState(SYSTEM_STATE_ID);
+    systemState.totalVaults = ZERO_BI;
+    systemState.totalCollections = ZERO_BI;
+    systemState.totalUsers = ZERO_BI;
+    systemState.totalValueLocked = ZERO_BI;
+    systemState.totalYieldDistributed = ZERO_BI;
+    systemState.totalSubsidiesDistributed = ZERO_BI;
+    systemState.systemUtilizationRate = ZERO_BI;
+    systemState.averageAPY = ZERO_BI;
+    systemState.lastUpdatedBlock = ZERO_BI;
+    systemState.lastUpdatedTimestamp = ZERO_BI;
+    systemState.save();
+  }
+  return systemState;
+}
+
+// Get or create EpochVaultAllocation by epoch and vault
+export function getOrCreateEpochVaultAllocation(epochId: string, vaultId: string): EpochVaultAllocation {
+  const id = epochId + "-" + vaultId;
+  let allocation = EpochVaultAllocation.load(id);
+  if (allocation == null) {
+    allocation = new EpochVaultAllocation(id);
+    allocation.epoch = epochId;
+    allocation.vault = vaultId;
+    allocation.yieldAllocated = ZERO_BI;
+    allocation.subsidiesDistributed = ZERO_BI;
+    allocation.remainingYield = ZERO_BI;
+    allocation.participantCount = ZERO_BI;
+    allocation.averageSubsidyPerUser = ZERO_BI;
+    allocation.utilizationRate = ZERO_BI;
+    allocation.createdAtBlock = ZERO_BI;
+    allocation.createdAtTimestamp = ZERO_BI;
+    allocation.updatedAtBlock = ZERO_BI;
+    allocation.updatedAtTimestamp = ZERO_BI;
+    allocation.save();
+  }
+  return allocation;
+}
+
+// Get or create MerkleDistribution by id, epoch, and vault
+export function getOrCreateMerkleDistribution(id: string, epochId: string, vaultId: string): MerkleDistribution {
+  let distribution = MerkleDistribution.load(id);
+  if (distribution == null) {
+    distribution = new MerkleDistribution(id);
+    distribution.epoch = epochId;
+    distribution.vault = vaultId;
+    distribution.totalAmount = ZERO_BI;
+    distribution.totalClaims = ZERO_BI;
+    distribution.merkleRoot = Bytes.empty();
+    distribution.blockNumber = ZERO_BI;
+    distribution.timestamp = ZERO_BI;
+    distribution.transactionHash = Bytes.empty();
+    distribution.save();
+  }
+  return distribution;
 }

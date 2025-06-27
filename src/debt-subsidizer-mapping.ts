@@ -5,36 +5,31 @@ import {
 import {
   SubsidyDistribution,
   Epoch,
-  SystemState,
-  MerkleDistribution,
-  EpochVaultAllocation,
 } from "../generated/schema";
 import { BigInt, log, Address } from "@graphprotocol/graph-ts";
 
-import { getOrCreateVault, getOrCreateAccount } from "./utils/getters";
+import { getOrCreateVault, getOrCreateAccount, getOrCreateSystemState, getOrCreateEpochVaultAllocation, getOrCreateMerkleDistribution } from "./utils/getters";
 import { ADDRESS_ZERO_STR } from "./utils/const";
 
 export function handleMerkleRootUpdated(event: MerkleRootUpdated): void {
   const eventIdBase =
     event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
 
-  let activeEpochId: string | null = null;
-  const systemState = SystemState.load("SYSTEM");
-  if (systemState != null && systemState.activeEpochId != null) {
-    activeEpochId = systemState.activeEpochId!;
-  } else {
+  const systemState = getOrCreateSystemState();
+  const activeEpochId: string | null = systemState.activeEpochId;
+  if (activeEpochId == null) {
     log.critical(
-      "handleMerkleRootUpdated: SystemState or activeEpochId not found. Cannot process event {}.",
+      "handleMerkleRootUpdated: No active epoch found. Cannot process event {}.",
       [eventIdBase]
     );
     return;
   }
 
-  const epoch = Epoch.load(activeEpochId);
+  const epoch = Epoch.load(activeEpochId as string);
   if (epoch == null) {
     log.critical(
       "handleMerkleRootUpdated: Active Epoch with id {} not found for event {}. Cannot process.",
-      [activeEpochId, eventIdBase]
+      [activeEpochId as string, eventIdBase]
     );
     return; // Critical: Cannot proceed if epoch entity doesn't exist
   }
@@ -46,14 +41,7 @@ export function handleMerkleRootUpdated(event: MerkleRootUpdated): void {
 
   // --- Create MerkleDistribution Entity ---
   const merkleDistributionId = epoch.id + "-" + vault.id;
-  let merkleDistribution = MerkleDistribution.load(merkleDistributionId);
-  if (merkleDistribution == null) {
-    merkleDistribution = new MerkleDistribution(merkleDistributionId);
-    merkleDistribution.epoch = epoch.id;
-    merkleDistribution.vault = vault.id;
-    merkleDistribution.totalAmount = BigInt.fromI32(0);
-    merkleDistribution.totalClaims = BigInt.fromI32(0);
-  }
+  const merkleDistribution = getOrCreateMerkleDistribution(merkleDistributionId, epoch.id, vault.id);
 
   merkleDistribution.merkleRoot = event.params.merkleRoot;
   merkleDistribution.blockNumber = event.block.number;
@@ -76,23 +64,21 @@ export function handleSubsidyClaimed(event: SubsidyClaimed): void {
   const eventIdBase =
     event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
 
-  let activeEpochId: string | null = null;
-  const systemState = SystemState.load("SYSTEM");
-  if (systemState != null && systemState.activeEpochId != null) {
-    activeEpochId = systemState.activeEpochId!;
-  } else {
+  const systemState = getOrCreateSystemState();
+  const activeEpochId: string | null = systemState.activeEpochId;
+  if (activeEpochId == null) {
     log.critical(
-      "handleSubsidyClaimed: SystemState or activeEpochId not found. Cannot process event {}.",
+      "handleSubsidyClaimed: No active epoch found. Cannot process event {}.",
       [eventIdBase]
     );
     return;
   }
 
-  const epoch = Epoch.load(activeEpochId);
+  const epoch = Epoch.load(activeEpochId as string);
   if (epoch == null) {
     log.critical(
       "handleSubsidyClaimed: Active Epoch with id {} not found for event {}. Cannot process.",
-      [activeEpochId, eventIdBase]
+      [activeEpochId as string, eventIdBase]
     );
     return; // Critical: Cannot proceed if epoch entity doesn't exist
   }
@@ -130,38 +116,16 @@ export function handleSubsidyClaimed(event: SubsidyClaimed): void {
   epoch.save();
 
   // --- Update Vault Allocation Statistics ---
-  const vaultAllocationId = epoch.id + "-" + loadedVault.id;
-  let vaultAllocation = EpochVaultAllocation.load(vaultAllocationId);
-  if (vaultAllocation == null) {
-    log.warning(
-      "handleSubsidyClaimed: EpochVaultAllocation {} not found for event {}. Creating new.",
-      [vaultAllocationId, eventIdBase]
-    );
-    vaultAllocation = new EpochVaultAllocation(vaultAllocationId);
-    vaultAllocation.epoch = epoch.id;
-    vaultAllocation.vault = loadedVault.id;
-    vaultAllocation.yieldAllocated = BigInt.fromI32(0);
-    vaultAllocation.subsidiesDistributed = BigInt.fromI32(0);
-    vaultAllocation.remainingYield = BigInt.fromI32(0);
-    vaultAllocation.participantCount = BigInt.fromI32(0);
-    vaultAllocation.averageSubsidyPerUser = BigInt.fromI32(0);
-    vaultAllocation.utilizationRate = BigInt.fromI32(0);
-    vaultAllocation.createdAtBlock = event.block.number;
-    vaultAllocation.createdAtTimestamp = event.block.timestamp;
-    vaultAllocation.updatedAtBlock = event.block.number;
-    vaultAllocation.updatedAtTimestamp = event.block.timestamp;
-  }
-  vaultAllocation.subsidiesDistributed =
-    vaultAllocation.subsidiesDistributed.plus(event.params.amount);
+  const vaultAllocation = getOrCreateEpochVaultAllocation(epoch.id, loadedVault.id);
+
+  vaultAllocation.subsidiesDistributed = vaultAllocation.subsidiesDistributed.plus(event.params.amount);
   if (vaultAllocation.yieldAllocated.gt(BigInt.fromI32(0))) {
-    vaultAllocation.remainingYield = vaultAllocation.yieldAllocated.minus(
-      vaultAllocation.subsidiesDistributed
-    );
+    vaultAllocation.remainingYield = vaultAllocation.yieldAllocated.minus(vaultAllocation.subsidiesDistributed);
   } else {
-    vaultAllocation.remainingYield = vaultAllocation.remainingYield.minus(
-      event.params.amount
-    );
+    vaultAllocation.remainingYield = vaultAllocation.remainingYield.minus(event.params.amount);
   }
+  vaultAllocation.updatedAtBlock = event.block.number;
+  vaultAllocation.updatedAtTimestamp = event.block.timestamp;
   vaultAllocation.save();
 
   log.info(

@@ -8,14 +8,14 @@ import { log, Address, BigInt, Bytes, ethereum } from "@graphprotocol/graph-ts";
 import {
   CollectionsVault,
   Epoch,
-  EpochVaultAllocation,
   CollectionYieldApplication,
   CollectionYieldAccrual,
   SubsidyDistribution,
-  CTokenMarket
+  CTokenMarket,
+  EpochVaultAllocation
 } from "../generated/schema";
 
-import { getOrCreateCollectionVault } from "./utils/getters";
+import { getOrCreateCollectionVault, getOrCreateEpochVaultAllocation } from "./utils/getters";
 import { ZERO_BI, BIGINT_1E18 } from "./utils/const";
 
 // Helper functions for struct access
@@ -203,31 +203,12 @@ export function handleVaultYieldAllocatedToEpoch(event: VaultYieldAllocatedToEpo
   }
 
   // Create or update EpochVaultAllocation
-  // The ID for EpochVaultAllocation is epoch.id + "-" + vault.id
-  const allocationId = epochId + "-" + vaultAddress;
-  let epochVaultAllocation = EpochVaultAllocation.load(allocationId);
-
-  if (epochVaultAllocation == null) {
-    epochVaultAllocation = new EpochVaultAllocation(allocationId);
-    epochVaultAllocation.epoch = epochId;
-    epochVaultAllocation.vault = vaultAddress;
-    epochVaultAllocation.yieldAllocated = ZERO_BI;
-    epochVaultAllocation.subsidiesDistributed = ZERO_BI; // Initialized to zero
-    epochVaultAllocation.participantCount = ZERO_BI;
-    epochVaultAllocation.averageSubsidyPerUser = ZERO_BI;
-    epochVaultAllocation.utilizationRate = ZERO_BI;
-    epochVaultAllocation.createdAtBlock = event.block.number;
-    epochVaultAllocation.createdAtTimestamp = event.block.timestamp;
-    epochVaultAllocation.updatedAtBlock = event.block.number;
-    epochVaultAllocation.updatedAtTimestamp = event.block.timestamp;
-  }
+  const epochVaultAllocation = getOrCreateEpochVaultAllocation(epochId, vaultAddress);
 
   epochVaultAllocation.yieldAllocated = epochVaultAllocation.yieldAllocated.plus(amountAllocated);
-  // remainingYield is yieldAllocated - subsidiesDistributed.
-  // It will be updated when subsidies are processed and `subsidiesDistributed` is updated.
-  epochVaultAllocation.remainingYield = epochVaultAllocation.yieldAllocated.minus(
-    epochVaultAllocation.subsidiesDistributed
-  );
+  epochVaultAllocation.remainingYield = epochVaultAllocation.yieldAllocated.minus(epochVaultAllocation.subsidiesDistributed);
+  epochVaultAllocation.updatedAtBlock = event.block.number;
+  epochVaultAllocation.updatedAtTimestamp = event.block.timestamp;
   epochVaultAllocation.save();
 
   log.info(
@@ -337,21 +318,17 @@ export function handleCollectionYieldAppliedForEpoch(event: CollectionYieldAppli
   );
 
 
-  // Update EpochVaultAllocation
+  // Update EpochVaultAllocation only if it exists
   const epochVaultAllocationId = epochId + "-" + vaultAddress;
-  const epochVaultAllocation = EpochVaultAllocation.load(epochVaultAllocationId); // Changed to const
+  const epochVaultAllocation = EpochVaultAllocation.load(epochVaultAllocationId);
 
-  if (epochVaultAllocation == null) {
-    log.warning(
-      "handleCollectionYieldAppliedForEpoch: EpochVaultAllocation {} not found for epoch {} and vault {}. Cannot update subsidiesDistributed.",
-      [epochVaultAllocationId, epochId, vaultAddress]
-    );
-    // Optionally create it, but it should ideally exist from VaultYieldAllocatedToEpoch or EpochManagerVaultYieldAllocated
-    // For now, we will skip updating if it doesn't exist, as it implies a missing prior event.
-  } else {
+  if (epochVaultAllocation != null) {
     epochVaultAllocation.subsidiesDistributed = epochVaultAllocation.subsidiesDistributed.plus(yieldApplied);
     epochVaultAllocation.remainingYield = epochVaultAllocation.yieldAllocated.minus(epochVaultAllocation.subsidiesDistributed);
+    epochVaultAllocation.updatedAtBlock = event.block.number;
+    epochVaultAllocation.updatedAtTimestamp = event.block.timestamp;
     epochVaultAllocation.save();
+
     log.info(
       "handleCollectionYieldAppliedForEpoch: Updated EpochVaultAllocation {}: subsidiesDistributed {}, remainingYield {}",
       [
@@ -359,6 +336,11 @@ export function handleCollectionYieldAppliedForEpoch(event: CollectionYieldAppli
         epochVaultAllocation.subsidiesDistributed.toString(),
         epochVaultAllocation.remainingYield.toString(),
       ]
+    );
+  } else {
+    log.warning(
+      "handleCollectionYieldAppliedForEpoch: EpochVaultAllocation {} not found for epoch {} and vault {}. Cannot update subsidiesDistributed.",
+      [epochVaultAllocationId, epochId, vaultAddress]
     );
   }
 
