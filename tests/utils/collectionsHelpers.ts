@@ -1,6 +1,6 @@
 import { newMockEvent } from "matchstick-as";
 import { ethereum, Address, BigInt } from "@graphprotocol/graph-ts";
-import { CollectionDeposit } from "../../generated/templates/CollectionVault/CollectionVault"; // Import the specific event type
+import { CollectionDeposit, CollectionWithdraw } from "../../generated/templates/CollectionVault/CollectionVault"; // Import the specific event types
 
 export function newCollectionDepositEvent(
   caller: Address,
@@ -55,11 +55,17 @@ export function newCollectionWithdrawEvent(
   shares: BigInt,
   cTokenAmount: BigInt,
   collectionAddress: Address
-): ethereum.Event {
-  const event = newMockEvent();
+): CollectionWithdraw {
+  const event = changetype<CollectionWithdraw>(newMockEvent());
 
   event.parameters = [];
 
+  event.parameters.push(
+    new ethereum.EventParam(
+      "collectionAddress",
+      ethereum.Value.fromAddress(collectionAddress)
+    )
+  );
   event.parameters.push(
     new ethereum.EventParam("caller", ethereum.Value.fromAddress(caller))
   );
@@ -67,16 +73,22 @@ export function newCollectionWithdrawEvent(
     new ethereum.EventParam("receiver", ethereum.Value.fromAddress(receiver))
   );
   event.parameters.push(
-    new ethereum.EventParam("assets", ethereum.Value.fromUnsignedBigInt(assets))
+    new ethereum.EventParam(
+      "assets",
+      ethereum.Value.fromUnsignedBigInt(assets)
+    )
   );
   event.parameters.push(
-    new ethereum.EventParam("shares", ethereum.Value.fromUnsignedBigInt(shares))
+    new ethereum.EventParam(
+      "shares",
+      ethereum.Value.fromUnsignedBigInt(shares)
+    )
   );
   event.parameters.push(
-    new ethereum.EventParam("cTokenAmount", ethereum.Value.fromUnsignedBigInt(cTokenAmount))
-  );
-  event.parameters.push(
-    new ethereum.EventParam("collectionAddress", ethereum.Value.fromAddress(collectionAddress))
+    new ethereum.EventParam(
+      "cTokenAmount",
+      ethereum.Value.fromUnsignedBigInt(cTokenAmount)
+    )
   );
 
   return event;

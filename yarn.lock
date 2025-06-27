@@ -5300,7 +5300,7 @@ makeerror@1.0.12:
 
 matchstick-as@^0.6.0:
   version "0.6.0"
-  resolved "https://registry.npmjs.org/matchstick-as/-/matchstick-as-0.6.0.tgz"
+  resolved "https://registry.npmjs.org/matchstick-as/-/matchstick-as-0.6.0.tgz#c65296b1f51b1014d605c52067d9b5321ea630e8"
   integrity sha512-E36fWsC1AbCkBFt05VsDDRoFvGSdcZg6oZJrtIe/YDBbuFh8SKbR5FcoqDhNWqSN+F7bN/iS2u8Md0SM+4pUpw==
   dependencies:
     wabt "1.0.24"

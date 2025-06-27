@@ -4,14 +4,15 @@ import {
 } from "../generated/DebtSubsidizer/DebtSubsidizer";
 import {
   SubsidyDistribution,
-  Account,
-  CollectionsVault,
   Epoch,
   SystemState,
   MerkleDistribution,
   EpochVaultAllocation,
 } from "../generated/schema";
-import { BigInt, log } from "@graphprotocol/graph-ts";
+import { BigInt, log, Address } from "@graphprotocol/graph-ts";
+
+import { getOrCreateVault, getOrCreateAccount } from "./utils/getters";
+import { ADDRESS_ZERO_STR } from "./utils/const";
 
 export function handleMerkleRootUpdated(event: MerkleRootUpdated): void {
   const eventIdBase =
@@ -38,30 +39,10 @@ export function handleMerkleRootUpdated(event: MerkleRootUpdated): void {
     return; // Critical: Cannot proceed if epoch entity doesn't exist
   }
 
-  // --- Load/Create Vault ---
-  let vault = CollectionsVault.load(event.params.vaultAddress.toHexString());
-  if (vault == null) {
-    log.warning(
-      "handleMerkleRootUpdated: Vault {} not found. Creating minimal vault for event {}.",
-      [event.params.vaultAddress.toHexString(), eventIdBase]
-    );
-    vault = new CollectionsVault(event.params.vaultAddress.toHexString());
-    vault.cTokenMarket = "UNKNOWN_CTOKEN_MARKET_ID_MERKLE";
-    vault.totalShares = BigInt.fromI32(0);
-    vault.totalDeposits = BigInt.fromI32(0);
-    vault.totalCTokens = BigInt.fromI32(0);
-    vault.globalDepositIndex = BigInt.fromI32(0);
-    vault.totalPrincipalDeposited = BigInt.fromI32(0);
-    vault.collectionRegistry = "";
-    vault.epochManager = "";
-    vault.lendingManager = "";
-    vault.debtSubsidizer = "";
-    vault.createdAtBlock = event.block.number;
-    vault.createdAtTimestamp = event.block.timestamp;
-    vault.updatedAtBlock = event.block.number;
-    vault.updatedAtTimestamp = event.block.timestamp;
-    vault.save();
-  }
+  const vault = getOrCreateVault(
+    event.params.vaultAddress,
+    Address.fromString(ADDRESS_ZERO_STR)
+  );
 
   // --- Create MerkleDistribution Entity ---
   const merkleDistributionId = epoch.id + "-" + vault.id;
@@ -70,6 +51,8 @@ export function handleMerkleRootUpdated(event: MerkleRootUpdated): void {
     merkleDistribution = new MerkleDistribution(merkleDistributionId);
     merkleDistribution.epoch = epoch.id;
     merkleDistribution.vault = vault.id;
+    merkleDistribution.totalAmount = BigInt.fromI32(0);
+    merkleDistribution.totalClaims = BigInt.fromI32(0);
   }
 
   merkleDistribution.merkleRoot = event.params.merkleRoot;
@@ -114,23 +97,12 @@ export function handleSubsidyClaimed(event: SubsidyClaimed): void {
     return; // Critical: Cannot proceed if epoch entity doesn't exist
   }
 
-  // --- Load/Create Account ---
-  let account = Account.load(event.params.recipient.toHexString());
-  if (account == null) {
-    account = new Account(event.params.recipient.toHexString());
-    account.totalSecondsClaimed = BigInt.fromI32(0);
-    account.save();
-  }
+  const account = getOrCreateAccount(event.params.recipient);
 
-  // --- Load Vault (must exist) ---
-  const loadedVault = CollectionsVault.load(event.params.vaultAddress.toHexString());
-  if (loadedVault == null) {
-    log.critical(
-      "handleSubsidyClaimed: Vault {} not found for event {}. Cannot process.",
-      [event.params.vaultAddress.toHexString(), eventIdBase]
-    );
-    return;
-  }
+  const loadedVault = getOrCreateVault(
+    event.params.vaultAddress,
+    Address.fromString(ADDRESS_ZERO_STR)
+  );
 
   const subsidyTxId = "CLAIMTX-" + eventIdBase;
   const subsidyTx = new SubsidyDistribution(subsidyTxId);
@@ -171,6 +143,13 @@ export function handleSubsidyClaimed(event: SubsidyClaimed): void {
     vaultAllocation.yieldAllocated = BigInt.fromI32(0);
     vaultAllocation.subsidiesDistributed = BigInt.fromI32(0);
     vaultAllocation.remainingYield = BigInt.fromI32(0);
+    vaultAllocation.participantCount = BigInt.fromI32(0);
+    vaultAllocation.averageSubsidyPerUser = BigInt.fromI32(0);
+    vaultAllocation.utilizationRate = BigInt.fromI32(0);
+    vaultAllocation.createdAtBlock = event.block.number;
+    vaultAllocation.createdAtTimestamp = event.block.timestamp;
+    vaultAllocation.updatedAtBlock = event.block.number;
+    vaultAllocation.updatedAtTimestamp = event.block.timestamp;
   }
   vaultAllocation.subsidiesDistributed =
     vaultAllocation.subsidiesDistributed.plus(event.params.amount);

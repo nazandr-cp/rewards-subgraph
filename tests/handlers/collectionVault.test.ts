@@ -12,7 +12,7 @@ import {
 import { Address, BigInt, Bytes, ethereum } from "@graphprotocol/graph-ts";
 import { handleCollectionDeposit, handleCollectionWithdraw } from "../../src/collection-vault-mapping";
 import { newCollectionDepositEvent, newCollectionWithdrawEvent } from "../utils/collectionsHelpers";
-import { CollectionDeposit, CollectionWithdraw } from "../../generated/templates/CollectionVault/CollectionVault"; // Import the specific event type
+import { CollectionDeposit, CollectionWithdraw } from "../../generated/templates/CollectionVault/CollectionVault"; // Import the specific event types
 import { CollectionsVault, CTokenMarket, CollectionParticipation, Collection, CollectionRegistry } from "../../generated/schema"; // Added CollectionRegistry
 import { expectConsistentVault, expectConsistentCollectionParticipation } from "../utils/consistency"; // Import consistency helpers
 
@@ -423,6 +423,13 @@ test("handleCollectionWithdraw: happy path withdraw", () => {
     exchangeRate
   );
 
+  // Update vault to have initial funds for withdrawal
+  const vaultEntity = CollectionsVault.load(vaultAddress.toHex())!;
+  vaultEntity.totalShares = BigInt.fromI32(1000);
+  vaultEntity.totalDeposits = BigInt.fromI32(1000);
+  vaultEntity.totalCTokens = BigInt.fromI32(1000).times(BigInt.fromString("1000000000000000000")).div(exchangeRate);
+  vaultEntity.save();
+
   // Create mock event
   const withdrawEvent1 = newCollectionWithdrawEvent(
     caller,
@@ -485,6 +492,13 @@ test("handleCollectionWithdraw: zero withdraw (edge case)", () => {
     exchangeRate
   );
 
+  // Update vault to have initial funds for withdrawal
+  const vaultForZeroWithdraw = CollectionsVault.load(vaultAddress.toHex())!;
+  vaultForZeroWithdraw.totalShares = BigInt.fromI32(1000);
+  vaultForZeroWithdraw.totalDeposits = BigInt.fromI32(1000);
+  vaultForZeroWithdraw.totalCTokens = BigInt.fromI32(1000).times(BigInt.fromString("1000000000000000000")).div(exchangeRate);
+  vaultForZeroWithdraw.save();
+
   // Create mock event
   const withdrawEvent2 = newCollectionWithdrawEvent(
     caller,
@@ -506,7 +520,7 @@ test("handleCollectionWithdraw: zero withdraw (edge case)", () => {
   // Call the handler
   handleCollectionWithdraw(changetype<CollectionWithdraw>(withdrawEvent2));
 
-  // Assertions: Values should remain at their initial state
+  // Assertions: Values should remain at their initial state (no change from 1000 since withdrawing 0)
   const vaultId = vaultAddress.toHex();
   const collectionVaultId = vaultAddress.toHex() + "-" + collectionAddress.toHex();
 
@@ -589,6 +603,19 @@ test("handleCollectionWithdraw: null cTokenMarket (edge case)", () => {
     exchangeRate
   );
 
+  // Update vault to have initial funds for withdrawal
+  const vaultForNullMarket = CollectionsVault.load(vaultAddress.toHex())!;
+  vaultForNullMarket.totalShares = BigInt.fromI32(1000);
+  vaultForNullMarket.totalDeposits = BigInt.fromI32(1000);
+  vaultForNullMarket.totalCTokens = BigInt.fromI32(1000); // Set to simple 1000 instead of calculated value
+  vaultForNullMarket.save();
+
+  // Also update the collection participation to match
+  const collectionParticipationIdForNullMarket = vaultAddress.toHex() + "-" + collectionAddress.toHex();
+  const collectionParticipationForNullMarket = CollectionParticipation.load(collectionParticipationIdForNullMarket)!;
+  collectionParticipationForNullMarket.totalCTokens = BigInt.fromI32(1000); // Set to simple 1000
+  collectionParticipationForNullMarket.save();
+
   const withdrawEvent4 = newCollectionWithdrawEvent(
     caller,
     receiver,
@@ -605,8 +632,9 @@ test("handleCollectionWithdraw: null cTokenMarket (edge case)", () => {
   const collectionVaultId = vaultAddress.toHex() + "-" + collectionAddress.toHex();
 
   // Assert that cTokenAmount from event was used as fallback
-  assert.fieldEquals("CollectionsVault", vaultId, "totalCTokens", BigInt.fromI32(1000).minus(cTokenAmount).toString());
-  assert.fieldEquals("CollectionParticipation", collectionVaultId, "totalCTokens", BigInt.fromI32(1000).minus(cTokenAmount).toString());
+  // Initial was 1000, withdrawn 250, so should be 750
+  assert.fieldEquals("CollectionsVault", vaultId, "totalCTokens", BigInt.fromI32(750).toString());
+  assert.fieldEquals("CollectionParticipation", collectionVaultId, "totalCTokens", BigInt.fromI32(750).toString());
 
   expectConsistentVault(vaultId);
   expectConsistentCollectionParticipation(collectionVaultId);
@@ -627,12 +655,13 @@ test("handleCollectionWithdraw: zero exchangeRate (edge case)", () => {
   createMockCollection(collectionAddress);
   createMockCollectionsVault(vaultAddress, cTokenMarketAddress);
   createMockCTokenMarket(cTokenMarketAddress, zeroExchangeRate); // Zero exchange rate
+  // Use valid exchange rate for initial creation to avoid division by zero
   createMockCollectionParticipation(
     vaultAddress,
     collectionAddress,
     BigInt.fromI32(1000), // initialShares
     BigInt.fromI32(1000), // initialAssets
-    zeroExchangeRate // Use zero exchange rate for initial cToken calculation
+    MOCK_EXCHANGE_RATE // Use valid exchange rate for creation
   );
 
   const withdrawEvent5 = newCollectionWithdrawEvent(

@@ -32,18 +32,31 @@ export function handleEpochStarted(event: EpochStarted): void {
     epoch.createdAtTimestamp = event.block.timestamp;
     epoch.updatedAtBlock = event.block.number;
     epoch.updatedAtTimestamp = event.block.timestamp;
+    epoch.participantCount = ZERO_BI;
+    epoch.epochManager = event.address.toHexString();
     epoch.save();
   } else {
     log.info("handleEpochStarted: Epoch {} already exists. Ensuring it is active and timestamps are current.", [epochId]);
     epoch.status = EPOCH_STATUS_ACTIVE;
     epoch.startTimestamp = event.params.startTime;
     epoch.endTimestamp = event.params.endTime;
+    epoch.epochManager = event.address.toHexString();
     epoch.save();
   }
 
   let systemState = SystemState.load(SYSTEM_STATE_ID);
   if (systemState === null) {
     systemState = new SystemState(SYSTEM_STATE_ID);
+    systemState.totalVaults = ZERO_BI;
+    systemState.totalCollections = ZERO_BI;
+    systemState.totalUsers = ZERO_BI;
+    systemState.totalValueLocked = ZERO_BI;
+    systemState.totalYieldDistributed = ZERO_BI;
+    systemState.totalSubsidiesDistributed = ZERO_BI;
+    systemState.systemUtilizationRate = ZERO_BI;
+    systemState.averageAPY = ZERO_BI;
+    systemState.lastUpdatedBlock = event.block.number;
+    systemState.lastUpdatedTimestamp = event.block.timestamp;
   }
   systemState.activeEpochId = epochId;
   systemState.save();
@@ -77,6 +90,8 @@ export function handleEpochProcessingStarted(event: EpochProcessingStarted): voi
     epoch.createdAtTimestamp = event.block.timestamp;
     epoch.updatedAtBlock = event.block.number;
     epoch.updatedAtTimestamp = event.block.timestamp;
+    epoch.participantCount = ZERO_BI;
+    epoch.epochManager = event.address.toHexString();
   }
 
   epoch.status = EPOCH_STATUS_PROCESSING;
@@ -92,6 +107,9 @@ export function handleEpochFinalized(event: EpochFinalized): void {
     epoch.totalYieldAvailable = event.params.totalYieldAvailable;
     epoch.totalSubsidiesDistributed = event.params.totalSubsidiesDistributed;
     epoch.status = EPOCH_STATUS_COMPLETED;
+    if (!epoch.epochManager) {
+      epoch.epochManager = event.address.toHexString();
+    }
     epoch.save();
 
     const systemState = SystemState.load(SYSTEM_STATE_ID);
@@ -143,6 +161,9 @@ export function handleEpochManagerVaultYieldAllocated(event: EpochManagerVaultYi
     );
     return;
   }
+  if (!epoch.epochManager) {
+    epoch.epochManager = event.address.toHexString();
+  }
 
   const vaultAddress = event.params.vault.toHexString();
   let vault = CollectionsVault.load(vaultAddress);
@@ -181,6 +202,14 @@ export function handleEpochManagerVaultYieldAllocated(event: EpochManagerVaultYi
     epochVaultAllocation.vault = vaultAddress;
     epochVaultAllocation.yieldAllocated = ZERO_BI;
     epochVaultAllocation.subsidiesDistributed = ZERO_BI;
+    epochVaultAllocation.remainingYield = ZERO_BI;
+    epochVaultAllocation.participantCount = ZERO_BI;
+    epochVaultAllocation.averageSubsidyPerUser = ZERO_BI;
+    epochVaultAllocation.utilizationRate = ZERO_BI;
+    epochVaultAllocation.createdAtBlock = event.block.number;
+    epochVaultAllocation.createdAtTimestamp = event.block.timestamp;
+    epochVaultAllocation.updatedAtBlock = event.block.number;
+    epochVaultAllocation.updatedAtTimestamp = event.block.timestamp;
   }
 
   epochVaultAllocation.yieldAllocated = epochVaultAllocation.yieldAllocated.plus(event.params.amount);

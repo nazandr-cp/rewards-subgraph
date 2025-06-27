@@ -1,5 +1,5 @@
 import { newMockEvent } from "matchstick-as";
-import { ethereum, Address, BigInt } from "@graphprotocol/graph-ts";
+import { ethereum, Address, BigInt, Bytes } from "@graphprotocol/graph-ts";
 
 export function newMintEvent(minter: Address, amount: BigInt): ethereum.Event {
   const event = newMockEvent();
@@ -102,15 +102,17 @@ export function newWithdrawFromProtocolEvent(caller: Address): ethereum.Event {
 export function newPrincipalResetEvent(trigger: Address): ethereum.Event {
   const event = newMockEvent();
   event.parameters = [];
+  event.parameters.push(new ethereum.EventParam("oldValue", ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(0))));
   event.parameters.push(new ethereum.EventParam("trigger", ethereum.Value.fromAddress(trigger)));
   return event;
 }
 
-export function newMerkleRootUpdatedEvent(vault: Address, root: BigInt): ethereum.Event {
+export function newMerkleRootUpdatedEvent(vault: Address, root: Bytes, updatedBy: Address): ethereum.Event {
   const event = newMockEvent();
   event.parameters = [];
   event.parameters.push(new ethereum.EventParam("vaultAddress", ethereum.Value.fromAddress(vault)));
-  event.parameters.push(new ethereum.EventParam("merkleRoot", ethereum.Value.fromUnsignedBigInt(root)));
+  event.parameters.push(new ethereum.EventParam("merkleRoot", ethereum.Value.fromBytes(root)));
+  event.parameters.push(new ethereum.EventParam("updatedBy", ethereum.Value.fromAddress(updatedBy)));
   return event;
 }
 
@@ -143,7 +145,7 @@ export function newERC1155TransferSingleEvent(operator: Address, from: Address, 
   return event;
 }
 
-export function newERC1155TransferBatchEvent(operator: Address, from: Address, to: Address, values: Array<BigInt>): ethereum.Event {
+export function newERC1155TransferBatchEvent(operator: Address, from: Address, to: Address, values: BigInt[]): ethereum.Event {
   const event = newMockEvent();
   event.parameters = [];
   event.parameters.push(new ethereum.EventParam("operator", ethereum.Value.fromAddress(operator)));

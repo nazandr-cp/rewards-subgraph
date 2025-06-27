@@ -18,6 +18,15 @@ import {
 import { getOrCreateCollectionVault } from "./utils/getters";
 import { ZERO_BI, BIGINT_1E18 } from "./utils/const";
 
+// Helper functions for struct access
+function getAddressFromParameter(param: ethereum.EventParam): Address {
+  return param.value.toAddress();
+}
+
+function getBigIntFromParameter(param: ethereum.EventParam): BigInt {
+  return param.value.toBigInt();
+}
+
 export function handleCollectionDeposit(event: CollectionDepositEvent): void {
   const vaultAddress = event.address;
   const collectionAddress = event.params.collectionAddress;
@@ -204,6 +213,13 @@ export function handleVaultYieldAllocatedToEpoch(event: VaultYieldAllocatedToEpo
     epochVaultAllocation.vault = vaultAddress;
     epochVaultAllocation.yieldAllocated = ZERO_BI;
     epochVaultAllocation.subsidiesDistributed = ZERO_BI; // Initialized to zero
+    epochVaultAllocation.participantCount = ZERO_BI;
+    epochVaultAllocation.averageSubsidyPerUser = ZERO_BI;
+    epochVaultAllocation.utilizationRate = ZERO_BI;
+    epochVaultAllocation.createdAtBlock = event.block.number;
+    epochVaultAllocation.createdAtTimestamp = event.block.timestamp;
+    epochVaultAllocation.updatedAtBlock = event.block.number;
+    epochVaultAllocation.updatedAtTimestamp = event.block.timestamp;
   }
 
   epochVaultAllocation.yieldAllocated = epochVaultAllocation.yieldAllocated.plus(amountAllocated);
@@ -237,22 +253,22 @@ export function handleVaultYieldAllocatedToEpoch(event: VaultYieldAllocatedToEpo
 export function handleCollectionYieldAccrued(event: ethereum.Event): void {
   // CollectionYieldAccrued(indexed address,uint256,uint256,uint256,uint256)
   // event.params: collection, yieldAmount, globalDepositIndex, lastGlobalDepositIndex, totalAccrued
-  
+
   if (event.parameters.length < 5) {
     log.error("handleCollectionYieldAccrued: Insufficient parameters. Expected 5, got {}", [
       event.parameters.length.toString()
     ]);
     return;
   }
-  
-  const collectionAddress = event.parameters[0].value.toAddress();
-  const yieldAmount = event.parameters[1].value.toBigInt();
-  const globalDepositIndex = event.parameters[2].value.toBigInt();
-  const lastGlobalDepositIndex = event.parameters[3].value.toBigInt();
-  const totalAccrued = event.parameters[4].value.toBigInt();
-  
+
+  const collectionAddress = getAddressFromParameter(event.parameters[0]);
+  const yieldAmount = getBigIntFromParameter(event.parameters[1]);
+  const globalDepositIndex = getBigIntFromParameter(event.parameters[2]);
+  const lastGlobalDepositIndex = getBigIntFromParameter(event.parameters[3]);
+  const totalAccrued = getBigIntFromParameter(event.parameters[4]);
+
   const vaultAddress = event.address;
-  
+
   log.info("CollectionYieldAccrued: vault {}, collection {}, yieldAmount {}, globalDepositIndex {}, lastGlobalDepositIndex {}, totalAccrued {}", [
     vaultAddress.toHexString(),
     collectionAddress.toHexString(),
@@ -294,6 +310,9 @@ export function handleCollectionYieldAccrued(event: ethereum.Event): void {
   accrual.blockNumber = event.block.number;
   accrual.timestamp = event.block.timestamp;
   accrual.transactionHash = event.transaction.hash;
+  accrual.cumulativeYield = totalAccrued;
+  accrual.sourceType = "";
+  accrual.sourceTransaction = Bytes.empty();
   accrual.save();
 }
 
@@ -317,22 +336,22 @@ export function handleCollectionYieldAppliedForEpoch(event: CollectionYieldAppli
     [epochId, vaultAddress, collectionAddress, yieldApplied.toString()]
   );
 
-  
-    // Update EpochVaultAllocation
-    const epochVaultAllocationId = epochId + "-" + vaultAddress;
-    const epochVaultAllocation = EpochVaultAllocation.load(epochVaultAllocationId); // Changed to const
-  
-    if (epochVaultAllocation == null) {
-      log.warning(
-        "handleCollectionYieldAppliedForEpoch: EpochVaultAllocation {} not found for epoch {} and vault {}. Cannot update subsidiesDistributed.",
-        [epochVaultAllocationId, epochId, vaultAddress]
-      );
-      // Optionally create it, but it should ideally exist from VaultYieldAllocatedToEpoch or EpochManagerVaultYieldAllocated
-      // For now, we will skip updating if it doesn't exist, as it implies a missing prior event.
-    } else {
-      epochVaultAllocation.subsidiesDistributed = epochVaultAllocation.subsidiesDistributed.plus(yieldApplied);
-      epochVaultAllocation.remainingYield = epochVaultAllocation.yieldAllocated.minus(epochVaultAllocation.subsidiesDistributed);
-      epochVaultAllocation.save();
+
+  // Update EpochVaultAllocation
+  const epochVaultAllocationId = epochId + "-" + vaultAddress;
+  const epochVaultAllocation = EpochVaultAllocation.load(epochVaultAllocationId); // Changed to const
+
+  if (epochVaultAllocation == null) {
+    log.warning(
+      "handleCollectionYieldAppliedForEpoch: EpochVaultAllocation {} not found for epoch {} and vault {}. Cannot update subsidiesDistributed.",
+      [epochVaultAllocationId, epochId, vaultAddress]
+    );
+    // Optionally create it, but it should ideally exist from VaultYieldAllocatedToEpoch or EpochManagerVaultYieldAllocated
+    // For now, we will skip updating if it doesn't exist, as it implies a missing prior event.
+  } else {
+    epochVaultAllocation.subsidiesDistributed = epochVaultAllocation.subsidiesDistributed.plus(yieldApplied);
+    epochVaultAllocation.remainingYield = epochVaultAllocation.yieldAllocated.minus(epochVaultAllocation.subsidiesDistributed);
+    epochVaultAllocation.save();
     log.info(
       "handleCollectionYieldAppliedForEpoch: Updated EpochVaultAllocation {}: subsidiesDistributed {}, remainingYield {}",
       [
@@ -354,6 +373,9 @@ export function handleCollectionYieldAppliedForEpoch(event: CollectionYieldAppli
     application.blockNumber = event.block.number;
     application.timestamp = event.block.timestamp; // Corrected: Use BigInt directly
     application.transactionHash = event.transaction.hash;
+    application.recipientCount = ZERO_BI;
+    application.averageYieldPerUser = ZERO_BI;
+    application.processingGasUsed = ZERO_BI;
     application.save();
 
     log.info("handleCollectionYieldAppliedForEpoch: Created CollectionYieldApplication entity {}", [applicationEntityId]);
@@ -365,8 +387,8 @@ export function handleYieldBatchRepaid(event: ethereum.Event): void {
   // YieldBatchRepaid(uint256,indexed address)
   // event.params: totalYieldRepaid, collection
 
-  const totalYieldRepaid = event.parameters[0].value.toBigInt();
-  const recipient = event.parameters[1].value.toAddress();
+  const totalYieldRepaid = getBigIntFromParameter(event.parameters[0]);
+  const recipient = getAddressFromParameter(event.parameters[1]);
 
   log.info("YieldBatchRepaid: totalYieldRepaid {}, recipient {}", [
     totalYieldRepaid.toString(),
@@ -382,9 +404,17 @@ export function handleYieldBatchRepaid(event: ethereum.Event): void {
   subsidyTx.subsidyAmount = totalYieldRepaid;
   subsidyTx.borrowAmountBefore = ZERO_BI;
   subsidyTx.borrowAmountAfter = ZERO_BI;
-  subsidyTx.gasUsed = event.receipt != null ? event.receipt!.gasUsed : ZERO_BI;
+  let gasUsed = ZERO_BI;
+  const receipt = event.receipt;
+  if (receipt != null) {
+    gasUsed = receipt.gasUsed;
+  }
+  subsidyTx.gasUsed = gasUsed;
   subsidyTx.blockNumber = event.block.number;
   subsidyTx.timestamp = event.block.timestamp;
   subsidyTx.transactionHash = event.transaction.hash;
+  subsidyTx.debtSubsidizer = "";
+  subsidyTx.nftBalance = ZERO_BI;
+  subsidyTx.weightedContribution = ZERO_BI;
   subsidyTx.save();
 }

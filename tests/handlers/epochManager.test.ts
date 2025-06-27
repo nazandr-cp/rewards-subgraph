@@ -51,12 +51,19 @@ test("handleEpochFinalized: updates epoch and clears system state", () => {
   epoch.startTimestamp = BigInt.fromI32(0);
   epoch.endTimestamp = BigInt.fromI32(0);
   epoch.totalYieldAvailable = BigInt.fromI32(0);
+  epoch.totalYieldAllocated = BigInt.fromI32(0);
+  epoch.totalYieldDistributed = BigInt.fromI32(0);
+  epoch.remainingYield = BigInt.fromI32(0);
   epoch.totalSubsidiesDistributed = BigInt.fromI32(0);
+  epoch.totalEligibleUsers = BigInt.fromI32(0);
+  epoch.totalParticipatingCollections = BigInt.fromI32(0);
   epoch.status = "ACTIVE";
   epoch.createdAtBlock = BigInt.fromI32(0);
   epoch.createdAtTimestamp = BigInt.fromI32(0);
   epoch.updatedAtBlock = BigInt.fromI32(0);
   epoch.updatedAtTimestamp = BigInt.fromI32(0);
+  epoch.participantCount = BigInt.fromI32(0);
+  epoch.epochManager = Address.fromString("0x0000000000000000000000000000000000000006").toHexString();
   epoch.save();
 
   const sys = new SystemState("SYSTEM");
@@ -79,7 +86,7 @@ test("handleEpochFinalized: updates epoch and clears system state", () => {
   assert.fieldEquals("Epoch", "3", "totalYieldAvailable", "100");
   assert.fieldEquals("Epoch", "3", "totalSubsidiesDistributed", "10");
   assert.fieldEquals("Epoch", "3", "status", "COMPLETED");
-  assert.notInStore("SystemState", "SYSTEM", "activeEpochId");
+  assert.fieldEquals("SystemState", "SYSTEM", "activeEpochId", "null");
 });
 
 test("handleEpochFailed: unknown epoch", () => {
@@ -105,6 +112,8 @@ test("handleEpochManagerVaultYieldAllocated: creates allocation", () => {
   epoch.createdAtTimestamp = BigInt.fromI32(0);
   epoch.updatedAtBlock = BigInt.fromI32(0);
   epoch.updatedAtTimestamp = BigInt.fromI32(0);
+  epoch.participantCount = BigInt.fromI32(0);
+  epoch.epochManager = Address.fromString("0x0000000000000000000000000000000000000006").toHexString();
   epoch.save();
 
   const vault = new CollectionsVault(MOCK_VAULT_ADDRESS.toHexString());

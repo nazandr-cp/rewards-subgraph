@@ -1,5 +1,5 @@
 import { beforeEach, test, assert, clearStore } from "matchstick-as/assembly/index";
-import { Address, BigInt } from "@graphprotocol/graph-ts";
+import { Address, BigInt, Bytes } from "@graphprotocol/graph-ts";
 import { handleMerkleRootUpdated, handleSubsidyClaimed } from "../../src/debt-subsidizer-mapping";
 import { MerkleRootUpdated, SubsidyClaimed } from "../../generated/DebtSubsidizer/DebtSubsidizer";
 import { newMerkleRootUpdatedEvent, newSubsidyClaimedEvent } from "../utils/tokenHelpers";
@@ -61,13 +61,29 @@ beforeEach(() => {
 });
 
 test("handleMerkleRootUpdated", () => {
-  const event = changetype<MerkleRootUpdated>(newMerkleRootUpdatedEvent(VAULT, BigInt.fromI32(1)));
+  const event = changetype<MerkleRootUpdated>(
+    newMerkleRootUpdatedEvent(
+      VAULT,
+      Bytes.fromHexString("0x0000000000000000000000000000000000000000000000000000000000000001"),
+      USER
+    )
+  );
   handleMerkleRootUpdated(event);
-  assert.notInStore("MerkleDistribution", "nonexistent"); // placeholder: entityExists not available
+  const merkleDistributionId = "1-0x00000000000000000000000000000000000000c1";
+  assert.fieldEquals(
+    "MerkleDistribution",
+    merkleDistributionId,
+    "merkleRoot",
+    "0x0000000000000000000000000000000000000000000000000000000000000001"
+  );
+  assert.fieldEquals("MerkleDistribution", merkleDistributionId, "totalAmount", "0");
+  assert.fieldEquals("MerkleDistribution", merkleDistributionId, "totalClaims", "0");
 });
 
 test("handleSubsidyClaimed", () => {
   const event = changetype<SubsidyClaimed>(newSubsidyClaimedEvent(VAULT, USER, BigInt.fromI32(10)));
   handleSubsidyClaimed(event);
-  assert.notInStore("SubsidyDistribution", "nonexistent"); // placeholder: entityExists not available
+  const subsidyTxId = "CLAIMTX-" + event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
+  assert.fieldEquals("SubsidyDistribution", subsidyTxId, "subsidyAmount", "10");
+  assert.fieldEquals("EpochVaultAllocation", "1-0x00000000000000000000000000000000000000c1", "subsidiesDistributed", "10");
 });

@@ -66,6 +66,9 @@ beforeEach(() => {
 test("handleMint", () => {
   const event = newMintEvent(OTHER_ADDRESS, BigInt.fromI32(100));
   event.address = CTOKEN_ADDRESS;
+  createMockedFunction(CTOKEN_ADDRESS, "totalSupply", "totalSupply():(uint256)").returns([
+    ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(1000))
+  ]);
   handleMint(changetype<Mint>(event));
   const id = OTHER_ADDRESS.toHexString() + "-" + CTOKEN_ADDRESS.toHexString();
   assert.fieldEquals("AccountMarket", id, "supplyBalance", "100");
@@ -88,6 +91,9 @@ test("handleRedeem", () => {
   am.save();
   const event = newRedeemEvent(OTHER_ADDRESS, BigInt.fromI32(50));
   event.address = CTOKEN_ADDRESS;
+  createMockedFunction(CTOKEN_ADDRESS, "totalSupply", "totalSupply():(uint256)").returns([
+    ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(1000))
+  ]);
   handleRedeem(changetype<Redeem>(event));
   assert.fieldEquals("AccountMarket", id, "supplyBalance", "150");
 });
@@ -127,8 +133,13 @@ test("handleRepayBorrow", () => {
 test("handleTransfer", () => {
   const event = newTransferEvent(OTHER_ADDRESS, CTOKEN_ADDRESS, BigInt.fromI32(10));
   event.address = CTOKEN_ADDRESS;
+  // Use 1e18 (10^18) as exchange rate so that 10 cTokens = 10 underlying
+  const exchangeRate = BigInt.fromString("1000000000000000000"); // 1e18
   createMockedFunction(CTOKEN_ADDRESS, "exchangeRateStored", "exchangeRateStored():(uint256)").returns([
-    ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(1))
+    ethereum.Value.fromUnsignedBigInt(exchangeRate)
+  ]);
+  createMockedFunction(CTOKEN_ADDRESS, "totalSupply", "totalSupply():(uint256)").returns([
+    ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(1000))
   ]);
   handleTransfer(changetype<Transfer>(event));
   const id = OTHER_ADDRESS.toHexString() + "-" + CTOKEN_ADDRESS.toHexString();
