@@ -4,7 +4,7 @@ import {
   VaultYieldAllocatedToEpoch as VaultYieldAllocatedToEpochEvent,
   CollectionYieldAppliedForEpoch as CollectionYieldAppliedForEpochEvent,
 } from "../generated/templates/CollectionVault/CollectionVault";
-import { log, Address, BigInt, Bytes, ethereum } from "@graphprotocol/graph-ts";
+import { log, Address, BigInt, ethereum } from "@graphprotocol/graph-ts";
 import {
   CollectionsVault,
   Epoch,
@@ -44,10 +44,10 @@ export function handleCollectionDeposit(event: CollectionDepositEvent): void {
   const cTokenMarket = CTokenMarket.load(cTokenMarketAddress.toHexString());
 
   let actualCTokens = ZERO_BI;
-  if (cTokenMarket != null && cTokenMarket.exchangeRate != ZERO_BI) {
+  if (cTokenMarket != null && cTokenMarket.exchangeRate.gt(ZERO_BI)) {
     actualCTokens = assets.times(BIGINT_1E18).div(cTokenMarket.exchangeRate);
   } else {
-    log.warning("handleCollectionDeposit: CTokenMarket {} not found or exchangeRate is zero for vault {}. cTokenAmount will be based on shares (event.params.cTokenAmount).", [
+    log.warning("handleCollectionDeposit: CTokenMarket {} not found or exchangeRate is zero/invalid for vault {}. Using event cTokenAmount as fallback.", [
       cTokenMarketAddress.toHexString(),
       vaultAddress.toHex()
     ]);
@@ -140,10 +140,10 @@ export function handleCollectionWithdraw(event: CollectionWithdrawEvent): void {
   const cTokenMarketWithdraw = CTokenMarket.load(cTokenMarketAddressWithdraw.toHexString());
 
   let actualCTokensWithdraw = ZERO_BI;
-  if (cTokenMarketWithdraw != null && cTokenMarketWithdraw.exchangeRate != ZERO_BI) {
+  if (cTokenMarketWithdraw != null && cTokenMarketWithdraw.exchangeRate.gt(ZERO_BI)) {
     actualCTokensWithdraw = assets.times(BIGINT_1E18).div(cTokenMarketWithdraw.exchangeRate);
   } else {
-    log.warning("handleCollectionWithdraw: CTokenMarket {} not found or exchangeRate is zero for vault {}. cTokenAmount will be based on shares (event.params.cTokenAmount).", [
+    log.warning("handleCollectionWithdraw: CTokenMarket {} not found or exchangeRate is zero/invalid for vault {}. Using event cTokenAmount as fallback.", [
       cTokenMarketAddressWithdraw.toHexString(),
       vaultAddress.toHex()
     ]);
@@ -291,8 +291,8 @@ export function handleCollectionYieldAccrued(event: ethereum.Event): void {
   accrual.timestamp = event.block.timestamp;
   accrual.transactionHash = event.transaction.hash;
   accrual.cumulativeYield = totalAccrued;
-  accrual.sourceType = "";
-  accrual.sourceTransaction = Bytes.empty();
+  accrual.sourceType = "VAULT_YIELD_ACCRUAL";
+  accrual.sourceTransaction = event.transaction.hash;
   accrual.save();
 }
 
@@ -314,7 +314,8 @@ export function handleCollectionYieldAppliedForEpoch(event: CollectionYieldAppli
 
   if (epochVaultAllocation != null) {
     epochVaultAllocation.subsidiesDistributed = epochVaultAllocation.subsidiesDistributed.plus(yieldApplied);
-    epochVaultAllocation.remainingYield = epochVaultAllocation.yieldAllocated.minus(epochVaultAllocation.subsidiesDistributed);
+    const newRemainingYield = epochVaultAllocation.yieldAllocated.minus(epochVaultAllocation.subsidiesDistributed);
+    epochVaultAllocation.remainingYield = newRemainingYield.lt(ZERO_BI) ? ZERO_BI : newRemainingYield;
     epochVaultAllocation.updatedAtBlock = event.block.number;
     epochVaultAllocation.updatedAtTimestamp = event.block.timestamp;
     epochVaultAllocation.save();
@@ -343,7 +344,7 @@ export function handleCollectionYieldAppliedForEpoch(event: CollectionYieldAppli
     application.collection = collectionAddress; // Storing collection address string
     application.yieldApplied = yieldApplied;
     application.blockNumber = event.block.number;
-    application.timestamp = event.block.timestamp; // Corrected: Use BigInt directly
+    application.timestamp = event.block.timestamp;
     application.transactionHash = event.transaction.hash;
     application.recipientCount = ZERO_BI;
     application.averageYieldPerUser = ZERO_BI;
@@ -376,9 +377,9 @@ export function handleYieldBatchRepaid(event: ethereum.Event): void {
 
   const subsidyTxId = event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
   const subsidyTx = new SubsidyDistribution(subsidyTxId);
-  subsidyTx.epoch = "";
+  subsidyTx.epoch = "0";
   subsidyTx.user = recipient.toHexString();
-  subsidyTx.collection = "";
+  subsidyTx.collection = recipient.toHexString();
   subsidyTx.vault = event.address.toHexString();
   subsidyTx.subsidyAmount = totalYieldRepaid;
   subsidyTx.borrowAmountBefore = ZERO_BI;

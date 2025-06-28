@@ -124,8 +124,18 @@ export function handleLiquidateBorrow(event: LiquidateBorrowEvent): void {
     cTokenCollateralAddress
   );
 
-  borrowerAccountBorrowedMarket.borrowBalance =
-    borrowerAccountBorrowedMarket.borrowBalance.minus(repayAmount);
+  const cTokenContract = CTokenContract.bind(cTokenBorrowedAddress);
+  const borrowBalanceTry = cTokenContract.try_borrowBalanceStored(borrowerAddress);
+  if (!borrowBalanceTry.reverted) {
+    borrowerAccountBorrowedMarket.borrowBalance = borrowBalanceTry.value;
+  } else {
+    log.warning(
+      "borrowBalanceStored() call reverted in LiquidateBorrow for borrower {}. Using repayAmount subtraction as fallback.",
+      [borrowerAddress.toHexString()]
+    );
+    borrowerAccountBorrowedMarket.borrowBalance =
+      borrowerAccountBorrowedMarket.borrowBalance.minus(repayAmount);
+  }
   borrowerAccountBorrowedMarket.updatedAtBlock = event.block.number;
   borrowerAccountBorrowedMarket.updatedAtTimestamp =
     event.block.timestamp;

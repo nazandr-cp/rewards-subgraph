@@ -101,7 +101,7 @@ export function handleEpochFinalized(event: EpochFinalized): void {
 
     const systemState = getOrCreateSystemState();
     if (systemState.activeEpochId == epochId) {
-      systemState.activeEpochId = null;
+      systemState.activeEpochId = "";
       systemState.save();
     }
 
@@ -172,13 +172,20 @@ export function handleEpochManagerVaultYieldAllocated(event: EpochManagerVaultYi
     vault.save();
   }
 
-  epoch.totalYieldAvailable = epoch.totalYieldAvailable.plus(event.params.amount);
+  if (event.params.amount.gt(ZERO_BI)) {
+    epoch.totalYieldAvailable = epoch.totalYieldAvailable.plus(event.params.amount);
+    epoch.remainingYield = epoch.totalYieldAvailable.minus(epoch.totalYieldDistributed);
+    if (epoch.remainingYield.lt(ZERO_BI)) {
+      epoch.remainingYield = ZERO_BI;
+    }
+  }
   epoch.save();
 
   const epochVaultAllocation = getOrCreateEpochVaultAllocation(epochId, vaultAddress);
 
   epochVaultAllocation.yieldAllocated = epochVaultAllocation.yieldAllocated.plus(event.params.amount);
-  epochVaultAllocation.remainingYield = epochVaultAllocation.yieldAllocated.minus(epochVaultAllocation.subsidiesDistributed);
+  const newRemainingYield = epochVaultAllocation.yieldAllocated.minus(epochVaultAllocation.subsidiesDistributed);
+  epochVaultAllocation.remainingYield = newRemainingYield.lt(ZERO_BI) ? ZERO_BI : newRemainingYield;
   epochVaultAllocation.updatedAtBlock = event.block.number;
   epochVaultAllocation.updatedAtTimestamp = event.block.timestamp;
   epochVaultAllocation.save();

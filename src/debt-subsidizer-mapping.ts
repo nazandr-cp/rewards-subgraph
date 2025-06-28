@@ -8,12 +8,13 @@ import {
   Epoch,
   DebtSubsidizer,
   VaultAddition,
+  CollectionsVault,
 } from "../generated/schema";
-import { BigInt, log, Address } from "@graphprotocol/graph-ts";
+import { log, Address } from "@graphprotocol/graph-ts";
 import { CollectionVault } from "../generated/templates";
 
 import { getOrCreateVault, getOrCreateAccount, getOrCreateSystemState, getOrCreateEpochVaultAllocation, getOrCreateMerkleDistribution } from "./utils/getters";
-import { ADDRESS_ZERO_STR, ZERO_BI } from "./utils/const";
+import { ZERO_BI } from "./utils/const";
 
 export function handleVaultAdded(event: VaultAdded): void {
   const vaultAddress = event.params.vaultAddress;
@@ -95,9 +96,19 @@ export function handleMerkleRootUpdated(event: MerkleRootUpdated): void {
     return; // Critical: Cannot proceed if epoch entity doesn't exist
   }
 
+  const vaultEntity = CollectionsVault.load(event.params.vaultAddress.toHexString());
+  if (vaultEntity == null || vaultEntity.cTokenMarket == null || vaultEntity.cTokenMarket == "") {
+    log.error(
+      "handleMerkleRootUpdated: Vault {} not found or has invalid cTokenMarket. Cannot process merkle root update.",
+      [event.params.vaultAddress.toHexString()]
+    );
+    return;
+  }
+
+  const cTokenAddress = Address.fromString(vaultEntity.cTokenMarket);
   const vault = getOrCreateVault(
     event.params.vaultAddress,
-    Address.fromString(ADDRESS_ZERO_STR)
+    cTokenAddress
   );
 
   // --- Create MerkleDistribution Entity ---
@@ -146,25 +157,35 @@ export function handleSubsidyClaimed(event: SubsidyClaimed): void {
 
   const account = getOrCreateAccount(event.params.recipient);
 
+  const vaultEntity = CollectionsVault.load(event.params.vaultAddress.toHexString());
+  if (vaultEntity == null || vaultEntity.cTokenMarket == null || vaultEntity.cTokenMarket == "") {
+    log.error(
+      "handleSubsidyClaimed: Vault {} not found or has invalid cTokenMarket. Cannot process subsidy claim.",
+      [event.params.vaultAddress.toHexString()]
+    );
+    return;
+  }
+
+  const cTokenAddress = Address.fromString(vaultEntity.cTokenMarket);
   const loadedVault = getOrCreateVault(
     event.params.vaultAddress,
-    Address.fromString(ADDRESS_ZERO_STR)
+    cTokenAddress
   );
 
   const subsidyTxId = "CLAIMTX-" + eventIdBase;
   const subsidyTx = new SubsidyDistribution(subsidyTxId);
   subsidyTx.epoch = epoch.id;
   subsidyTx.user = account.id;
-  subsidyTx.collection = "UNKNOWN_COLLECTION";
+  subsidyTx.collection = account.id;
   subsidyTx.vault = loadedVault.id;
-  subsidyTx.debtSubsidizer = ""; // Will be set when DebtSubsidizer entity is available
+  subsidyTx.debtSubsidizer = event.address.toHexString();
   subsidyTx.subsidyAmount = event.params.amount;
-  subsidyTx.borrowAmountBefore = BigInt.fromI32(0);
-  subsidyTx.borrowAmountAfter = BigInt.fromI32(0);
-  subsidyTx.nftBalance = BigInt.fromI32(0);
-  subsidyTx.weightedContribution = BigInt.fromI32(0);
+  subsidyTx.borrowAmountBefore = ZERO_BI;
+  subsidyTx.borrowAmountAfter = ZERO_BI;
+  subsidyTx.nftBalance = ZERO_BI;
+  subsidyTx.weightedContribution = ZERO_BI;
   subsidyTx.gasUsed =
-    event.receipt != null ? event.receipt!.gasUsed : BigInt.fromI32(0);
+    event.receipt != null ? event.receipt!.gasUsed : ZERO_BI;
   subsidyTx.blockNumber = event.block.number;
   subsidyTx.timestamp = event.block.timestamp;
   subsidyTx.transactionHash = event.transaction.hash;
@@ -180,10 +201,12 @@ export function handleSubsidyClaimed(event: SubsidyClaimed): void {
   const vaultAllocation = getOrCreateEpochVaultAllocation(epoch.id, loadedVault.id);
 
   vaultAllocation.subsidiesDistributed = vaultAllocation.subsidiesDistributed.plus(event.params.amount);
-  if (vaultAllocation.yieldAllocated.gt(BigInt.fromI32(0))) {
-    vaultAllocation.remainingYield = vaultAllocation.yieldAllocated.minus(vaultAllocation.subsidiesDistributed);
+  if (vaultAllocation.yieldAllocated.gt(ZERO_BI)) {
+    const newRemainingYield = vaultAllocation.yieldAllocated.minus(vaultAllocation.subsidiesDistributed);
+    vaultAllocation.remainingYield = newRemainingYield.lt(ZERO_BI) ? ZERO_BI : newRemainingYield;
   } else {
-    vaultAllocation.remainingYield = vaultAllocation.remainingYield.minus(event.params.amount);
+    const newRemainingYield = vaultAllocation.remainingYield.minus(event.params.amount);
+    vaultAllocation.remainingYield = newRemainingYield.lt(ZERO_BI) ? ZERO_BI : newRemainingYield;
   }
   vaultAllocation.updatedAtBlock = event.block.number;
   vaultAllocation.updatedAtTimestamp = event.block.timestamp;

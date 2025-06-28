@@ -25,9 +25,20 @@ export function handleMarketListed(event: MarketListed): void {
 
   // Set symbol and name (required fields)
   const symbolResult = cTokenContract.try_symbol();
-  cTokenMarket.symbol = symbolResult.reverted ? "UNKNOWN" : symbolResult.value;
+  if (symbolResult.reverted) {
+    log.warning("Failed to get symbol for cToken: {}", [event.params.cToken.toHexString()]);
+    cTokenMarket.symbol = "UNKNOWN";
+  } else {
+    cTokenMarket.symbol = symbolResult.value;
+  }
+
   const nameResult = cTokenContract.try_name();
-  cTokenMarket.name = nameResult.reverted ? "UNKNOWN" : nameResult.value;
+  if (nameResult.reverted) {
+    log.warning("Failed to get name for cToken: {}", [event.params.cToken.toHexString()]);
+    cTokenMarket.name = "UNKNOWN";
+  } else {
+    cTokenMarket.name = nameResult.value;
+  }
 
   cTokenMarket.decimals = decimals;
   cTokenMarket.exchangeRate = exchangeRate;

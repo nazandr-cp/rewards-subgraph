@@ -43,7 +43,7 @@ beforeEach(() => {
   epoch.epochManager = "";
   epoch.save();
   const vault = new CollectionsVault(VAULT.toHexString());
-  vault.cTokenMarket = "";
+  vault.cTokenMarket = "0x0000000000000000000000000000000000000005";
   vault.totalShares = BigInt.fromI32(0);
   vault.totalDeposits = BigInt.fromI32(0);
   vault.totalCTokens = BigInt.fromI32(0);

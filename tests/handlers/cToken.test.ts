@@ -162,6 +162,9 @@ test("handleLiquidateBorrow", () => {
   createMockedFunction(CTOKEN_ADDRESS, "totalBorrows", "totalBorrows():(uint256)").returns([
     ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(10))
   ]);
+  createMockedFunction(CTOKEN_ADDRESS, "borrowBalanceStored", "borrowBalanceStored(address):(uint256)")
+    .withArgs([ethereum.Value.fromAddress(OTHER_ADDRESS)])
+    .returns([ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(0))]);
   createMockedFunction(COLLATERAL_ADDRESS, "exchangeRateStored", "exchangeRateStored():(uint256)").returns([
     ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(1))
   ]);

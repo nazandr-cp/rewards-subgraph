@@ -18,6 +18,7 @@ dataSources:
       entities:
         - CTokenMarket
         - Borrow
+        - Account
       abis:
         - name: Comptroller
           file: ./abis/Comptroller.json
@@ -44,6 +45,8 @@ dataSources:
       entities:
         - Epoch
         - EpochVaultAllocation
+        - CollectionsVault
+        - Account
       abis:
         - name: EpochManager
           file: ./abis/EpochManager.json
@@ -76,13 +79,14 @@ dataSources:
       apiVersion: 0.0.9
       language: wasm/assemblyscript
       entities:
-        - Subsidy
-        - SubsidyTransaction
+        - SubsidyDistribution
         - Epoch
         - Account
         - Collection
-        - Vault
+        - CollectionsVault
         - UserEpochEligibility
+        - VaultAddition
+        - CollectionWhitelist
       abis:
         - name: DebtSubsidizer
           file: ./abis/DebtSubsidizer.json
@@ -108,9 +112,9 @@ dataSources:
       language: wasm/assemblyscript
       entities:
         - Account
-        - Vault
+        - CollectionsVault
         - Collection
-        - CollectionVault
+        - CollectionParticipation
       abis:
         - name: LendingManager
           file: ./abis/LendingManager.json
@@ -134,7 +138,6 @@ dataSources:
       kind: ethereum/events
       apiVersion: 0.0.9
       language: wasm/assemblyscript
-      file: ./src/erc721-mapping.ts
       entities:
         - Collection
         - Account
@@ -145,6 +148,7 @@ dataSources:
       eventHandlers:
         - event: Transfer(indexed address,indexed address,indexed uint256)
           handler: handleTransfer
+      file: ./src/erc721-mapping.ts
 
 templates:
   - kind: ethereum/contract
@@ -158,13 +162,14 @@ templates:
       language: wasm/assemblyscript
       file: ./src/cToken-mapping.ts
       entities:
-        - Vault
-        - AccountVault
+        - CollectionsVault
+        - AccountMarket
         - Collection
-        - CollectionVault
+        - CollectionParticipation
         - AccountSubsidiesPerCollection
         - Account
         - CTokenMarket
+        - Borrow
       abis:
         - name: cToken
           file: ./abis/cToken.json
@@ -200,10 +205,12 @@ templates:
       language: wasm/assemblyscript
       entities:
         - Collection
-        - CollectionVault
+        - CollectionParticipation
         - Account
         - AccountSubsidiesPerCollection
-        - Vault
+        - CollectionsVault
+        - EpochVaultAllocation
+        - CollectionYieldAccrual
       abis:
         - name: CollectionVault
           file: ./abis/CollectionsVault.json
