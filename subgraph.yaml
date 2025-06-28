@@ -124,7 +124,7 @@ dataSources:
       file: ./src/lending-manager-mapping.ts
 
   - kind: ethereum
-    name: ERC721Collection # Example, adjust if you have specific collection data sources
+    name: ERC721Collection
     network: apechain-curtis
     source:
       address: "0xc7CfdB8290571cAA6DF7d4693059aB9E853e22EB"
@@ -134,15 +134,14 @@ dataSources:
       kind: ethereum/events
       apiVersion: 0.0.9
       language: wasm/assemblyscript
-      file: ./src/erc721-mapping.ts # Ensure this mapping handles UserEpochEligibility updates if relevant
+      file: ./src/erc721-mapping.ts
       entities:
         - Collection
         - Account
-        - UserEpochEligibility # If NFT transfers affect eligibility
+        - UserEpochEligibility
       abis:
         - name: ERC721
-          file: ./abis/IERC721.json # Generic ERC721 ABI
-        # Add other ABIs if erc721-mapping interacts with them
+          file: ./abis/IERC721.json
       eventHandlers:
         - event: Transfer(indexed address,indexed address,indexed uint256)
           handler: handleTransfer
