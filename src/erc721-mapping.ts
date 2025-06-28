@@ -38,7 +38,6 @@ export function handleTransfer(event: TransferEvent): void {
     ]);
   }
 
-  // Always update Account NFT balances regardless of vault participation
   if (!isMint) {
     const fromAccount = getOrCreateAccount(fromAddress);
     fromAccount.totalNFTsOwned = fromAccount.totalNFTsOwned.minus(BigInt.fromI32(1));
@@ -65,10 +64,8 @@ export function handleTransfer(event: TransferEvent): void {
     ]);
   }
 
-  // Create collection entity to ensure it exists
   const collection = getOrCreateCollection(collectionAddress);
 
-  // Update collection stats for mints
   if (isMint) {
     collection.totalSupply = collection.totalSupply.plus(BigInt.fromI32(1));
     collection.updatedAtBlock = blockNumber;

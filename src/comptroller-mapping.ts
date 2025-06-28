@@ -39,13 +39,12 @@ export function handleMarketListed(event: MarketListed): void {
 export function handleMarketEntered(event: MarketEntered): void {
   const user = event.params.account;
   const cToken = event.params.cToken;
-  
+
   log.info("MarketEntered: User {} entered market {}", [
     user.toHexString(),
     cToken.toHexString()
   ]);
-  
-  // Export test data for E2E integration
+
   const testData = `{"user": "${user.toHexString()}", "cToken": "${cToken.toHexString()}", "eventType": "MARKET_ENTERED"}`;
   log.info("E2E_TEST_DATA: MARKET_ENTRY - {}", [testData]);
 }

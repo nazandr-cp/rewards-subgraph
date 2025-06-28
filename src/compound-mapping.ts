@@ -5,13 +5,12 @@ import { log } from "@graphprotocol/graph-ts";
 export function handleMarketEntered(event: MarketEntered): void {
   const user = event.params.account;
   const cToken = event.params.cToken;
-  
+
   log.info("MarketEntered: User {} entered market {}", [
     user.toHexString(),
     cToken.toHexString()
   ]);
-  
-  // Export test data for E2E integration
+
   const testData = `{"user": "${user.toHexString()}", "cToken": "${cToken.toHexString()}", "eventType": "MARKET_ENTERED"}`;
   log.info("E2E_TEST_DATA: MARKET_ENTRY - {}", [testData]);
 }
@@ -22,7 +21,7 @@ export function handleBorrow(event: BorrowEvent): void {
   const accountBorrows = event.params.accountBorrows;
   const totalBorrows = event.params.totalBorrows;
   const cTokenAddress = event.address;
-  
+
   log.info("Borrow: User {} borrowed {} from cToken {}. Account borrows: {}, Total borrows: {}", [
     borrower.toHexString(),
     borrowAmount.toString(),
@@ -30,8 +29,7 @@ export function handleBorrow(event: BorrowEvent): void {
     accountBorrows.toString(),
     totalBorrows.toString()
   ]);
-  
-  // Export test data for E2E integration
+
   const testData = `{"borrower": "${borrower.toHexString()}", "cToken": "${cTokenAddress.toHexString()}", "amount": "${borrowAmount.toString()}", "accountBorrows": "${accountBorrows.toString()}", "totalBorrows": "${totalBorrows.toString()}"}`;
   log.info("E2E_TEST_DATA: BORROW - {}", [testData]);
 }

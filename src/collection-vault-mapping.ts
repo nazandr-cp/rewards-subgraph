@@ -19,7 +19,6 @@ import {
 import { getOrCreateCollectionVault, getOrCreateEpochVaultAllocation, getOrCreateAccount } from "./utils/getters";
 import { ZERO_BI, BIGINT_1E18 } from "./utils/const";
 
-// Helper functions for struct access
 function getAddressFromParameter(param: ethereum.EventParam): Address {
   return param.value.toAddress();
 }
@@ -33,7 +32,6 @@ export function handleCollectionDeposit(event: CollectionDepositEvent): void {
   const collectionAddress = event.params.collectionAddress;
   const shares = event.params.shares;
   const assets = event.params.assets;
-  // const totalCTokensFromEvent = event.params.cTokenAmount; // This is shares, not actual cTokens
 
   const vaultEntity = CollectionsVault.load(vaultAddress.toHex());
   if (!vaultEntity) {
@@ -53,7 +51,7 @@ export function handleCollectionDeposit(event: CollectionDepositEvent): void {
       cTokenMarketAddress.toHexString(),
       vaultAddress.toHex()
     ]);
-    actualCTokens = event.params.cTokenAmount; // Fallback to event shares if exchange rate unavailable
+    actualCTokens = event.params.cTokenAmount;
   }
 
   const vault = vaultEntity;
@@ -85,7 +83,6 @@ export function handleCollectionDeposit(event: CollectionDepositEvent): void {
 
   // Update Account statistics
   const account = getOrCreateAccount(event.params.receiver);
-  account.totalYieldEarned = account.totalYieldEarned.plus(assets);
   account.updatedAtBlock = event.block.number;
   account.updatedAtTimestamp = event.block.timestamp;
   account.save();
@@ -105,7 +102,7 @@ export function handleCollectionDeposit(event: CollectionDepositEvent): void {
   // Create CollectionDeposit entity for E2E testing
   const depositId = event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
   const deposit = new CollectionDeposit(depositId);
-  deposit.depositor = event.params.receiver;
+  deposit.depositor = event.params.caller;
   deposit.collection = collectionAddress;
   deposit.vault = vaultAddress;
   deposit.amount = assets;
@@ -116,7 +113,7 @@ export function handleCollectionDeposit(event: CollectionDepositEvent): void {
   deposit.save();
 
   // Export test data for E2E integration
-  const testData = `{"depositor": "${event.params.receiver.toHexString()}", "collection": "${collectionAddress.toHexString()}", "vault": "${vaultAddress.toHexString()}", "amount": "${assets.toString()}", "shares": "${shares.toString()}"}`;
+  const testData = `{"depositor": "${event.params.caller.toHexString()}", "collection": "${collectionAddress.toHexString()}", "vault": "${vaultAddress.toHexString()}", "amount": "${assets.toString()}", "shares": "${shares.toString()}"}`;
   log.info("E2E_TEST_DATA: DEPOSIT - {}", [testData]);
 }
 
@@ -129,7 +126,6 @@ export function handleCollectionWithdraw(event: CollectionWithdrawEvent): void {
   const collectionAddress = event.params.collectionAddress;
   const shares = event.params.shares;
   const assets = event.params.assets;
-  // const totalCTokensFromEvent = event.params.cTokenAmount; // This is shares, not actual cTokens
 
   const vaultEntityWithdraw = CollectionsVault.load(vaultAddress.toHex());
   if (!vaultEntityWithdraw) {
@@ -151,7 +147,7 @@ export function handleCollectionWithdraw(event: CollectionWithdrawEvent): void {
       cTokenMarketAddressWithdraw.toHexString(),
       vaultAddress.toHex()
     ]);
-    actualCTokensWithdraw = event.params.cTokenAmount; // Fallback to event shares
+    actualCTokensWithdraw = event.params.cTokenAmount;
   }
 
   const vault = vaultEntityWithdraw;
@@ -192,13 +188,6 @@ export function handleCollectionWithdraw(event: CollectionWithdrawEvent): void {
   );
 }
 
-/**
- * @notice Handles the VaultYieldAllocatedToEpoch event from the CollectionsVault contract.
- * @dev Creates or updates an EpochVaultAllocation entity when a vault allocates its yield to an epoch.
- *      This event is emitted by CollectionsVault itself, distinct from EpochManager's VaultYieldAllocated.
- *      This handler assumes Epoch entities are created by EpochManager's EpochStarted event.
- * @param event The VaultYieldAllocatedToEpoch event.
- */
 export function handleVaultYieldAllocatedToEpoch(event: VaultYieldAllocatedToEpochEvent): void {
   const epochId = event.params.epochId.toString();
   const vaultAddress = event.address.toHexString(); // event.address is the CollectionsVault address
@@ -242,20 +231,9 @@ export function handleVaultYieldAllocatedToEpoch(event: VaultYieldAllocatedToEpo
     ]
   );
 
-  // Also, update the Epoch's totalYieldAvailable if this event is the source of truth for it
-  // or if EpochManager.VaultYieldAllocated is not guaranteed to cover this.
-  // The current EpochManager.VaultYieldAllocated handler already updates epoch.totalYieldAvailable.
-  // If this event from CollectionsVault is *in addition* or *instead of* the EpochManager one for this purpose,
-  // then update epoch.totalYieldAvailable here too.
-  // Based on the plan, EpochManager.VaultYieldAllocated seems to be the primary one for epoch.totalYieldAvailable.
-  // This event (VaultYieldAllocatedToEpoch from CollectionsVault) primarily confirms the vault's own accounting.
-  // So, we primarily focus on EpochVaultAllocation here.
 }
 
 export function handleCollectionYieldAccrued(event: ethereum.Event): void {
-  // CollectionYieldAccrued(indexed address,uint256,uint256,uint256,uint256)
-  // event.params: collection, yieldAmount, globalDepositIndex, lastGlobalDepositIndex, totalAccrued
-
   if (event.parameters.length < 5) {
     log.error("handleCollectionYieldAccrued: Insufficient parameters. Expected 5, got {}", [
       event.parameters.length.toString()
@@ -318,15 +296,6 @@ export function handleCollectionYieldAccrued(event: ethereum.Event): void {
   accrual.save();
 }
 
-/**
- * @notice Handles the CollectionYieldAppliedForEpoch event from the CollectionsVault contract.
- * @dev Updates the `remainingYield` and `subsidiesDistributed` fields in an `EpochVaultAllocation` entity.
- *      Also creates a `CollectionYieldApplication` entity for historical record.
- * @param event The CollectionYieldAppliedForEpoch event.
- * Event signature: event CollectionYieldAppliedForEpoch(uint256 indexed epochId, address indexed collection, uint16 yieldSharePercentage, uint256 yieldAdded, uint256 newTotalDeposits);
- * Note: The ABI in CollectionsVault.json has `yieldAdded` and `newTotalDeposits`. The task description mentions `yieldApplied`. Assuming `yieldAdded` is the correct parameter for `yieldApplied`.
- * The `vault` is `event.address`.
- */
 export function handleCollectionYieldAppliedForEpoch(event: CollectionYieldAppliedForEpochEvent): void {
   const epochId = event.params.epochId.toString();
   const vaultAddress = event.address.toHexString();
@@ -397,6 +366,13 @@ export function handleYieldBatchRepaid(event: ethereum.Event): void {
     totalYieldRepaid.toString(),
     recipient.toHexString()
   ]);
+
+  // Update recipient's totalYieldEarned since this is actual yield distribution
+  const account = getOrCreateAccount(recipient);
+  account.totalYieldEarned = account.totalYieldEarned.plus(totalYieldRepaid);
+  account.updatedAtBlock = event.block.number;
+  account.updatedAtTimestamp = event.block.timestamp;
+  account.save();
 
   const subsidyTxId = event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
   const subsidyTx = new SubsidyDistribution(subsidyTxId);

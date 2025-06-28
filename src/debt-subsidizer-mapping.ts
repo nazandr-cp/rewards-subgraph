@@ -20,7 +20,6 @@ export function handleVaultAdded(event: VaultAdded): void {
   const cTokenAddress = event.params.cTokenAddress;
   const lendingManagerAddress = event.params.lendingManagerAddress;
 
-  // Create CollectionVault template instance to start indexing vault events
   CollectionVault.create(vaultAddress);
 
   // Create or update the DebtSubsidizer entity
@@ -42,7 +41,6 @@ export function handleVaultAdded(event: VaultAdded): void {
   debtSubsidizer.updatedAtTimestamp = event.block.timestamp;
   debtSubsidizer.save();
 
-  // Create VaultAddition entity
   const vaultAdditionId = event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
   const vaultAddition = new VaultAddition(vaultAdditionId);
   vaultAddition.debtSubsidizer = debtSubsidizer.id;
@@ -54,7 +52,6 @@ export function handleVaultAdded(event: VaultAdded): void {
   vaultAddition.transactionHash = event.transaction.hash;
   vaultAddition.save();
 
-  // Create or update the vault entity
   const vault = getOrCreateVault(vaultAddress, cTokenAddress);
   vault.lendingManager = lendingManagerAddress.toHexString();
   vault.debtSubsidizer = debtSubsidizer.id;
@@ -204,7 +201,6 @@ export function handleSubsidyClaimed(event: SubsidyClaimed): void {
     ]
   );
 
-  // Export test data for E2E integration
   const testData = `{"user": "${event.params.recipient.toHexString()}", "vault": "${event.params.vaultAddress.toHexString()}", "amount": "${event.params.amount.toString()}", "epoch": "${epoch.id}"}`;
   log.info("E2E_TEST_DATA: SUBSIDY_CLAIM - {}", [testData]);
 }

@@ -67,7 +67,6 @@ export function handleBorrow(event: BorrowEvent): void {
   accountMarket.updatedAtTimestamp = event.block.timestamp;
   accountMarket.save();
 
-  // Update Account statistics
   account.totalBorrowVolume = account.totalBorrowVolume.plus(borrowAmount);
   account.updatedAtBlock = event.block.number;
   account.updatedAtTimestamp = event.block.timestamp;
@@ -78,7 +77,6 @@ export function handleBorrow(event: BorrowEvent): void {
   market.updatedAtTimestamp = event.block.timestamp;
   market.save();
 
-  // Create Borrow E2E entity
   const borrowId = event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
   const borrowEntity = new Borrow(borrowId);
   borrowEntity.borrower = borrower;
@@ -93,7 +91,6 @@ export function handleBorrow(event: BorrowEvent): void {
 
   accrueAccountSubsidies(borrower, event.block.number, event.block.timestamp);
 
-  // Export test data for E2E integration
   const testData = `{"borrower": "${borrower.toHexString()}", "cToken": "${event.address.toHexString()}", "amount": "${borrowAmount.toString()}", "accountBorrows": "${accountBorrows.toString()}", "totalBorrows": "${totalBorrows.toString()}"}`;
   log.info("E2E_TEST_DATA: BORROW - {}", [testData]);
 }
