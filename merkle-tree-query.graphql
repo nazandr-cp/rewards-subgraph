@@ -1,0 +1,362 @@
+# Query to get current user subsidies for Merkle tree when epoch is not yet created
+query GetCurrentUserSubsidiesForMerkleTree($vaultId: ID!) {
+  # Get all accounts with current accumulated subsidies for the vault
+  accountSubsidiesPerCollections(
+    where: { vault: $vaultId, subsidiesAccrued_gt: "0" }
+    orderBy: account
+    orderDirection: asc
+    first: 1000
+  ) {
+    id
+    account {
+      id
+    }
+    vault {
+      id
+    }
+    collection {
+      id
+      contractAddress
+      name
+      symbol
+    }
+    balanceNFT
+    weightedBalance
+    secondsAccumulated
+    secondsClaimed
+    subsidiesAccrued
+    subsidiesClaimed
+    totalRewardsEarned
+    updatedAtBlock
+    updatedAtTimestamp
+  }
+
+  # Get all accounts with their total accumulated subsidies
+  accounts(
+    where: { totalSubsidiesReceived_gt: "0" }
+    orderBy: id
+    orderDirection: asc
+    first: 1000
+  ) {
+    id
+    totalSubsidiesReceived
+    totalYieldEarned
+    totalSecondsClaimed
+    accountSubsidies(where: { vault: $vaultId, subsidiesAccrued_gt: "0" }) {
+      collection {
+        id
+        contractAddress
+      }
+      subsidiesAccrued
+      subsidiesClaimed
+      totalRewardsEarned
+    }
+  }
+}
+
+# Query to get aggregated current user subsidies (simplified for Merkle tree)
+query GetAggregatedCurrentUserSubsidies($vaultId: ID!) {
+  accounts(
+    where: { totalSubsidiesReceived_gt: "0" }
+    orderBy: id
+    orderDirection: asc
+    first: 1000
+  ) {
+    id
+    totalSubsidiesReceived
+    accountSubsidies(where: { vault: $vaultId, subsidiesAccrued_gt: "0" }) {
+      subsidiesAccrued
+      collection {
+        id
+      }
+    }
+  }
+}
+
+# Query to get current user subsidies by collection for detailed Merkle tree
+query GetCurrentUserSubsidiesByCollection($vaultId: ID!) {
+  accountSubsidiesPerCollections(
+    where: { vault: $vaultId, subsidiesAccrued_gt: "0" }
+    orderBy: account
+    orderDirection: asc
+    first: 1000
+  ) {
+    account {
+      id
+    }
+    collection {
+      id
+      contractAddress
+    }
+    subsidiesAccrued
+    subsidiesClaimed
+    totalRewardsEarned
+  }
+}
+
+# Query for existing epoch-based Merkle tree (when epoch exists)
+query GetUserSubsidiesForMerkleTree($epochId: ID!, $vaultId: ID!) {
+  # Get all user subsidies for the specified epoch and vault
+  subsidyDistributions(
+    where: { epoch: $epochId, vault: $vaultId }
+    orderBy: user
+    orderDirection: asc
+    first: 1000
+  ) {
+    id
+    user {
+      id
+    }
+    collection {
+      id
+      contractAddress
+      name
+      symbol
+    }
+    vault {
+      id
+    }
+    subsidyAmount
+    borrowAmountBefore
+    borrowAmountAfter
+    nftBalance
+    weightedContribution
+    blockNumber
+    timestamp
+    transactionHash
+  }
+
+  # Get cumulative subsidies per user across all collections for this epoch
+  userEligibilities(
+    where: { epoch: $epochId, isEligible: true }
+    orderBy: user
+    orderDirection: asc
+    first: 1000
+  ) {
+    id
+    user {
+      id
+      totalSubsidiesReceived
+      totalYieldEarned
+      totalSecondsClaimed
+    }
+    collection {
+      id
+      contractAddress
+      name
+    }
+    subsidyReceived
+    yieldShare
+    nftBalance
+    borrowBalance
+    holdingDuration
+    bonusMultiplier
+  }
+}
+
+# Query to get aggregated user subsidies for Merkle tree (simplified format)
+query GetAggregatedUserSubsidies($epochId: ID!, $vaultId: ID!) {
+  userEligibilities(
+    where: { epoch: $epochId, isEligible: true, subsidyReceived_gt: "0" }
+    orderBy: user
+    orderDirection: asc
+    first: 1000
+  ) {
+    user {
+      id
+    }
+    subsidyReceived
+    collection {
+      id
+    }
+  }
+}
+
+# Query to get historical cumulative subsidies across all epochs up to specified epoch
+query GetCumulativeUserSubsidies($maxEpochNumber: BigInt!, $vaultId: ID!) {
+  subsidyDistributions(
+    where: { vault: $vaultId, epoch_: { epochNumber_lte: $maxEpochNumber } }
+    orderBy: user
+    orderDirection: asc
+    first: 5000
+  ) {
+    id
+    user {
+      id
+    }
+    epoch {
+      id
+      epochNumber
+    }
+    collection {
+      id
+      contractAddress
+    }
+    subsidyAmount
+    timestamp
+  }
+
+  # Get user accounts with their total accumulated subsidies
+  accounts(
+    where: { totalSubsidiesReceived_gt: "0" }
+    orderBy: id
+    orderDirection: asc
+    first: 1000
+  ) {
+    id
+    totalSubsidiesReceived
+    totalYieldEarned
+    totalSecondsClaimed
+    accountSubsidies(where: { vault: $vaultId, subsidiesAccrued_gt: "0" }) {
+      collection {
+        id
+        contractAddress
+      }
+      subsidiesAccrued
+      subsidiesClaimed
+      totalRewardsEarned
+    }
+  }
+}
+
+# Query to verify Merkle tree data integrity
+query VerifyMerkleTreeData($epochId: ID!, $vaultId: ID!, $merkleRoot: Bytes!) {
+  merkleDistributions(
+    where: { epoch: $epochId, vault: $vaultId, merkleRoot: $merkleRoot }
+  ) {
+    id
+    epoch {
+      id
+      epochNumber
+    }
+    vault {
+      id
+    }
+    merkleRoot
+    totalAmount
+    totalClaims
+    blockNumber
+    timestamp
+    transactionHash
+  }
+
+  # Verify against actual subsidy distributions
+  subsidyDistributions(where: { epoch: $epochId, vault: $vaultId }) {
+    id
+    user {
+      id
+    }
+    subsidyAmount
+  }
+}
+
+# Query for building incremental Merkle tree updates
+query GetIncrementalSubsidyUpdates(
+  $fromEpoch: BigInt!
+  $toEpoch: BigInt!
+  $vaultId: ID!
+) {
+  subsidyDistributions(
+    where: {
+      vault: $vaultId
+      epoch_: { epochNumber_gte: $fromEpoch, epochNumber_lte: $toEpoch }
+    }
+    orderBy: timestamp
+    orderDirection: asc
+    first: 1000
+  ) {
+    id
+    user {
+      id
+    }
+    epoch {
+      id
+      epochNumber
+    }
+    collection {
+      id
+      contractAddress
+    }
+    subsidyAmount
+    borrowAmountBefore
+    borrowAmountAfter
+    nftBalance
+    weightedContribution
+    timestamp
+    blockNumber
+  }
+
+  epochs(
+    where: { epochNumber_gte: $fromEpoch, epochNumber_lte: $toEpoch }
+    orderBy: epochNumber
+    orderDirection: asc
+  ) {
+    id
+    epochNumber
+    status
+    totalSubsidiesDistributed
+    vaultAllocations(where: { vault: $vaultId }) {
+      subsidiesDistributed
+      participantCount
+      averageSubsidyPerUser
+    }
+  }
+}
+
+# Query to get current system state for Merkle tree calculation
+query GetCurrentSystemStateForMerkleTree($vaultId: ID!) {
+  # Get current vault state
+  collectionsVault(id: $vaultId) {
+    id
+    name
+    contractAddress
+    totalSubsidiesDistributed
+    totalYieldGenerated
+    currentEpoch {
+      id
+      epochNumber
+      status
+    }
+    collections {
+      id
+      contractAddress
+      name
+      symbol
+      totalParticipants
+      totalSubsidiesDistributed
+    }
+  }
+
+  # Get current accounts with subsidies
+  accounts(
+    where: { totalSubsidiesReceived_gt: "0" }
+    orderBy: totalSubsidiesReceived
+    orderDirection: desc
+    first: 1000
+  ) {
+    id
+    totalSubsidiesReceived
+    totalYieldEarned
+    accountSubsidies(where: { vault: $vaultId, subsidiesAccrued_gt: "0" }) {
+      collection {
+        id
+        contractAddress
+      }
+      subsidiesAccrued
+      subsidiesClaimed
+      balanceNFT
+    }
+  }
+
+  # Get system state
+  systemState(id: "global") {
+    id
+    totalSubsidiesDistributed
+    totalYieldGenerated
+    totalActiveUsers
+    totalCollections
+    totalVaults
+    lastUpdatedBlock
+    lastUpdatedTimestamp
+  }
+}

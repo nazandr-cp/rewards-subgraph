@@ -1,4 +1,4 @@
-import { log, BigInt } from "@graphprotocol/graph-ts";
+import { log, BigInt, Address } from "@graphprotocol/graph-ts";
 import {
   AccrueInterest as AccrueInterestEvent,
   Borrow as BorrowEvent,
@@ -22,7 +22,44 @@ import {
 const EXP_SCALE = BigInt.fromI32(10).pow(18);
 const PROTOCOL_SEIZE_SHARE_MANTISSA = BigInt.fromString("28000000000000000");
 
+// Validation function to ensure the address is a valid cToken
+function validateCToken(address: Address): boolean {
+  const cTokenContract = CTokenContract.bind(address);
+
+  // Check for multiple cToken-specific methods
+  const exchangeRateTry = cTokenContract.try_exchangeRateStored();
+  const borrowRateTry = cTokenContract.try_borrowRatePerBlock();
+  const supplyRateTry = cTokenContract.try_supplyRatePerBlock();
+  const totalBorrowsTry = cTokenContract.try_totalBorrows();
+
+  if (exchangeRateTry.reverted || borrowRateTry.reverted ||
+    supplyRateTry.reverted || totalBorrowsTry.reverted) {
+    return false;
+  }
+
+  // Check symbol follows cToken convention
+  const symbolTry = cTokenContract.try_symbol();
+  if (symbolTry.reverted || !symbolTry.value.startsWith("c")) {
+    return false;
+  }
+
+  // Check exchange rate is reasonable (not zero)
+  if (exchangeRateTry.value.equals(BigInt.fromI32(0))) {
+    return false;
+  }
+
+  return true;
+}
+
+
 export function handleAccrueInterest(event: AccrueInterestEvent): void {
+  if (!validateCToken(event.address)) {
+    log.warning("handleAccrueInterest: Address {} is not a valid cToken. Skipping event.", [
+      event.address.toHexString()
+    ]);
+    return;
+  }
+
   const cashPrior = event.params.cashPrior;
   const interestAccumulated = event.params.interestAccumulated;
   const borrowIndex = event.params.borrowIndex;
@@ -53,12 +90,20 @@ export function handleAccrueInterest(event: AccrueInterestEvent): void {
 }
 
 export function handleBorrow(event: BorrowEvent): void {
+  if (!validateCToken(event.address)) {
+    log.warning("handleBorrow: Address {} is not a valid cToken. Skipping event.", [
+      event.address.toHexString()
+    ]);
+    return;
+  }
+
   const borrower = event.params.borrower;
   const borrowAmount = event.params.borrowAmount;
   const accountBorrows = event.params.accountBorrows;
   const totalBorrows = event.params.totalBorrows;
 
   const market = getOrCreateCTokenMarket(event.address);
+
   const accountMarket = getOrCreateAccountMarket(borrower, event.address);
   const account = getOrCreateAccount(borrower);
 
@@ -249,18 +294,25 @@ export function handleLiquidateBorrow(event: LiquidateBorrowEvent): void {
 }
 
 export function handleMint(event: MintEvent): void {
+  if (!validateCToken(event.address)) {
+    log.warning("handleMint: Address {} is not a valid cToken. Skipping event.", [
+      event.address.toHexString()
+    ]);
+    return;
+  }
+
   const cTokenContractAddress = event.address;
   const minter = event.params.minter;
   const mintAmount = event.params.mintAmount;
   const market = getOrCreateCTokenMarket(event.address);
+  const cTokenContract = CTokenContract.bind(cTokenContractAddress);
+
   const accountMarket = getOrCreateAccountMarket(minter, cTokenContractAddress);
 
   accountMarket.supplyBalance = accountMarket.supplyBalance.plus(mintAmount);
   accountMarket.updatedAtBlock = event.block.number;
   accountMarket.updatedAtTimestamp = event.block.timestamp;
   accountMarket.save();
-
-  const cTokenContract = CTokenContract.bind(cTokenContractAddress);
   const totalSupplyTry = cTokenContract.try_totalSupply();
   if (!totalSupplyTry.reverted) {
     market.totalSupply = totalSupplyTry.value;
@@ -350,6 +402,13 @@ export function handleRepayBorrow(event: RepayBorrowEvent): void {
 }
 
 export function handleTransfer(event: TransferEvent): void {
+  if (!validateCToken(event.address)) {
+    log.warning("handleTransfer: Address {} is not a valid cToken. Skipping event.", [
+      event.address.toHexString()
+    ]);
+    return;
+  }
+
   const fromAddress = event.params.from;
   const toAddress = event.params.to;
   const value_ct = event.params.amount;

@@ -1,4 +1,5 @@
 import { BigInt, Address, log, Bytes } from "@graphprotocol/graph-ts";
+import { cToken as CTokenContract } from "../../generated/templates/cToken/cToken";
 import {
   Account,
   Collection,
@@ -62,6 +63,8 @@ export function getOrCreateAccount(accountAddress: Address): Account {
 export function getOrCreateCTokenMarket(address: Address): CTokenMarket {
   let cTokenMarket = CTokenMarket.load(address.toHexString());
   if (cTokenMarket == null) {
+    // This function should only be called for validated cTokens
+    // If validation failed earlier, this should not be reached
     cTokenMarket = new CTokenMarket(address.toHexString());
     cTokenMarket.symbol = "UNKNOWN";
     cTokenMarket.name = "UNKNOWN";
@@ -83,6 +86,18 @@ export function getOrCreateCTokenMarket(address: Address): CTokenMarket {
     cTokenMarket.multiplierPerBlock = ZERO_BI;
     cTokenMarket.jumpMultiplierPerBlock = ZERO_BI;
     cTokenMarket.kink = ZERO_BI;
+
+    const cTokenContract = CTokenContract.bind(address);
+    const nameResult = cTokenContract.try_name();
+    if (!nameResult.reverted) {
+      cTokenMarket.name = nameResult.value;
+    }
+
+    const symbolResult = cTokenContract.try_symbol();
+    if (!symbolResult.reverted) {
+      cTokenMarket.symbol = symbolResult.value;
+    }
+
     cTokenMarket.save();
   }
   return cTokenMarket;

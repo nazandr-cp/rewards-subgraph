@@ -90,6 +90,8 @@ dataSources:
       abis:
         - name: DebtSubsidizer
           file: ./abis/DebtSubsidizer.json
+        - name: cToken
+          file: ./abis/cToken.json
       eventHandlers:
         - event: MerkleRootUpdated(indexed address,bytes32,indexed address)
           handler: handleMerkleRootUpdated
@@ -145,6 +147,8 @@ dataSources:
       abis:
         - name: ERC721
           file: ./abis/IERC721.json
+        - name: IERC721Metadata
+          file: ./abis/IERC721Metadata.json
       eventHandlers:
         - event: Transfer(indexed address,indexed address,indexed uint256)
           handler: handleTransfer

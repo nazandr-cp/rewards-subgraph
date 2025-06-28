@@ -1,5 +1,6 @@
 import { BigInt, log } from "@graphprotocol/graph-ts";
 import { Transfer as TransferEvent } from "../generated/ERC721Collection/ERC721";
+import { IERC721Metadata } from "../generated/ERC721Collection/IERC721Metadata";
 import { ADDRESS_ZERO_STR } from "./utils/const";
 import {
   getOrCreateCollection,
@@ -65,6 +66,21 @@ export function handleTransfer(event: TransferEvent): void {
   }
 
   const collection = getOrCreateCollection(collectionAddress);
+
+  // Update collection name and symbol if they're still default values
+  if (collection.name == "Unknown Collection" || collection.symbol == "UNKN") {
+    const collectionContract = IERC721Metadata.bind(collectionAddress);
+
+    const nameResult = collectionContract.try_name();
+    if (!nameResult.reverted && collection.name == "Unknown Collection") {
+      collection.name = nameResult.value;
+    }
+
+    const symbolResult = collectionContract.try_symbol();
+    if (!symbolResult.reverted && collection.symbol == "UNKN") {
+      collection.symbol = symbolResult.value;
+    }
+  }
 
   if (isMint) {
     collection.totalSupply = collection.totalSupply.plus(BigInt.fromI32(1));
