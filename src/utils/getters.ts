@@ -262,6 +262,7 @@ export function getOrCreateAccountSubsidiesPerCollection(
     apsc.collectionParticipation = collectionVault.id;
     apsc.balanceNFT = ZERO_BI;
     apsc.weightedBalance = ZERO_BI;
+    apsc.lastEffectiveValue = ZERO_BI;
     apsc.secondsAccumulated = ZERO_BI;
     apsc.secondsClaimed = ZERO_BI;
     apsc.subsidiesAccrued = ZERO_BI;

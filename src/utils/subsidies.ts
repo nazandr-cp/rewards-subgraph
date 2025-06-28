@@ -99,9 +99,11 @@ export function accrueSeconds(
   basePrincipalForSubsidy = currentBorrowU(accountAddress, cTokenMarketAddress);
 
   const nftHoldingWeight = weight(apsc.balanceNFT, cv);
-  const combinedEffectiveValue = basePrincipalForSubsidy.plus(nftHoldingWeight);
+  const effectiveValue = basePrincipalForSubsidy.plus(nftHoldingWeight);
 
-  const subsidyAccruedScaled = combinedEffectiveValue.times(dt);
+  apsc.lastEffectiveValue = effectiveValue;
+
+  const subsidyAccruedScaled = effectiveValue.times(dt);
 
   if (subsidyAccruedScaled.lt(ZERO_BI)) {
     log.critical(
@@ -118,7 +120,7 @@ export function accrueSeconds(
     return;
   }
 
-  apsc.secondsAccumulated = apsc.secondsAccumulated.plus(subsidyAccruedScaled.div(EXP_SCALE));
+  apsc.secondsAccumulated = apsc.secondsAccumulated.plus(subsidyAccruedScaled);
   apsc.updatedAtTimestamp = now;
 }
 

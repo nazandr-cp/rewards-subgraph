@@ -5,7 +5,10 @@ import { ADDRESS_ZERO_STR } from "./utils/const";
 import {
   getOrCreateCollection,
   getOrCreateAccount,
+  getOrCreateAccountSubsidiesPerCollection,
 } from "./utils/getters";
+import { Collection } from "../generated/schema";
+import { accrueSeconds } from "./utils/subsidies";
 
 export function handleTransfer(event: TransferEvent): void {
   const collectionAddress = event.address;
@@ -102,6 +105,71 @@ export function handleTransfer(event: TransferEvent): void {
       collectionAddress.toHexString(),
       collection.totalSupply.toString()
     ]);
+  }
+
+  // Handle AccountSubsidiesPerCollection updates for collections that are part of vaults
+  const collectionEntity = Collection.load(collectionAddress.toHexString());
+  if (collectionEntity != null) {
+    const loadedCollectionParticipations = collectionEntity.participations.load();
+
+    if (loadedCollectionParticipations.length > 0) {
+      log.info("Processing AccountSubsidiesPerCollection for {} collection participations", [
+        BigInt.fromI32(loadedCollectionParticipations.length).toString()
+      ]);
+
+      for (let i = 0; i < loadedCollectionParticipations.length; i++) {
+        const collectionParticipation = loadedCollectionParticipations[i];
+        if (collectionParticipation == null) continue;
+
+        // Update FROM account subsidies (decrease NFT balance)
+        if (!isMint) {
+          const fromAccSubsidies = getOrCreateAccountSubsidiesPerCollection(
+            fromAddress,
+            collectionParticipation.id,
+            blockNumber,
+            timestamp
+          );
+
+          accrueSeconds(fromAccSubsidies, collectionParticipation, timestamp);
+          fromAccSubsidies.balanceNFT = fromAccSubsidies.balanceNFT.minus(BigInt.fromI32(1));
+          fromAccSubsidies.updatedAtBlock = blockNumber;
+          fromAccSubsidies.updatedAtTimestamp = timestamp;
+          fromAccSubsidies.save();
+
+          log.info("Updated FROM account {} subsidies for collection participation {}, new NFT balance: {}", [
+            fromAddress.toHexString(),
+            collectionParticipation.id,
+            fromAccSubsidies.balanceNFT.toString()
+          ]);
+        }
+
+        // Update TO account subsidies (increase NFT balance)
+        if (!isBurn) {
+          const toAccSubsidies = getOrCreateAccountSubsidiesPerCollection(
+            toAddress,
+            collectionParticipation.id,
+            blockNumber,
+            timestamp
+          );
+
+          accrueSeconds(toAccSubsidies, collectionParticipation, timestamp);
+          toAccSubsidies.balanceNFT = toAccSubsidies.balanceNFT.plus(BigInt.fromI32(1));
+          toAccSubsidies.updatedAtBlock = blockNumber;
+          toAccSubsidies.updatedAtTimestamp = timestamp;
+          toAccSubsidies.save();
+
+          log.info("Updated TO account {} subsidies for collection participation {}, new NFT balance: {}", [
+            toAddress.toHexString(),
+            collectionParticipation.id,
+            toAccSubsidies.balanceNFT.toString()
+          ]);
+        }
+      }
+    } else {
+      log.info("Collection {} has no vault participations, skipping AccountSubsidiesPerCollection updates", [
+        collectionAddress.toHexString()
+      ]);
+    }
   }
 
   log.info("NFT {} processed successfully for collection {}", [

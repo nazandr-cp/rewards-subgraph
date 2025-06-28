@@ -550,6 +550,7 @@ type AccountSubsidiesPerCollection @entity(immutable: false) {
   # NFT holding state
   balanceNFT: BigInt!
   weightedBalance: BigInt!
+  lastEffectiveValue: BigInt!
 
   # Subsidy accrual
   secondsAccumulated: BigInt!

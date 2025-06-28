@@ -152,7 +152,7 @@ export function handleSubsidyClaimed(event: SubsidyClaimed): void {
       "handleSubsidyClaimed: Active Epoch with id {} not found for event {}. Cannot process.",
       [activeEpochId as string, eventIdBase]
     );
-    return; // Critical: Cannot proceed if epoch entity doesn't exist
+    return;
   }
 
   const account = getOrCreateAccount(event.params.recipient);
@@ -191,13 +191,25 @@ export function handleSubsidyClaimed(event: SubsidyClaimed): void {
   subsidyTx.transactionHash = event.transaction.hash;
   subsidyTx.save();
 
-  // --- Update Epoch Statistics ---
+  // Update AccountSubsidiesPerCollection for the user
+  const accountSubsidies = account.accountSubsidies.load();
+  for (let i = 0; i < accountSubsidies.length; i++) {
+    const subsidy = accountSubsidies[i];
+    if (subsidy.vault == loadedVault.id) {
+      const newTotal = subsidy.secondsClaimed.plus(event.params.amount);
+      subsidy.secondsClaimed = newTotal;
+      subsidy.subsidiesClaimed = subsidy.subsidiesClaimed.plus(event.params.amount);
+      subsidy.updatedAtBlock = event.block.number;
+      subsidy.updatedAtTimestamp = event.block.timestamp;
+      subsidy.save();
+    }
+  }
+
   epoch.totalSubsidiesDistributed = epoch.totalSubsidiesDistributed.plus(
     event.params.amount
   );
   epoch.save();
 
-  // --- Update Vault Allocation Statistics ---
   const vaultAllocation = getOrCreateEpochVaultAllocation(epoch.id, loadedVault.id);
 
   vaultAllocation.subsidiesDistributed = vaultAllocation.subsidiesDistributed.plus(event.params.amount);

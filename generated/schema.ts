@@ -3971,6 +3971,19 @@ export class AccountSubsidiesPerCollection extends Entity {
     this.set("weightedBalance", Value.fromBigInt(value));
   }
 
+  get lastEffectiveValue(): BigInt {
+    let value = this.get("lastEffectiveValue");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toBigInt();
+    }
+  }
+
+  set lastEffectiveValue(value: BigInt) {
+    this.set("lastEffectiveValue", Value.fromBigInt(value));
+  }
+
   get secondsAccumulated(): BigInt {
     let value = this.get("secondsAccumulated");
     if (!value || value.kind == ValueKind.NULL) {
