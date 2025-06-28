@@ -1,28 +1,23 @@
 {
   "extends": "@graphprotocol/graph-ts/types/tsconfig.base.json",
   "compilerOptions": {
-    "esModuleInterop": true,
     "baseUrl": ".",
     "paths": {
-      "../../src/*": [
+      "src/*": [
         "src/*"
       ]
     },
-    "types": [
-      "matchstick-as",
-      "@graphprotocol/graph-ts"
-    ]
+    "skipLibCheck": true
   },
   "include": [
     "src",
     "hardhat_scripts",
-    "tests/handlers", // Only include handler tests for Matchstick compilation
-    "tests/utils", // Include test utility files for Matchstick compilation
-    "as-globals.d.ts" // Include custom AssemblyScript globals
+    "tests/handlers",
+    "tests/utils",
+    "as-globals.d.ts"
   ],
   "exclude": [
     "node_modules",
-    "tests/helpers" // Exclude Jest helper tests from Matchstick compilation
-  ],
-  "rootDir": "./",
+    "tests/helpers"
+  ]
 }

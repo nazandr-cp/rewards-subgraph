@@ -2,8 +2,8 @@
   "name": "subsidies",
   "license": "UNLICENSED",
   "scripts": {
-    "codegen": "graph codegen",
-    "build": "graph build",
+    "codegen": "npx graph codegen",
+    "build": "npx graph build",
     "deploy": "npx graph deploy --node https://api.studio.thegraph.com/deploy/ subsidies",
     "create-local": "npx graph create --node http://localhost:8020/ subsidies",
     "remove-local": "npx graph remove --node http://localhost:8020/ subsidies",
