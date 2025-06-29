@@ -54,20 +54,44 @@ export function currentBorrowU(user: Address, cTokenAddr: Address): BigInt {
   return borrowRes.value;
 }
 
-const MAX_NFT_COUNT_FOR_WEIGHT_CALC = BigInt.fromI32(1000000);
+export const MAX_NFT_COUNT_FOR_WEIGHT_CALC = BigInt.fromI32(1000000);
+
+export function linearWeight(nftCount: BigInt, p1: BigInt, p2: BigInt): BigInt {
+  if (nftCount.gt(MAX_NFT_COUNT_FOR_WEIGHT_CALC)) {
+    // Log warning when NFT count exceeds maximum in Graph environment
+    if (typeof log !== 'undefined') {
+      log.warning(
+        "linearWeight: NFT count {} exceeds maximum {}. Using capped value.",
+        [nftCount.toString(), MAX_NFT_COUNT_FOR_WEIGHT_CALC.toString()]
+      );
+    }
+    nftCount = MAX_NFT_COUNT_FOR_WEIGHT_CALC;
+  }
+
+  return p1.times(nftCount).plus(p2);
+}
+
+export function exponentialWeight(nftCount: BigInt, A: BigInt, k: BigInt): BigInt {
+  if (nftCount.gt(MAX_NFT_COUNT_FOR_WEIGHT_CALC)) {
+    // Log warning when NFT count exceeds maximum in Graph environment
+    if (typeof log !== 'undefined') {
+      log.warning(
+        "exponentialWeight: NFT count {} exceeds maximum {}. Using capped value.",
+        [nftCount.toString(), MAX_NFT_COUNT_FOR_WEIGHT_CALC.toString()]
+      );
+    }
+    nftCount = MAX_NFT_COUNT_FOR_WEIGHT_CALC;
+  }
+
+  const kn_scaled = k.times(nftCount);
+  return A.times(approxExponentialTerm(kn_scaled)).div(EXP_SCALE);
+}
 
 export function weight(nftCount: BigInt, cv: CollectionParticipation): BigInt {
-  const n_bi = nftCount.gt(MAX_NFT_COUNT_FOR_WEIGHT_CALC)
-    ? MAX_NFT_COUNT_FOR_WEIGHT_CALC
-    : nftCount;
-
   if (cv.weightFunctionType == "LINEAR") {
-    return cv.weightFunctionP1.times(n_bi).plus(cv.weightFunctionP2);
+    return linearWeight(nftCount, cv.weightFunctionP1, cv.weightFunctionP2);
   } else if (cv.weightFunctionType == "EXPONENTIAL") {
-    const k_bi = cv.weightFunctionP2;
-    const A_bi = cv.weightFunctionP1;
-    const kn_scaled = k_bi.times(n_bi);
-    return A_bi.times(approxExponentialTerm(kn_scaled)).div(EXP_SCALE);
+    return exponentialWeight(nftCount, cv.weightFunctionP1, cv.weightFunctionP2);
   } else {
     return ZERO_BI;
   }
@@ -120,7 +144,7 @@ export function accrueSeconds(
     return;
   }
 
-  apsc.secondsAccumulated = apsc.secondsAccumulated.plus(subsidyAccruedScaled);
+  apsc.secondsAccumulated = apsc.secondsAccumulated.plus(subsidyAccruedScaled.div(EXP_SCALE));
   apsc.updatedAtTimestamp = now;
 }
 
