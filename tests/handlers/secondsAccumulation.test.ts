@@ -3,7 +3,8 @@ import { Address, BigInt, ethereum } from "@graphprotocol/graph-ts";
 import { handleTransfer } from "../../src/erc721-mapping";
 import { Transfer } from "../../generated/ERC721Collection/ERC721";
 import { newERC721TransferEvent } from "../utils/tokenHelpers";
-import { Collection, CollectionsVault, CollectionParticipation, AccountSubsidiesPerCollection } from "../../generated/schema";
+import { Collection, CollectionsVault, CollectionParticipation, AccountSubsidy } from "../../generated/schema";
+import { IdGenerator } from "../../src/utils/id-generation";
 
 const COLLECTION = Address.fromString("0x00000000000000000000000000000000000000c1");
 const VAULT = Address.fromString("0x0000000000000000000000000000000000000001");
@@ -30,9 +31,6 @@ beforeEach(() => {
     col.minBorrowAmount = BigInt.fromI32(0);
     col.maxBorrowAmount = BigInt.fromI32(0);
     col.totalNFTsDeposited = BigInt.fromI32(0);
-    col.totalBorrowVolume = BigInt.fromI32(0);
-    col.totalYieldGenerated = BigInt.fromI32(0);
-    col.totalSubsidiesReceived = BigInt.fromI32(0);
     col.registeredAtBlock = BigInt.fromI32(0);
     col.registeredAtTimestamp = BigInt.fromI32(0);
     col.updatedAtBlock = BigInt.fromI32(0);
@@ -58,7 +56,7 @@ beforeEach(() => {
     vault.save();
 
     // Create a collection participation (collection-vault relationship)
-    const collectionVaultId = VAULT.toHexString() + "-" + COLLECTION.toHexString();
+    const collectionVaultId = IdGenerator.collectionVaultId(VAULT, COLLECTION);
     const cp = new CollectionParticipation(collectionVaultId);
     cp.collection = COLLECTION.toHexString();
     cp.vault = VAULT.toHexString();
@@ -118,14 +116,13 @@ beforeEach(() => {
 });
 
 test("should accumulate seconds on NFT transfer when collection participates in vault", () => {
-    // Create an initial AccountSubsidiesPerCollection for the TO address
-    const accountSubsidiesId = TO.toHexString() + "-" + VAULT.toHexString() + "-" + COLLECTION.toHexString();
-    const accountSubsidies = new AccountSubsidiesPerCollection(accountSubsidiesId);
+    // Create an initial AccountSubsidy for the TO address
+    const collectionVaultId = IdGenerator.collectionVaultId(VAULT, COLLECTION);
+    const accountSubsidiesId = IdGenerator.accountSubsidiesPerCollectionId(TO, collectionVaultId);
+    const accountSubsidies = new AccountSubsidy(accountSubsidiesId);
     accountSubsidies.account = TO.toHexString();
-    accountSubsidies.vault = VAULT.toHexString();
-    accountSubsidies.collection = COLLECTION.toHexString();
     accountSubsidies.accountMarket = TO.toHexString() + "-" + CTOKEN.toHexString();
-    accountSubsidies.collectionParticipation = VAULT.toHexString() + "-" + COLLECTION.toHexString();
+    accountSubsidies.collectionParticipation = collectionVaultId;
     accountSubsidies.balanceNFT = BigInt.fromI32(0);
     accountSubsidies.weightedBalance = BigInt.fromI32(0);
     accountSubsidies.secondsAccumulated = BigInt.fromI32(0);
@@ -148,8 +145,8 @@ test("should accumulate seconds on NFT transfer when collection participates in 
     // Execute the transfer
     handleTransfer(event);
 
-    // Load the updated AccountSubsidiesPerCollection
-    const updatedAccountSubsidies = AccountSubsidiesPerCollection.load(accountSubsidiesId);
+    // Load the updated AccountSubsidy
+    const updatedAccountSubsidies = AccountSubsidy.load(accountSubsidiesId);
     assert.assertNotNull(updatedAccountSubsidies);
 
     if (updatedAccountSubsidies) {
@@ -173,14 +170,13 @@ test("should accumulate seconds on NFT transfer when collection participates in 
 });
 
 test("should accumulate additional seconds on subsequent transfers", () => {
-    // Create initial AccountSubsidiesPerCollection
-    const accountSubsidiesId = TO.toHexString() + "-" + VAULT.toHexString() + "-" + COLLECTION.toHexString();
-    const accountSubsidies = new AccountSubsidiesPerCollection(accountSubsidiesId);
+    // Create initial AccountSubsidy
+    const collectionVaultId = IdGenerator.collectionVaultId(VAULT, COLLECTION);
+    const accountSubsidiesId = IdGenerator.accountSubsidiesPerCollectionId(TO, collectionVaultId);
+    const accountSubsidies = new AccountSubsidy(accountSubsidiesId);
     accountSubsidies.account = TO.toHexString();
-    accountSubsidies.vault = VAULT.toHexString();
-    accountSubsidies.collection = COLLECTION.toHexString();
     accountSubsidies.accountMarket = TO.toHexString() + "-" + CTOKEN.toHexString();
-    accountSubsidies.collectionParticipation = VAULT.toHexString() + "-" + COLLECTION.toHexString();
+    accountSubsidies.collectionParticipation = collectionVaultId;
     accountSubsidies.balanceNFT = BigInt.fromI32(0);
     accountSubsidies.weightedBalance = BigInt.fromI32(0);
     accountSubsidies.secondsAccumulated = BigInt.fromI32(0);
@@ -209,7 +205,7 @@ test("should accumulate additional seconds on subsequent transfers", () => {
     handleTransfer(event2);
 
     // Load the final state
-    const finalAccountSubsidies = AccountSubsidiesPerCollection.load(accountSubsidiesId);
+    const finalAccountSubsidies = AccountSubsidy.load(accountSubsidiesId);
     assert.assertNotNull(finalAccountSubsidies);
 
     if (finalAccountSubsidies) {
@@ -223,14 +219,13 @@ test("should accumulate additional seconds on subsequent transfers", () => {
 });
 
 test("should handle zero NFT balance correctly", () => {
-    // Create AccountSubsidiesPerCollection with existing balance
-    const accountSubsidiesId = FROM.toHexString() + "-" + VAULT.toHexString() + "-" + COLLECTION.toHexString();
-    const accountSubsidies = new AccountSubsidiesPerCollection(accountSubsidiesId);
+    // Create AccountSubsidy with existing balance
+    const collectionVaultId = IdGenerator.collectionVaultId(VAULT, COLLECTION);
+    const accountSubsidiesId = IdGenerator.accountSubsidiesPerCollectionId(FROM, collectionVaultId);
+    const accountSubsidies = new AccountSubsidy(accountSubsidiesId);
     accountSubsidies.account = FROM.toHexString();
-    accountSubsidies.vault = VAULT.toHexString();
-    accountSubsidies.collection = COLLECTION.toHexString();
     accountSubsidies.accountMarket = FROM.toHexString() + "-" + CTOKEN.toHexString();
-    accountSubsidies.collectionParticipation = VAULT.toHexString() + "-" + COLLECTION.toHexString();
+    accountSubsidies.collectionParticipation = collectionVaultId;
     accountSubsidies.balanceNFT = BigInt.fromI32(1); // Has 1 NFT initially
     accountSubsidies.weightedBalance = BigInt.fromI32(0);
     accountSubsidies.secondsAccumulated = BigInt.fromI32(0);
@@ -252,7 +247,7 @@ test("should handle zero NFT balance correctly", () => {
     handleTransfer(event);
 
     // Load the FROM account's subsidies
-    const fromAccountSubsidies = AccountSubsidiesPerCollection.load(accountSubsidiesId);
+    const fromAccountSubsidies = AccountSubsidy.load(accountSubsidiesId);
     assert.assertNotNull(fromAccountSubsidies);
 
     if (fromAccountSubsidies) {

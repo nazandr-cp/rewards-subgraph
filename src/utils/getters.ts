@@ -5,7 +5,7 @@ import {
   Collection,
   CollectionsVault,
   CollectionParticipation,
-  AccountSubsidiesPerCollection,
+  AccountSubsidy,
   CTokenMarket,
   AccountMarket,
   UserEpochEligibility,
@@ -15,20 +15,24 @@ import {
   MerkleDistribution,
 } from "../../generated/schema";
 
+import { IdGenerator } from "./id-generation";
+import { CTokenValidationCache } from "./ctoken-cache";
+
 import { ZERO_BI, ADDRESS_ZERO_STR, SYSTEM_STATE_ID } from "./const";
 
+// Use optimized ID generation
 function generateCollectionVaultId(
-  vaultId: string,
-  collectionId: string
+  vaultAddress: Address,
+  collectionAddress: Address
 ): string {
-  return vaultId + "-" + collectionId;
+  return IdGenerator.collectionVaultId(vaultAddress, collectionAddress);
 }
 
-function generateAccountSubsidiesPerCollectionId(
-  accountId: string,
+function generateAccountSubsidyId(
+  accountAddress: Address,
   collectionVaultId: string
 ): string {
-  return accountId + "-" + collectionVaultId;
+  return IdGenerator.accountSubsidiesPerCollectionId(accountAddress, collectionVaultId);
 }
 
 export function getOrCreateAccount(accountAddress: Address): Account {
@@ -122,11 +126,8 @@ export function getOrCreateCollection(collectionAddress: Address): Collection {
     collection.weightFunctionP2 = ZERO_BI;
     collection.minBorrowAmount = ZERO_BI;
     collection.maxBorrowAmount = ZERO_BI;
-    // Collection statistics
+    // Core collection statistics (non-duplicate)
     collection.totalNFTsDeposited = ZERO_BI;
-    collection.totalBorrowVolume = ZERO_BI;
-    collection.totalYieldGenerated = ZERO_BI;
-    collection.totalSubsidiesReceived = ZERO_BI;
     // Metadata
     collection.registeredAtBlock = ZERO_BI;
     collection.registeredAtTimestamp = ZERO_BI;
@@ -172,9 +173,8 @@ export function getOrCreateCollectionVault(
   cTokenMarketAddress: Address
 ): CollectionParticipation {
   const collection = getOrCreateCollection(collectionAddress);
-  const vaultId = vaultAddress.toHexString();
 
-  const id = generateCollectionVaultId(vaultId, collection.id);
+  const id = generateCollectionVaultId(vaultAddress, collectionAddress);
   let cv = CollectionParticipation.load(id);
 
   if (cv == null) {
@@ -210,12 +210,12 @@ export function getOrCreateCollectionVault(
   return cv;
 }
 
-export function getOrCreateAccountSubsidiesPerCollection(
+export function getOrCreateAccountSubsidy(
   accountAddress: Address,
   collectionVaultId: string,
   blockNumber: BigInt,
   timestamp: BigInt
-): AccountSubsidiesPerCollection {
+): AccountSubsidy {
   const account = getOrCreateAccount(accountAddress);
   const collectionVault = CollectionParticipation.load(collectionVaultId);
 
@@ -225,17 +225,17 @@ export function getOrCreateAccountSubsidiesPerCollection(
       [collectionVaultId]
     );
     // Return a dummy object to satisfy TypeScript, as log.critical is expected to halt execution.
-    return new AccountSubsidiesPerCollection(collectionVaultId);
+    return new AccountSubsidy(collectionVaultId);
   }
 
   const vaultEntity = CollectionsVault.load(collectionVault.vault);
   if (vaultEntity == null) {
     log.critical(
-      "getOrCreateAccountSubsidiesPerCollection: Vault with id {} not found when creating AccountSubsidiesPerCollection. This should not happen.",
+      "getOrCreateAccountSubsidy: Vault with id {} not found when creating AccountSubsidy. This should not happen.",
       [collectionVault.vault]
     );
     // Return a dummy object to satisfy TypeScript, as log.critical is expected to halt execution.
-    return new AccountSubsidiesPerCollection(collectionVaultId);
+    return new AccountSubsidy(collectionVaultId);
   }
 
   const cTokenMarketForVault = vaultEntity.cTokenMarket
@@ -247,33 +247,31 @@ export function getOrCreateAccountSubsidiesPerCollection(
     cTokenMarketForVault
   );
 
-  const id = generateAccountSubsidiesPerCollectionId(
-    account.id,
+  const id = generateAccountSubsidyId(
+    accountAddress,
     collectionVault.id
   );
-  let apsc = AccountSubsidiesPerCollection.load(id);
+  let accountSubsidy = AccountSubsidy.load(id);
 
-  if (apsc == null) {
-    apsc = new AccountSubsidiesPerCollection(id);
-    apsc.account = account.id;
-    apsc.vault = collectionVault.vault;
-    apsc.collection = collectionVault.collection;
-    apsc.accountMarket = accountMarket.id;
-    apsc.collectionParticipation = collectionVault.id;
-    apsc.balanceNFT = ZERO_BI;
-    apsc.weightedBalance = ZERO_BI;
-    apsc.secondsAccumulated = ZERO_BI;
-    apsc.secondsClaimed = ZERO_BI;
-    apsc.subsidiesAccrued = ZERO_BI;
-    apsc.subsidiesClaimed = ZERO_BI;
-    apsc.averageHoldingPeriod = ZERO_BI;
-    apsc.totalRewardsEarned = ZERO_BI;
-    apsc.lastEffectiveValue = ZERO_BI;
-    apsc.updatedAtBlock = blockNumber;
-    apsc.updatedAtTimestamp = timestamp;
-    apsc.save();
+  if (accountSubsidy == null) {
+    accountSubsidy = new AccountSubsidy(id);
+    accountSubsidy.account = account.id;
+    accountSubsidy.accountMarket = accountMarket.id;
+    accountSubsidy.collectionParticipation = collectionVault.id;
+    accountSubsidy.balanceNFT = ZERO_BI;
+    accountSubsidy.weightedBalance = ZERO_BI;
+    accountSubsidy.secondsAccumulated = ZERO_BI;
+    accountSubsidy.secondsClaimed = ZERO_BI;
+    accountSubsidy.subsidiesAccrued = ZERO_BI;
+    accountSubsidy.subsidiesClaimed = ZERO_BI;
+    accountSubsidy.averageHoldingPeriod = ZERO_BI;
+    accountSubsidy.totalRewardsEarned = ZERO_BI;
+    accountSubsidy.lastEffectiveValue = ZERO_BI;
+    accountSubsidy.updatedAtBlock = blockNumber;
+    accountSubsidy.updatedAtTimestamp = timestamp;
+    accountSubsidy.save();
   }
-  return apsc;
+  return accountSubsidy;
 }
 
 export function getOrCreateAccountMarket(
@@ -373,11 +371,8 @@ export function getOrCreateSystemState(): SystemState {
   if (systemState == null) {
     systemState = new SystemState(SYSTEM_STATE_ID);
     systemState.totalVaults = ZERO_BI;
-    systemState.totalCollections = ZERO_BI;
     systemState.totalUsers = ZERO_BI;
     systemState.totalValueLocked = ZERO_BI;
-    systemState.totalYieldDistributed = ZERO_BI;
-    systemState.totalSubsidiesDistributed = ZERO_BI;
     systemState.systemUtilizationRate = ZERO_BI;
     systemState.averageAPY = ZERO_BI;
     systemState.lastUpdatedBlock = ZERO_BI;

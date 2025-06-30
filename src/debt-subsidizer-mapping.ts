@@ -9,6 +9,7 @@ import {
   DebtSubsidizer,
   VaultAddition,
   CollectionsVault,
+  CollectionParticipation,
 } from "../generated/schema";
 import { log, Address } from "@graphprotocol/graph-ts";
 import { CollectionVault } from "../generated/templates";
@@ -191,11 +192,12 @@ export function handleSubsidyClaimed(event: SubsidyClaimed): void {
   subsidyTx.transactionHash = event.transaction.hash;
   subsidyTx.save();
 
-  // Update AccountSubsidiesPerCollection for the user
+  // Update AccountSubsidy for the user
   const accountSubsidies = account.accountSubsidies.load();
   for (let i = 0; i < accountSubsidies.length; i++) {
     const subsidy = accountSubsidies[i];
-    if (subsidy.vault == loadedVault.id) {
+    const collectionParticipation = CollectionParticipation.load(subsidy.collectionParticipation);
+    if (collectionParticipation && collectionParticipation.vault == loadedVault.id) {
       const newTotal = subsidy.secondsClaimed.plus(event.params.amount);
       subsidy.secondsClaimed = newTotal;
       subsidy.subsidiesClaimed = subsidy.subsidiesClaimed.plus(event.params.amount);

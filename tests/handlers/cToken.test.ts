@@ -114,6 +114,7 @@ test("handleRedeem", () => {
 });
 
 test("handleBorrow", () => {
+  createMarket();
   const event = newBorrowEvent(OTHER_ADDRESS, BigInt.fromI32(10), BigInt.fromI32(10), BigInt.fromI32(10));
   event.address = CTOKEN_ADDRESS;
   createMockedFunction(CTOKEN_ADDRESS, "totalBorrows", "totalBorrows():(uint256)").returns([

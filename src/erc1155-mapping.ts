@@ -8,7 +8,7 @@ import { Collection, SystemState, Account } from "../generated/schema";
 import { accrueSeconds } from "./utils/subsidies";
 import { ADDRESS_ZERO_STR, SYSTEM_STATE_ID, ZERO_BI } from "./utils/const";
 import {
-  getOrCreateAccountSubsidiesPerCollection,
+  getOrCreateAccountSubsidy,
   getOrCreateUserEpochEligibility,
 } from "./utils/getters";
 
@@ -95,7 +95,7 @@ export function handleTransferSingle(event: TransferSingleEvent): void {
     }
 
     if (fromAddress.toHexString() != ADDRESS_ZERO_STR) {
-      const fromAccSubsidies = getOrCreateAccountSubsidiesPerCollection(
+      const fromAccSubsidies = getOrCreateAccountSubsidy(
         fromAddress,
         collectionVault.id,
         blockNumber,
@@ -109,7 +109,7 @@ export function handleTransferSingle(event: TransferSingleEvent): void {
     }
 
     if (toAddress.toHexString() != ADDRESS_ZERO_STR) {
-      const toAccSubsidies = getOrCreateAccountSubsidiesPerCollection(
+      const toAccSubsidies = getOrCreateAccountSubsidy(
         toAddress,
         collectionVault.id,
         blockNumber,
@@ -222,7 +222,7 @@ export function handleTransferBatch(event: TransferBatchEvent): void {
     }
 
     if (fromAddress.toHexString() != ADDRESS_ZERO_STR) {
-      const fromAccSubsidies = getOrCreateAccountSubsidiesPerCollection(
+      const fromAccSubsidies = getOrCreateAccountSubsidy(
         fromAddress,
         collectionVault.id,
         blockNumber,
@@ -237,7 +237,7 @@ export function handleTransferBatch(event: TransferBatchEvent): void {
     }
 
     if (toAddress.toHexString() != ADDRESS_ZERO_STR) {
-      const toAccSubsidies = getOrCreateAccountSubsidiesPerCollection(
+      const toAccSubsidies = getOrCreateAccountSubsidy(
         toAddress,
         collectionVault.id,
         blockNumber,

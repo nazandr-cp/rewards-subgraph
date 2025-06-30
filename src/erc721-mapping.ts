@@ -5,7 +5,7 @@ import { ADDRESS_ZERO_STR } from "./utils/const";
 import {
   getOrCreateCollection,
   getOrCreateAccount,
-  getOrCreateAccountSubsidiesPerCollection,
+  getOrCreateAccountSubsidy,
 } from "./utils/getters";
 import { Collection } from "../generated/schema";
 import { accrueSeconds } from "./utils/subsidies";
@@ -123,7 +123,7 @@ export function handleTransfer(event: TransferEvent): void {
 
         // Update FROM account subsidies (decrease NFT balance)
         if (!isMint) {
-          const fromAccSubsidies = getOrCreateAccountSubsidiesPerCollection(
+          const fromAccSubsidies = getOrCreateAccountSubsidy(
             fromAddress,
             collectionParticipation.id,
             blockNumber,
@@ -145,7 +145,7 @@ export function handleTransfer(event: TransferEvent): void {
 
         // Update TO account subsidies (increase NFT balance)
         if (!isBurn) {
-          const toAccSubsidies = getOrCreateAccountSubsidiesPerCollection(
+          const toAccSubsidies = getOrCreateAccountSubsidy(
             toAddress,
             collectionParticipation.id,
             blockNumber,

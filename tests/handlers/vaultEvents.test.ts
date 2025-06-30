@@ -30,6 +30,7 @@ import {
   EpochVaultAllocation,
 } from "../../generated/schema";
 import { CollectionYieldApplication } from "../../generated/schema";
+import { IdGenerator } from "../../src/utils/id-generation";
 
 // Define common addresses and values for tests
 const MOCK_REGISTRY_ADDRESS = Address.fromString("0x000000000000000000000000000000000000000A");
@@ -72,9 +73,6 @@ function createMockCollection(collectionAddress: Address): void {
   collection.minBorrowAmount = BigInt.fromI32(0);
   collection.maxBorrowAmount = BigInt.fromI32(0);
   collection.totalNFTsDeposited = BigInt.fromI32(0);
-  collection.totalBorrowVolume = BigInt.fromI32(0);
-  collection.totalYieldGenerated = BigInt.fromI32(0);
-  collection.totalSubsidiesReceived = BigInt.fromI32(0);
   collection.registeredAtBlock = BigInt.fromI32(1);
   collection.registeredAtTimestamp = BigInt.fromI32(1678886400);
   collection.updatedAtBlock = BigInt.fromI32(1);
@@ -292,7 +290,7 @@ test("handleCollectionYieldAccrued: happy path", () => {
 
   handleCollectionYieldAccrued(event);
 
-  const collVaultId = vaultAddress.toHex() + "-" + collectionAddress.toHex();
+  const collVaultId = IdGenerator.collectionVaultId(vaultAddress, collectionAddress);
   assert.fieldEquals("CollectionParticipation", collVaultId, "globalDepositIndex", globalDepositIndex.toString());
   assert.fieldEquals("CollectionParticipation", collVaultId, "lastGlobalDepositIndex", lastGlobalDepositIndex.toString());
   assert.fieldEquals("CollectionParticipation", collVaultId, "yieldAccrued", totalAccrued.toString());
@@ -325,7 +323,7 @@ test("handleCollectionYieldAccrued: unknown vault (guard path)", () => {
 
   handleCollectionYieldAccrued(event);
 
-  const collVaultId = vaultAddress.toHex() + "-" + collectionAddress.toHex();
+  const collVaultId = IdGenerator.collectionVaultId(vaultAddress, collectionAddress);
   assert.notInStore("CollectionParticipation", collVaultId);
   assert.notInStore("CollectionYieldAccrual", event.transaction.hash.toHex() + "-" + event.logIndex.toString());
 });
@@ -354,7 +352,7 @@ test("handleCollectionYieldAccrued: zero yield amount (edge case)", () => {
 
   handleCollectionYieldAccrued(event);
 
-  const collVaultId = vaultAddress.toHex() + "-" + collectionAddress.toHex();
+  const collVaultId = IdGenerator.collectionVaultId(vaultAddress, collectionAddress);
   assert.fieldEquals("CollectionParticipation", collVaultId, "yieldAccrued", "0");
   const accrualId = event.transaction.hash.toHex() + "-" + event.logIndex.toString();
   assert.fieldEquals("CollectionYieldAccrual", accrualId, "yieldAmount", "0");

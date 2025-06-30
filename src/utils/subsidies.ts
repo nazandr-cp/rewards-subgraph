@@ -3,7 +3,7 @@ import {
   Account,
   CollectionsVault,
   CollectionParticipation,
-  AccountSubsidiesPerCollection,
+  AccountSubsidy,
 } from "../../generated/schema";
 import { cToken } from "../../generated/templates/cToken/cToken";
 
@@ -98,26 +98,26 @@ export function weight(nftCount: BigInt, cv: CollectionParticipation): BigInt {
 }
 
 export function accrueSeconds(
-  apsc: AccountSubsidiesPerCollection,
+  accountSubsidy: AccountSubsidy,
   cv: CollectionParticipation,
   now: BigInt
 ): void {
-  const dt = now.minus(apsc.updatedAtTimestamp);
+  const dt = now.minus(accountSubsidy.updatedAtTimestamp);
 
   log.info("accrueSeconds: Account {}, dt = {}, now = {}, updatedAtTimestamp = {}", [
-    apsc.account,
+    accountSubsidy.account,
     dt.toString(),
     now.toString(),
-    apsc.updatedAtTimestamp.toString()
+    accountSubsidy.updatedAtTimestamp.toString()
   ]);
 
   if (dt.isZero() || dt.lt(ZERO_BI)) {
-    log.info("accrueSeconds: Skipping due to zero or negative dt for account {}", [apsc.account]);
+    log.info("accrueSeconds: Skipping due to zero or negative dt for account {}", [accountSubsidy.account]);
     return;
   }
 
   let basePrincipalForSubsidy = ZERO_BI;
-  const accountAddress = Address.fromString(apsc.account);
+  const accountAddress = Address.fromString(accountSubsidy.account);
   const vaultEntity = CollectionsVault.load(cv.vault);
 
   if (vaultEntity == null) {
@@ -131,24 +131,24 @@ export function accrueSeconds(
 
   basePrincipalForSubsidy = currentBorrowU(accountAddress, cTokenMarketAddress);
 
-  const nftHoldingWeight = weight(apsc.balanceNFT, cv);
+  const nftHoldingWeight = weight(accountSubsidy.balanceNFT, cv);
   const effectiveValue = basePrincipalForSubsidy.plus(nftHoldingWeight);
 
   log.info("accrueSeconds: Account {}, basePrincipalForSubsidy = {}, nftHoldingWeight = {}, effectiveValue = {}, balanceNFT = {}", [
-    apsc.account,
+    accountSubsidy.account,
     basePrincipalForSubsidy.toString(),
     nftHoldingWeight.toString(),
     effectiveValue.toString(),
-    apsc.balanceNFT.toString()
+    accountSubsidy.balanceNFT.toString()
   ]);
 
-  apsc.lastEffectiveValue = effectiveValue;
+  accountSubsidy.lastEffectiveValue = effectiveValue;
 
   const subsidyAccruedScaled = effectiveValue.times(dt);
   const finalAccrual = subsidyAccruedScaled.div(EXP_SCALE);
 
   log.info("accrueSeconds: Account {}, subsidyAccruedScaled = {}, finalAccrual = {}, EXP_SCALE = {}", [
-    apsc.account,
+    accountSubsidy.account,
     subsidyAccruedScaled.toString(),
     finalAccrual.toString(),
     EXP_SCALE.toString()
@@ -158,7 +158,7 @@ export function accrueSeconds(
     log.critical(
       "Negative subsidyAccruedScaled for account {}, collectionVault {}. Values: subsidyAccruedScaled = {}, basePrincipalForSubsidy = {}, nftHoldingWeight = {}, dt = {}. Reverting.",
       [
-        apsc.account,
+        accountSubsidy.account,
         cv.id,
         subsidyAccruedScaled.toString(),
         basePrincipalForSubsidy.toString(),
@@ -169,12 +169,12 @@ export function accrueSeconds(
     return;
   }
 
-  apsc.secondsAccumulated = apsc.secondsAccumulated.plus(finalAccrual);
-  apsc.updatedAtTimestamp = now;
+  accountSubsidy.secondsAccumulated = accountSubsidy.secondsAccumulated.plus(finalAccrual);
+  accountSubsidy.updatedAtTimestamp = now;
 
   log.info("accrueSeconds: Account {}, new secondsAccumulated = {}", [
-    apsc.account,
-    apsc.secondsAccumulated.toString()
+    accountSubsidy.account,
+    accountSubsidy.secondsAccumulated.toString()
   ]);
 }
 
@@ -188,10 +188,10 @@ export function accrueAccountSubsidies(
     return;
   }
 
-  const accountSubsidiesPerCollection = account.accountSubsidies.load();
+  const accountSubsidies = account.accountSubsidies.load();
   if (
-    !accountSubsidiesPerCollection ||
-    accountSubsidiesPerCollection.length == 0
+    !accountSubsidies ||
+    accountSubsidies.length == 0
   ) {
     return;
   }
@@ -200,30 +200,30 @@ export function accrueAccountSubsidies(
   const loadedVaults = new Array<string>();
   const cachedVaults = new Array<CollectionParticipation>();
 
-  for (let i = 0; i < accountSubsidiesPerCollection.length; i++) {
-    const accSubsidies = accountSubsidiesPerCollection[i];
-    if (!accSubsidies) continue;
+  for (let i = 0; i < accountSubsidies.length; i++) {
+    const accountSubsidy = accountSubsidies[i];
+    if (!accountSubsidy) continue;
 
     let collectionVault: CollectionParticipation | null = null;
 
     // Check cache first
-    const cacheIndex = loadedVaults.indexOf(accSubsidies.collectionParticipation);
+    const cacheIndex = loadedVaults.indexOf(accountSubsidy.collectionParticipation);
     if (cacheIndex >= 0) {
       collectionVault = cachedVaults[cacheIndex];
     } else {
       // Load and cache
-      collectionVault = CollectionParticipation.load(accSubsidies.collectionParticipation);
+      collectionVault = CollectionParticipation.load(accountSubsidy.collectionParticipation);
       if (collectionVault) {
-        loadedVaults.push(accSubsidies.collectionParticipation);
+        loadedVaults.push(accountSubsidy.collectionParticipation);
         cachedVaults.push(collectionVault);
       }
     }
 
     if (collectionVault) {
-      accrueSeconds(accSubsidies, collectionVault, timestamp);
-      accSubsidies.updatedAtBlock = blockNumber;
-      accSubsidies.updatedAtTimestamp = timestamp;
-      accSubsidies.save();
+      accrueSeconds(accountSubsidy, collectionVault, timestamp);
+      accountSubsidy.updatedAtBlock = blockNumber;
+      accountSubsidy.updatedAtTimestamp = timestamp;
+      accountSubsidy.save();
     }
   }
 }

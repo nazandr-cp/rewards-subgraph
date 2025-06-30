@@ -14,6 +14,9 @@ import {
   getOrCreateAccount,
   getOrCreateCTokenMarket,
 } from "./utils/getters";
+import { CTokenValidationCache } from "./utils/ctoken-cache";
+import { BatchContext } from "./utils/batch-operations";
+import { IdGenerator } from "./utils/id-generation";
 import { accrueAccountSubsidies } from "./utils/subsidies";
 import {
   Borrow,
@@ -22,33 +25,9 @@ import {
 const EXP_SCALE = BigInt.fromI32(10).pow(18);
 const PROTOCOL_SEIZE_SHARE_MANTISSA = BigInt.fromString("28000000000000000");
 
-// Validation function to ensure the address is a valid cToken
+// Use cached validation for better performance
 function validateCToken(address: Address): boolean {
-  const cTokenContract = CTokenContract.bind(address);
-
-  // Check for multiple cToken-specific methods
-  const exchangeRateTry = cTokenContract.try_exchangeRateStored();
-  const borrowRateTry = cTokenContract.try_borrowRatePerBlock();
-  const supplyRateTry = cTokenContract.try_supplyRatePerBlock();
-  const totalBorrowsTry = cTokenContract.try_totalBorrows();
-
-  if (exchangeRateTry.reverted || borrowRateTry.reverted ||
-    supplyRateTry.reverted || totalBorrowsTry.reverted) {
-    return false;
-  }
-
-  // Check symbol follows cToken convention
-  const symbolTry = cTokenContract.try_symbol();
-  if (symbolTry.reverted || !symbolTry.value.startsWith("c")) {
-    return false;
-  }
-
-  // Check exchange rate is reasonable (not zero)
-  if (exchangeRateTry.value.equals(BigInt.fromI32(0))) {
-    return false;
-  }
-
-  return true;
+  return CTokenValidationCache.isValidCToken(address);
 }
 
 
@@ -97,32 +76,46 @@ export function handleBorrow(event: BorrowEvent): void {
     return;
   }
 
+  // Use batch context for optimized entity operations
+  const batchContext = new BatchContext();
+  
   const borrower = event.params.borrower;
   const borrowAmount = event.params.borrowAmount;
   const accountBorrows = event.params.accountBorrows;
   const totalBorrows = event.params.totalBorrows;
 
-  const market = getOrCreateCTokenMarket(event.address);
+  const market = batchContext.getOrCreateCTokenMarket(
+    event.address, 
+    event.block.number, 
+    event.block.timestamp
+  );
+  const account = batchContext.getOrCreateAccount(
+    borrower, 
+    event.block.number, 
+    event.block.timestamp
+  );
+  const accountMarket = batchContext.getOrCreateAccountMarket(
+    borrower.toHexString(),
+    event.address.toHexString(),
+    event.block.number,
+    event.block.timestamp
+  );
 
-  const accountMarket = getOrCreateAccountMarket(borrower, event.address);
-  const account = getOrCreateAccount(borrower);
-
+  // Update entities
   accountMarket.borrowBalance = accountBorrows;
   accountMarket.updatedAtBlock = event.block.number;
   accountMarket.updatedAtTimestamp = event.block.timestamp;
-  accountMarket.save();
 
   account.totalBorrowVolume = account.totalBorrowVolume.plus(borrowAmount);
   account.updatedAtBlock = event.block.number;
   account.updatedAtTimestamp = event.block.timestamp;
-  account.save();
 
   market.totalBorrows = totalBorrows;
   market.updatedAtBlock = event.block.number;
   market.updatedAtTimestamp = event.block.timestamp;
-  market.save();
 
-  const borrowId = event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
+  // Create Borrow entity for E2E testing (conditionally)
+  const borrowId = IdGenerator.transactionEventId(event.transaction.hash, event.logIndex);
   const borrowEntity = new Borrow(borrowId);
   borrowEntity.borrower = borrower;
   borrowEntity.cToken = event.address;
@@ -133,6 +126,9 @@ export function handleBorrow(event: BorrowEvent): void {
   borrowEntity.blockNumber = event.block.number;
   borrowEntity.transactionHash = event.transaction.hash;
   borrowEntity.save();
+
+  // Save all batched entities
+  batchContext.saveAll();
 
   accrueAccountSubsidies(borrower, event.block.number, event.block.timestamp);
 

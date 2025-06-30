@@ -15,6 +15,7 @@ import { newCollectionDepositEvent, newCollectionWithdrawEvent } from "../utils/
 import { CollectionDeposit, CollectionWithdraw } from "../../generated/templates/CollectionVault/CollectionVault"; // Import the specific event types
 import { CollectionsVault, CTokenMarket, CollectionParticipation, Collection, CollectionRegistry } from "../../generated/schema"; // Added CollectionRegistry
 import { expectConsistentVault, expectConsistentCollectionParticipation } from "../utils/consistency"; // Import consistency helpers
+import { IdGenerator } from "../../src/utils/id-generation";
 
 // Define common addresses and values for tests
 const MOCK_REGISTRY_ADDRESS = Address.fromString("0x000000000000000000000000000000000000000A");
@@ -55,9 +56,6 @@ function createMockCollection(collectionAddress: Address): void {
   collection.minBorrowAmount = BigInt.fromI32(0);
   collection.maxBorrowAmount = BigInt.fromI32(0);
   collection.totalNFTsDeposited = BigInt.fromI32(0);
-  collection.totalBorrowVolume = BigInt.fromI32(0);
-  collection.totalYieldGenerated = BigInt.fromI32(0);
-  collection.totalSubsidiesReceived = BigInt.fromI32(0);
   collection.registeredAtBlock = BigInt.fromI32(1);
   collection.registeredAtTimestamp = BigInt.fromI32(1678886400);
   collection.updatedAtBlock = BigInt.fromI32(1);
@@ -125,7 +123,7 @@ function createMockCollectionParticipation(
   initialAssets: BigInt,
   exchangeRate: BigInt
 ): void {
-  const collectionParticipationId = vaultAddress.toHex() + "-" + collectionAddress.toHex();
+  const collectionParticipationId = IdGenerator.collectionVaultId(vaultAddress, collectionAddress);
   const collectionParticipation = new CollectionParticipation(collectionParticipationId);
   collectionParticipation.vault = vaultAddress.toHex();
   collectionParticipation.collection = collectionAddress.toHex();
@@ -200,7 +198,7 @@ test("handleCollectionDeposit: happy path deposit", () => {
 
   // Assertions
   const vaultId = vaultAddress.toHex();
-  const collectionVaultId = vaultAddress.toHex() + "-" + collectionAddress.toHex();
+  const collectionVaultId = IdGenerator.collectionVaultId(vaultAddress, collectionAddress);
 
   assert.fieldEquals("CollectionsVault", vaultId, "totalShares", shares.toString());
   assert.fieldEquals("CollectionsVault", vaultId, "totalDeposits", assets.toString());
@@ -255,7 +253,7 @@ test("handleCollectionDeposit: zero deposit (edge case)", () => {
 
   // Assertions: Values should remain at their initial state (0)
   const vaultId = vaultAddress.toHex();
-  const collectionVaultId = vaultAddress.toHex() + "-" + collectionAddress.toHex();
+  const collectionVaultId = IdGenerator.collectionVaultId(vaultAddress, collectionAddress);
 
   assert.fieldEquals("CollectionsVault", vaultId, "totalShares", "0");
   assert.fieldEquals("CollectionsVault", vaultId, "totalDeposits", "0");
@@ -310,7 +308,7 @@ test("handleCollectionDeposit: unknown vault (guard path)", () => {
 
   // Assertions: No entities should be created or updated for this vault
   assert.notInStore("CollectionsVault", vaultAddress.toHex());
-  assert.notInStore("CollectionParticipation", vaultAddress.toHex() + "-" + collectionAddress.toHex());
+  assert.notInStore("CollectionParticipation", IdGenerator.collectionVaultId(vaultAddress, collectionAddress));
 });
 
 test("handleCollectionDeposit: null cTokenMarket (edge case)", () => {
@@ -342,7 +340,7 @@ test("handleCollectionDeposit: null cTokenMarket (edge case)", () => {
   handleCollectionDeposit(changetype<CollectionDeposit>(depositEvent));
 
   const vaultId = vaultAddress.toHex();
-  const collectionVaultId = vaultAddress.toHex() + "-" + collectionAddress.toHex();
+  const collectionVaultId = IdGenerator.collectionVaultId(vaultAddress, collectionAddress);
 
   // Assert that cTokenAmount from event was used as fallback
   assert.fieldEquals("CollectionsVault", vaultId, "totalCTokens", cTokenAmount.toString());
@@ -387,7 +385,7 @@ test("handleCollectionDeposit: zero exchangeRate (edge case)", () => {
   handleCollectionDeposit(changetype<CollectionDeposit>(depositEvent));
 
   const vaultId = vaultAddress.toHex();
-  const collectionVaultId = vaultAddress.toHex() + "-" + collectionAddress.toHex();
+  const collectionVaultId = IdGenerator.collectionVaultId(vaultAddress, collectionAddress);
 
   // Assert that cTokenAmount from event was used as fallback
   assert.fieldEquals("CollectionsVault", vaultId, "totalCTokens", cTokenAmount.toString());
@@ -453,7 +451,7 @@ test("handleCollectionWithdraw: happy path withdraw", () => {
 
   // Assertions
   const vaultId = vaultAddress.toHex();
-  const collectionVaultId = vaultAddress.toHex() + "-" + collectionAddress.toHex();
+  const collectionVaultId = IdGenerator.collectionVaultId(vaultAddress, collectionAddress);
 
   assert.fieldEquals("CollectionsVault", vaultId, "totalShares", BigInt.fromI32(500).toString());
   assert.fieldEquals("CollectionsVault", vaultId, "totalDeposits", BigInt.fromI32(500).toString());
@@ -522,7 +520,7 @@ test("handleCollectionWithdraw: zero withdraw (edge case)", () => {
 
   // Assertions: Values should remain at their initial state (no change from 1000 since withdrawing 0)
   const vaultId = vaultAddress.toHex();
-  const collectionVaultId = vaultAddress.toHex() + "-" + collectionAddress.toHex();
+  const collectionVaultId = IdGenerator.collectionVaultId(vaultAddress, collectionAddress);
 
   assert.fieldEquals("CollectionsVault", vaultId, "totalShares", BigInt.fromI32(1000).toString());
   assert.fieldEquals("CollectionsVault", vaultId, "totalDeposits", BigInt.fromI32(1000).toString());
@@ -577,7 +575,7 @@ test("handleCollectionWithdraw: unknown vault (guard path)", () => {
 
   // Assertions: No entities should be created or updated for this vault
   assert.notInStore("CollectionsVault", vaultAddress.toHex());
-  assert.notInStore("CollectionParticipation", vaultAddress.toHex() + "-" + collectionAddress.toHex());
+  assert.notInStore("CollectionParticipation", IdGenerator.collectionVaultId(vaultAddress, collectionAddress));
 });
 
 test("handleCollectionWithdraw: null cTokenMarket (edge case)", () => {
@@ -611,7 +609,7 @@ test("handleCollectionWithdraw: null cTokenMarket (edge case)", () => {
   vaultForNullMarket.save();
 
   // Also update the collection participation to match
-  const collectionParticipationIdForNullMarket = vaultAddress.toHex() + "-" + collectionAddress.toHex();
+  const collectionParticipationIdForNullMarket = IdGenerator.collectionVaultId(vaultAddress, collectionAddress);
   const collectionParticipationForNullMarket = CollectionParticipation.load(collectionParticipationIdForNullMarket)!;
   collectionParticipationForNullMarket.totalCTokens = BigInt.fromI32(1000); // Set to simple 1000
   collectionParticipationForNullMarket.save();
@@ -629,7 +627,7 @@ test("handleCollectionWithdraw: null cTokenMarket (edge case)", () => {
   handleCollectionWithdraw(changetype<CollectionWithdraw>(withdrawEvent4));
 
   const vaultId = vaultAddress.toHex();
-  const collectionVaultId = vaultAddress.toHex() + "-" + collectionAddress.toHex();
+  const collectionVaultId = IdGenerator.collectionVaultId(vaultAddress, collectionAddress);
 
   // Assert that cTokenAmount from event was used as fallback
   // Initial was 1000, withdrawn 250, so should be 750
@@ -683,7 +681,7 @@ test("handleCollectionWithdraw: zero exchangeRate (edge case)", () => {
   handleCollectionWithdraw(changetype<CollectionWithdraw>(withdrawEvent5));
 
   const vaultId = vaultAddress.toHex();
-  const collectionVaultId = vaultAddress.toHex() + "-" + collectionAddress.toHex();
+  const collectionVaultId = IdGenerator.collectionVaultId(vaultAddress, collectionAddress);
 
   // Assert that cTokenAmount from event was used as fallback
   // Initial totalCTokens for CollectionParticipation was calculated with zeroExchangeRate, so it would be a very large number or cause division by zero.
@@ -710,7 +708,7 @@ test("handleCollectionWithdraw: zero exchangeRate (edge case)", () => {
   const initialSharesForWithdraw = BigInt.fromI32(1000);
   const initialAssetsForWithdraw = BigInt.fromI32(1000);
 
-  const collectionParticipationId = vaultAddress.toHex() + "-" + collectionAddress.toHex();
+  const collectionParticipationId = IdGenerator.collectionVaultId(vaultAddress, collectionAddress);
   const collectionParticipation = new CollectionParticipation(collectionParticipationId);
   collectionParticipation.vault = vaultAddress.toHex();
   collectionParticipation.collection = collectionAddress.toHex();
