@@ -69,6 +69,21 @@ test("handleMint", () => {
   createMockedFunction(CTOKEN_ADDRESS, "totalSupply", "totalSupply():(uint256)").returns([
     ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(1000))
   ]);
+  createMockedFunction(CTOKEN_ADDRESS, "totalBorrows", "totalBorrows():(uint256)").returns([
+    ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(500))
+  ]);
+  createMockedFunction(CTOKEN_ADDRESS, "symbol", "symbol():(string)").returns([
+    ethereum.Value.fromString("cMOCK")
+  ]);
+  createMockedFunction(CTOKEN_ADDRESS, "exchangeRateStored", "exchangeRateStored():(uint256)").returns([
+    ethereum.Value.fromUnsignedBigInt(BigInt.fromString("1000000000000000000"))
+  ]);
+  createMockedFunction(CTOKEN_ADDRESS, "borrowRatePerBlock", "borrowRatePerBlock():(uint256)").returns([
+    ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(1))
+  ]);
+  createMockedFunction(CTOKEN_ADDRESS, "supplyRatePerBlock", "supplyRatePerBlock():(uint256)").returns([
+    ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(1))
+  ]);
   handleMint(changetype<Mint>(event));
   const id = OTHER_ADDRESS.toHexString() + "-" + CTOKEN_ADDRESS.toHexString();
   assert.fieldEquals("AccountMarket", id, "supplyBalance", "100");
@@ -101,6 +116,21 @@ test("handleRedeem", () => {
 test("handleBorrow", () => {
   const event = newBorrowEvent(OTHER_ADDRESS, BigInt.fromI32(10), BigInt.fromI32(10), BigInt.fromI32(10));
   event.address = CTOKEN_ADDRESS;
+  createMockedFunction(CTOKEN_ADDRESS, "totalBorrows", "totalBorrows():(uint256)").returns([
+    ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(500))
+  ]);
+  createMockedFunction(CTOKEN_ADDRESS, "symbol", "symbol():(string)").returns([
+    ethereum.Value.fromString("cMOCK")
+  ]);
+  createMockedFunction(CTOKEN_ADDRESS, "exchangeRateStored", "exchangeRateStored():(uint256)").returns([
+    ethereum.Value.fromUnsignedBigInt(BigInt.fromString("1000000000000000000"))
+  ]);
+  createMockedFunction(CTOKEN_ADDRESS, "borrowRatePerBlock", "borrowRatePerBlock():(uint256)").returns([
+    ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(1))
+  ]);
+  createMockedFunction(CTOKEN_ADDRESS, "supplyRatePerBlock", "supplyRatePerBlock():(uint256)").returns([
+    ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(1))
+  ]);
   handleBorrow(changetype<Borrow>(event));
   const id = OTHER_ADDRESS.toHexString() + "-" + CTOKEN_ADDRESS.toHexString();
   assert.fieldEquals("AccountMarket", id, "borrowBalance", "10");
@@ -135,8 +165,20 @@ test("handleTransfer", () => {
   event.address = CTOKEN_ADDRESS;
   // Use 1e18 (10^18) as exchange rate so that 10 cTokens = 10 underlying
   const exchangeRate = BigInt.fromString("1000000000000000000"); // 1e18
+  createMockedFunction(CTOKEN_ADDRESS, "totalBorrows", "totalBorrows():(uint256)").returns([
+    ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(500))
+  ]);
+  createMockedFunction(CTOKEN_ADDRESS, "symbol", "symbol():(string)").returns([
+    ethereum.Value.fromString("cMOCK")
+  ]);
   createMockedFunction(CTOKEN_ADDRESS, "exchangeRateStored", "exchangeRateStored():(uint256)").returns([
     ethereum.Value.fromUnsignedBigInt(exchangeRate)
+  ]);
+  createMockedFunction(CTOKEN_ADDRESS, "borrowRatePerBlock", "borrowRatePerBlock():(uint256)").returns([
+    ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(1))
+  ]);
+  createMockedFunction(CTOKEN_ADDRESS, "supplyRatePerBlock", "supplyRatePerBlock():(uint256)").returns([
+    ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(1))
   ]);
   createMockedFunction(CTOKEN_ADDRESS, "totalSupply", "totalSupply():(uint256)").returns([
     ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(1000))
@@ -149,8 +191,20 @@ test("handleTransfer", () => {
 test("handleAccrueInterest", () => {
   const event = newAccrueInterestEvent(BigInt.fromI32(1), BigInt.fromI32(1), BigInt.fromI32(1), BigInt.fromI32(1));
   event.address = CTOKEN_ADDRESS;
+  createMockedFunction(CTOKEN_ADDRESS, "totalBorrows", "totalBorrows():(uint256)").returns([
+    ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(500))
+  ]);
+  createMockedFunction(CTOKEN_ADDRESS, "symbol", "symbol():(string)").returns([
+    ethereum.Value.fromString("cMOCK")
+  ]);
   createMockedFunction(CTOKEN_ADDRESS, "exchangeRateStored", "exchangeRateStored():(uint256)").returns([
     ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(2))
+  ]);
+  createMockedFunction(CTOKEN_ADDRESS, "borrowRatePerBlock", "borrowRatePerBlock():(uint256)").returns([
+    ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(1))
+  ]);
+  createMockedFunction(CTOKEN_ADDRESS, "supplyRatePerBlock", "supplyRatePerBlock():(uint256)").returns([
+    ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(1))
   ]);
   handleAccrueInterest(changetype<AccrueInterest>(event));
   assert.fieldEquals("CTokenMarket", CTOKEN_ADDRESS.toHexString(), "exchangeRate", "2");
@@ -165,6 +219,12 @@ test("handleLiquidateBorrow", () => {
   createMockedFunction(CTOKEN_ADDRESS, "borrowBalanceStored", "borrowBalanceStored(address):(uint256)")
     .withArgs([ethereum.Value.fromAddress(OTHER_ADDRESS)])
     .returns([ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(0))]);
+  createMockedFunction(COLLATERAL_ADDRESS, "name", "name():(string)").returns([
+    ethereum.Value.fromString("Collateral Token")
+  ]);
+  createMockedFunction(COLLATERAL_ADDRESS, "symbol", "symbol():(string)").returns([
+    ethereum.Value.fromString("COLL")
+  ]);
   createMockedFunction(COLLATERAL_ADDRESS, "exchangeRateStored", "exchangeRateStored():(uint256)").returns([
     ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(1))
   ]);

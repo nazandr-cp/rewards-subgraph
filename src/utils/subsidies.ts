@@ -103,7 +103,16 @@ export function accrueSeconds(
   now: BigInt
 ): void {
   const dt = now.minus(apsc.updatedAtTimestamp);
+
+  log.info("accrueSeconds: Account {}, dt = {}, now = {}, updatedAtTimestamp = {}", [
+    apsc.account,
+    dt.toString(),
+    now.toString(),
+    apsc.updatedAtTimestamp.toString()
+  ]);
+
   if (dt.isZero() || dt.lt(ZERO_BI)) {
+    log.info("accrueSeconds: Skipping due to zero or negative dt for account {}", [apsc.account]);
     return;
   }
 
@@ -125,9 +134,25 @@ export function accrueSeconds(
   const nftHoldingWeight = weight(apsc.balanceNFT, cv);
   const effectiveValue = basePrincipalForSubsidy.plus(nftHoldingWeight);
 
+  log.info("accrueSeconds: Account {}, basePrincipalForSubsidy = {}, nftHoldingWeight = {}, effectiveValue = {}, balanceNFT = {}", [
+    apsc.account,
+    basePrincipalForSubsidy.toString(),
+    nftHoldingWeight.toString(),
+    effectiveValue.toString(),
+    apsc.balanceNFT.toString()
+  ]);
+
   apsc.lastEffectiveValue = effectiveValue;
 
   const subsidyAccruedScaled = effectiveValue.times(dt);
+  const finalAccrual = subsidyAccruedScaled.div(EXP_SCALE);
+
+  log.info("accrueSeconds: Account {}, subsidyAccruedScaled = {}, finalAccrual = {}, EXP_SCALE = {}", [
+    apsc.account,
+    subsidyAccruedScaled.toString(),
+    finalAccrual.toString(),
+    EXP_SCALE.toString()
+  ]);
 
   if (subsidyAccruedScaled.lt(ZERO_BI)) {
     log.critical(
@@ -144,8 +169,13 @@ export function accrueSeconds(
     return;
   }
 
-  apsc.secondsAccumulated = apsc.secondsAccumulated.plus(subsidyAccruedScaled.div(EXP_SCALE));
+  apsc.secondsAccumulated = apsc.secondsAccumulated.plus(finalAccrual);
   apsc.updatedAtTimestamp = now;
+
+  log.info("accrueSeconds: Account {}, new secondsAccumulated = {}", [
+    apsc.account,
+    apsc.secondsAccumulated.toString()
+  ]);
 }
 
 export function accrueAccountSubsidies(

@@ -149,6 +149,8 @@ dataSources:
           file: ./abis/IERC721.json
         - name: IERC721Metadata
           file: ./abis/IERC721Metadata.json
+        - name: cToken
+          file: ./abis/cToken.json
       eventHandlers:
         - event: Transfer(indexed address,indexed address,indexed uint256)
           handler: handleTransfer

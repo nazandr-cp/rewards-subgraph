@@ -14,7 +14,11 @@ beforeEach(() => {
 test("handleMarketListed", () => {
   const event = changetype<MarketListed>(newMarketListedEvent(CTOKEN));
   createMockedFunction(CTOKEN, "decimals", "decimals():(uint8)").returns([ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(8))]);
+  createMockedFunction(CTOKEN, "totalBorrows", "totalBorrows():(uint256)").returns([ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(500))]);
+  createMockedFunction(CTOKEN, "totalSupply", "totalSupply():(uint256)").returns([ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(1000))]);
   createMockedFunction(CTOKEN, "exchangeRateStored", "exchangeRateStored():(uint256)").returns([ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(1))]);
+  createMockedFunction(CTOKEN, "borrowRatePerBlock", "borrowRatePerBlock():(uint256)").returns([ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(1))]);
+  createMockedFunction(CTOKEN, "supplyRatePerBlock", "supplyRatePerBlock():(uint256)").returns([ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(1))]);
   createMockedFunction(CTOKEN, "symbol", "symbol():(string)").returns([ethereum.Value.fromString("cMOCK")]);
   createMockedFunction(CTOKEN, "name", "name():(string)").returns([ethereum.Value.fromString("Mock")]);
   handleMarketListed(event);

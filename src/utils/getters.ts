@@ -268,10 +268,7 @@ export function getOrCreateAccountSubsidiesPerCollection(
     apsc.subsidiesClaimed = ZERO_BI;
     apsc.averageHoldingPeriod = ZERO_BI;
     apsc.totalRewardsEarned = ZERO_BI;
-    apsc.updatedAtBlock = blockNumber;
-    apsc.updatedAtTimestamp = timestamp;
-    apsc.save();
-  } else {
+    apsc.lastEffectiveValue = ZERO_BI;
     apsc.updatedAtBlock = blockNumber;
     apsc.updatedAtTimestamp = timestamp;
     apsc.save();
