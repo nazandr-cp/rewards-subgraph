@@ -16,8 +16,6 @@ import {
 } from "../../generated/schema";
 
 import { IdGenerator } from "./id-generation";
-import { CTokenValidationCache } from "./ctoken-cache";
-
 import { ZERO_BI, ADDRESS_ZERO_STR, SYSTEM_STATE_ID } from "./const";
 
 // Use optimized ID generation
@@ -48,8 +46,8 @@ export function getOrCreateAccount(accountAddress: Address): Account {
     account.totalBorrowVolume = ZERO_BI;
     account.totalNFTsOwned = ZERO_BI;
     account.totalCollectionsParticipated = ZERO_BI;
-    account.firstInteractionBlock = ZERO_BI;
-    account.firstInteractionTimestamp = ZERO_BI;
+    account.createdAtBlock = ZERO_BI;
+    account.createdAtTimestamp = ZERO_BI;
     account.updatedAtBlock = ZERO_BI;
     account.updatedAtTimestamp = ZERO_BI;
     account.save();
@@ -131,8 +129,8 @@ export function getOrCreateCollection(collectionAddress: Address): Collection {
     // Vault associations (managed by CollectionRegistry)
     collection.vaults = [];
     // Metadata
-    collection.registeredAtBlock = ZERO_BI;
-    collection.registeredAtTimestamp = ZERO_BI;
+    collection.createdAtBlock = ZERO_BI;
+    collection.createdAtTimestamp = ZERO_BI;
     collection.updatedAtBlock = ZERO_BI;
     collection.updatedAtTimestamp = ZERO_BI;
     collection.save();
@@ -198,7 +196,6 @@ export function getOrCreateCollectionVault(
     cv.secondsClaimed = ZERO_BI;
     cv.totalSubsidies = ZERO_BI;
     cv.totalSubsidiesClaimed = ZERO_BI;
-    cv.averageAPY = ZERO_BI;
     cv.totalParticipants = ZERO_BI;
     cv.createdAtBlock = ZERO_BI;
     cv.createdAtTimestamp = ZERO_BI;
@@ -300,8 +297,8 @@ export function getOrCreateAccountMarket(
     accountMarket.collateralBalance = ZERO_BI;
     accountMarket.supplyIndex = ZERO_BI;
     accountMarket.borrowIndex = ZERO_BI;
-    accountMarket.enteredMarketBlock = ZERO_BI;
-    accountMarket.enteredMarketTimestamp = ZERO_BI;
+    accountMarket.createdAtBlock = ZERO_BI;
+    accountMarket.createdAtTimestamp = ZERO_BI;
     accountMarket.updatedAtBlock = ZERO_BI;
     accountMarket.updatedAtTimestamp = ZERO_BI;
     accountMarket.save();
@@ -366,8 +363,8 @@ export function getOrCreateUserEpochEligibility(
     userEpochEligibility.subsidyReceived = ZERO_BI;
     userEpochEligibility.yieldShare = ZERO_BI;
     userEpochEligibility.bonusMultiplier = ZERO_BI;
-    userEpochEligibility.calculatedAtBlock = ZERO_BI;
-    userEpochEligibility.calculatedAtTimestamp = ZERO_BI;
+    userEpochEligibility.createdAtBlock = ZERO_BI;
+    userEpochEligibility.createdAtTimestamp = ZERO_BI;
     userEpochEligibility.save();
   }
   return userEpochEligibility;
@@ -382,7 +379,6 @@ export function getOrCreateSystemState(): SystemState {
     systemState.totalCollections = ZERO_BI;
     systemState.totalValueLocked = ZERO_BI;
     systemState.systemUtilizationRate = ZERO_BI;
-    systemState.averageAPY = ZERO_BI;
     systemState.lastUpdatedBlock = ZERO_BI;
     systemState.lastUpdatedTimestamp = ZERO_BI;
     systemState.save();

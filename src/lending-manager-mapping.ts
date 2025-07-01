@@ -9,9 +9,9 @@ import { ZERO_BI } from "./utils/const";
 export function handleDepositToProtocol(event: DepositToProtocol): void {
   const account = getOrCreateAccount(event.params.caller);
 
-  if (account.firstInteractionBlock.equals(ZERO_BI)) {
-    account.firstInteractionBlock = event.block.number;
-    account.firstInteractionTimestamp = event.block.timestamp;
+  if (account.createdAtBlock.equals(ZERO_BI)) {
+    account.createdAtBlock = event.block.number;
+    account.createdAtTimestamp = event.block.timestamp;
   }
 
   account.updatedAtBlock = event.block.number;
@@ -22,9 +22,9 @@ export function handleDepositToProtocol(event: DepositToProtocol): void {
 export function handleWithdrawFromProtocol(event: WithdrawFromProtocol): void {
   const account = getOrCreateAccount(event.params.caller);
 
-  if (account.firstInteractionBlock.equals(ZERO_BI)) {
-    account.firstInteractionBlock = event.block.number;
-    account.firstInteractionTimestamp = event.block.timestamp;
+  if (account.createdAtBlock.equals(ZERO_BI)) {
+    account.createdAtBlock = event.block.number;
+    account.createdAtTimestamp = event.block.timestamp;
   }
 
   account.updatedAtBlock = event.block.number;
@@ -35,9 +35,9 @@ export function handleWithdrawFromProtocol(event: WithdrawFromProtocol): void {
 export function handlePrincipalReset(event: PrincipalReset): void {
   const account = getOrCreateAccount(event.params.trigger);
 
-  if (account.firstInteractionBlock.equals(ZERO_BI)) {
-    account.firstInteractionBlock = event.block.number;
-    account.firstInteractionTimestamp = event.block.timestamp;
+  if (account.createdAtBlock.equals(ZERO_BI)) {
+    account.createdAtBlock = event.block.number;
+    account.createdAtTimestamp = event.block.timestamp;
   }
 
   account.updatedAtBlock = event.block.number;

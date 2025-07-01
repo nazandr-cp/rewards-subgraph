@@ -8,7 +8,7 @@ import {
   AutomatedSystemUpdated,
 } from "../generated/EpochManager/EpochManager";
 import { Epoch, CollectionsVault } from "../generated/schema";
-import { EPOCH_STATUS_ACTIVE, EPOCH_STATUS_PROCESSING, EPOCH_STATUS_COMPLETED, ZERO_BI } from "./utils/const";
+import { EPOCH_STATUS_ACTIVE, EPOCH_STATUS_PROCESSING, EPOCH_STATUS_COMPLETED, EPOCH_STATUS_FAILED, ZERO_BI } from "./utils/const";
 import { log } from "@graphprotocol/graph-ts";
 import { getOrCreateSystemState, getOrCreateEpochVaultAllocation } from "./utils/getters";
 
@@ -26,14 +26,12 @@ export function handleEpochStarted(event: EpochStarted): void {
     epoch.totalYieldDistributed = ZERO_BI;
     epoch.remainingYield = ZERO_BI;
     epoch.totalSubsidiesDistributed = ZERO_BI;
-    epoch.totalEligibleUsers = ZERO_BI;
     epoch.totalParticipatingCollections = ZERO_BI;
     epoch.status = EPOCH_STATUS_ACTIVE;
     epoch.createdAtBlock = event.block.number;
     epoch.createdAtTimestamp = event.block.timestamp;
     epoch.updatedAtBlock = event.block.number;
     epoch.updatedAtTimestamp = event.block.timestamp;
-    epoch.participantCount = ZERO_BI;
     epoch.epochManager = event.address.toHexString();
     epoch.save();
   } else {
@@ -46,7 +44,7 @@ export function handleEpochStarted(event: EpochStarted): void {
   }
 
   const systemState = getOrCreateSystemState();
-  systemState.activeEpochId = epochId;
+  systemState.activeEpochId = event.params.epochId;
   systemState.save();
 
   const testData = `{"epochId": "${epochId}", "eventType": "STARTED", "startTime": "${event.params.startTime.toString()}", "endTime": "${event.params.endTime.toString()}"}`;
@@ -71,13 +69,11 @@ export function handleEpochProcessingStarted(event: EpochProcessingStarted): voi
     epoch.totalYieldDistributed = ZERO_BI;
     epoch.remainingYield = ZERO_BI;
     epoch.totalSubsidiesDistributed = ZERO_BI;
-    epoch.totalEligibleUsers = ZERO_BI;
     epoch.totalParticipatingCollections = ZERO_BI;
     epoch.createdAtBlock = event.block.number;
     epoch.createdAtTimestamp = event.block.timestamp;
     epoch.updatedAtBlock = event.block.number;
     epoch.updatedAtTimestamp = event.block.timestamp;
-    epoch.participantCount = ZERO_BI;
     epoch.epochManager = event.address.toHexString();
   }
 
@@ -100,8 +96,8 @@ export function handleEpochFinalized(event: EpochFinalized): void {
     epoch.save();
 
     const systemState = getOrCreateSystemState();
-    if (systemState.activeEpochId == epochId) {
-      systemState.activeEpochId = "";
+    if (systemState.activeEpochId !== null && systemState.activeEpochId!.equals(event.params.epochId)) {
+      systemState.activeEpochId = null;
       systemState.save();
     }
 
@@ -122,7 +118,7 @@ export function handleEpochFailed(event: EpochFailed): void {
     return;
   }
 
-  epoch.status = "FAILED";
+  epoch.status = EPOCH_STATUS_FAILED;
   epoch.endTimestamp = event.block.timestamp;
   epoch.save();
 

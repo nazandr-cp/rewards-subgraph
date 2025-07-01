@@ -31,7 +31,6 @@ export function handleVaultAdded(event: VaultAdded): void {
     debtSubsidizer.totalSubsidyPool = ZERO_BI;
     debtSubsidizer.totalSubsidiesDistributed = ZERO_BI;
     debtSubsidizer.totalSubsidiesRemaining = ZERO_BI;
-    debtSubsidizer.totalEligibleUsers = ZERO_BI;
     debtSubsidizer.subsidyRate = ZERO_BI;
     debtSubsidizer.maxSubsidyPerUser = ZERO_BI;
     debtSubsidizer.subsidyDuration = ZERO_BI;
@@ -49,8 +48,8 @@ export function handleVaultAdded(event: VaultAdded): void {
   vaultAddition.vaultAddress = vaultAddress;
   vaultAddition.cTokenAddress = cTokenAddress;
   vaultAddition.lendingManagerAddress = lendingManagerAddress;
-  vaultAddition.addedAtBlock = event.block.number;
-  vaultAddition.addedAtTimestamp = event.block.timestamp;
+  vaultAddition.createdAtBlock = event.block.number;
+  vaultAddition.createdAtTimestamp = event.block.timestamp;
   vaultAddition.transactionHash = event.transaction.hash;
   vaultAddition.save();
 
@@ -79,8 +78,7 @@ export function handleMerkleRootUpdated(event: MerkleRootUpdated): void {
     event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
 
   const systemState = getOrCreateSystemState();
-  const activeEpochId: string | null = systemState.activeEpochId;
-  if (activeEpochId == null) {
+  if (systemState.activeEpochId === null) {
     log.critical(
       "handleMerkleRootUpdated: No active epoch found. Cannot process event {}.",
       [eventIdBase]
@@ -88,19 +86,20 @@ export function handleMerkleRootUpdated(event: MerkleRootUpdated): void {
     return;
   }
 
-  const epoch = Epoch.load(activeEpochId as string);
-  if (epoch == null) {
+  const epochIdString = systemState.activeEpochId!.toString();
+  const epoch = Epoch.load(epochIdString);
+  if (epoch === null) {
     log.critical(
       "handleMerkleRootUpdated: Active Epoch with id {} not found for event {}. Cannot process.",
-      [activeEpochId as string, eventIdBase]
+      [epochIdString, eventIdBase]
     );
-    return; // Critical: Cannot proceed if epoch entity doesn't exist
+    return;
   }
 
   const vaultEntity = CollectionsVault.load(event.params.vaultAddress.toHexString());
-  if (vaultEntity == null || vaultEntity.cTokenMarket == null || vaultEntity.cTokenMarket == "") {
+  if (vaultEntity === null) {
     log.error(
-      "handleMerkleRootUpdated: Vault {} not found or has invalid cTokenMarket. Cannot process merkle root update.",
+      "handleMerkleRootUpdated: Vault {} not found. Cannot process merkle root update.",
       [event.params.vaultAddress.toHexString()]
     );
     return;
@@ -112,7 +111,6 @@ export function handleMerkleRootUpdated(event: MerkleRootUpdated): void {
     cTokenAddress
   );
 
-  // --- Create MerkleDistribution Entity ---
   const merkleDistributionId = epoch.id + "-" + vault.id;
   const merkleDistribution = getOrCreateMerkleDistribution(merkleDistributionId, epoch.id, vault.id);
 
@@ -138,8 +136,7 @@ export function handleSubsidyClaimed(event: SubsidyClaimed): void {
     event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
 
   const systemState = getOrCreateSystemState();
-  const activeEpochId: string | null = systemState.activeEpochId;
-  if (activeEpochId == null) {
+  if (systemState.activeEpochId === null) {
     log.critical(
       "handleSubsidyClaimed: No active epoch found. Cannot process event {}.",
       [eventIdBase]
@@ -147,11 +144,12 @@ export function handleSubsidyClaimed(event: SubsidyClaimed): void {
     return;
   }
 
-  const epoch = Epoch.load(activeEpochId as string);
-  if (epoch == null) {
+  const epochIdString = systemState.activeEpochId!.toString();
+  const epoch = Epoch.load(epochIdString);
+  if (epoch === null) {
     log.critical(
       "handleSubsidyClaimed: Active Epoch with id {} not found for event {}. Cannot process.",
-      [activeEpochId as string, eventIdBase]
+      [epochIdString, eventIdBase]
     );
     return;
   }
@@ -159,9 +157,9 @@ export function handleSubsidyClaimed(event: SubsidyClaimed): void {
   const account = getOrCreateAccount(event.params.recipient);
 
   const vaultEntity = CollectionsVault.load(event.params.vaultAddress.toHexString());
-  if (vaultEntity == null || vaultEntity.cTokenMarket == null || vaultEntity.cTokenMarket == "") {
+  if (vaultEntity === null) {
     log.error(
-      "handleSubsidyClaimed: Vault {} not found or has invalid cTokenMarket. Cannot process subsidy claim.",
+      "handleSubsidyClaimed: Vault {} not found. Cannot process subsidy claim.",
       [event.params.vaultAddress.toHexString()]
     );
     return;
@@ -186,7 +184,7 @@ export function handleSubsidyClaimed(event: SubsidyClaimed): void {
   subsidyTx.nftBalance = ZERO_BI;
   subsidyTx.weightedContribution = ZERO_BI;
   subsidyTx.gasUsed =
-    event.receipt != null ? event.receipt!.gasUsed : ZERO_BI;
+    event.receipt !== null ? event.receipt!.gasUsed : ZERO_BI;
   subsidyTx.blockNumber = event.block.number;
   subsidyTx.timestamp = event.block.timestamp;
   subsidyTx.transactionHash = event.transaction.hash;

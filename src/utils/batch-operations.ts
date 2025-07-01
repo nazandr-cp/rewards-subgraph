@@ -46,8 +46,8 @@ class BatchContext {
         account.totalBorrowVolume = ZERO_BI;
         account.totalNFTsOwned = ZERO_BI;
         account.totalCollectionsParticipated = ZERO_BI;
-        account.firstInteractionBlock = blockNumber;
-        account.firstInteractionTimestamp = timestamp;
+        account.createdAtBlock = blockNumber;
+        account.createdAtTimestamp = timestamp;
         account.updatedAtBlock = blockNumber;
         account.updatedAtTimestamp = timestamp;
       } else {
@@ -124,8 +124,8 @@ class BatchContext {
         accountMarket.collateralBalance = ZERO_BI;
         accountMarket.supplyIndex = ZERO_BI;
         accountMarket.borrowIndex = ZERO_BI;
-        accountMarket.enteredMarketBlock = blockNumber;
-        accountMarket.enteredMarketTimestamp = timestamp;
+        accountMarket.createdAtBlock = blockNumber;
+        accountMarket.createdAtTimestamp = timestamp;
         accountMarket.updatedAtBlock = blockNumber;
         accountMarket.updatedAtTimestamp = timestamp;
       } else {

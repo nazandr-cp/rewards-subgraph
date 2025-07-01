@@ -536,19 +536,6 @@ export class EpochManager extends Entity {
     this.set("totalEpochs", Value.fromBigInt(value));
   }
 
-  get totalYieldDistributed(): BigInt {
-    let value = this.get("totalYieldDistributed");
-    if (!value || value.kind == ValueKind.NULL) {
-      throw new Error("Cannot return null for a required field.");
-    } else {
-      return value.toBigInt();
-    }
-  }
-
-  set totalYieldDistributed(value: BigInt) {
-    this.set("totalYieldDistributed", Value.fromBigInt(value));
-  }
-
   get owner(): Bytes {
     let value = this.get("owner");
     if (!value || value.kind == ValueKind.NULL) {
@@ -941,19 +928,6 @@ export class DebtSubsidizer extends Entity {
 
   set totalSubsidiesRemaining(value: BigInt) {
     this.set("totalSubsidiesRemaining", Value.fromBigInt(value));
-  }
-
-  get totalEligibleUsers(): BigInt {
-    let value = this.get("totalEligibleUsers");
-    if (!value || value.kind == ValueKind.NULL) {
-      throw new Error("Cannot return null for a required field.");
-    } else {
-      return value.toBigInt();
-    }
-  }
-
-  set totalEligibleUsers(value: BigInt) {
-    this.set("totalEligibleUsers", Value.fromBigInt(value));
   }
 
   get subsidyRate(): BigInt {
@@ -1380,8 +1354,8 @@ export class AccountRoleAssignment extends Entity {
     this.set("grantedBy", Value.fromBytes(value));
   }
 
-  get grantedAtBlock(): BigInt {
-    let value = this.get("grantedAtBlock");
+  get createdAtBlock(): BigInt {
+    let value = this.get("createdAtBlock");
     if (!value || value.kind == ValueKind.NULL) {
       throw new Error("Cannot return null for a required field.");
     } else {
@@ -1389,12 +1363,12 @@ export class AccountRoleAssignment extends Entity {
     }
   }
 
-  set grantedAtBlock(value: BigInt) {
-    this.set("grantedAtBlock", Value.fromBigInt(value));
+  set createdAtBlock(value: BigInt) {
+    this.set("createdAtBlock", Value.fromBigInt(value));
   }
 
-  get grantedAtTimestamp(): BigInt {
-    let value = this.get("grantedAtTimestamp");
+  get createdAtTimestamp(): BigInt {
+    let value = this.get("createdAtTimestamp");
     if (!value || value.kind == ValueKind.NULL) {
       throw new Error("Cannot return null for a required field.");
     } else {
@@ -1402,8 +1376,8 @@ export class AccountRoleAssignment extends Entity {
     }
   }
 
-  set grantedAtTimestamp(value: BigInt) {
-    this.set("grantedAtTimestamp", Value.fromBigInt(value));
+  set createdAtTimestamp(value: BigInt) {
+    this.set("createdAtTimestamp", Value.fromBigInt(value));
   }
 
   get revokedAtBlock(): BigInt | null {
@@ -1534,8 +1508,8 @@ export class VaultAddition extends Entity {
     this.set("lendingManagerAddress", Value.fromBytes(value));
   }
 
-  get addedAtBlock(): BigInt {
-    let value = this.get("addedAtBlock");
+  get createdAtBlock(): BigInt {
+    let value = this.get("createdAtBlock");
     if (!value || value.kind == ValueKind.NULL) {
       throw new Error("Cannot return null for a required field.");
     } else {
@@ -1543,12 +1517,12 @@ export class VaultAddition extends Entity {
     }
   }
 
-  set addedAtBlock(value: BigInt) {
-    this.set("addedAtBlock", Value.fromBigInt(value));
+  set createdAtBlock(value: BigInt) {
+    this.set("createdAtBlock", Value.fromBigInt(value));
   }
 
-  get addedAtTimestamp(): BigInt {
-    let value = this.get("addedAtTimestamp");
+  get createdAtTimestamp(): BigInt {
+    let value = this.get("createdAtTimestamp");
     if (!value || value.kind == ValueKind.NULL) {
       throw new Error("Cannot return null for a required field.");
     } else {
@@ -1556,8 +1530,8 @@ export class VaultAddition extends Entity {
     }
   }
 
-  set addedAtTimestamp(value: BigInt) {
-    this.set("addedAtTimestamp", Value.fromBigInt(value));
+  set createdAtTimestamp(value: BigInt) {
+    this.set("createdAtTimestamp", Value.fromBigInt(value));
   }
 
   get transactionHash(): Bytes {
@@ -1669,8 +1643,8 @@ export class CollectionWhitelist extends Entity {
     this.set("isActive", Value.fromBoolean(value));
   }
 
-  get whitelistedAtBlock(): BigInt {
-    let value = this.get("whitelistedAtBlock");
+  get createdAtBlock(): BigInt {
+    let value = this.get("createdAtBlock");
     if (!value || value.kind == ValueKind.NULL) {
       throw new Error("Cannot return null for a required field.");
     } else {
@@ -1678,12 +1652,12 @@ export class CollectionWhitelist extends Entity {
     }
   }
 
-  set whitelistedAtBlock(value: BigInt) {
-    this.set("whitelistedAtBlock", Value.fromBigInt(value));
+  set createdAtBlock(value: BigInt) {
+    this.set("createdAtBlock", Value.fromBigInt(value));
   }
 
-  get whitelistedAtTimestamp(): BigInt {
-    let value = this.get("whitelistedAtTimestamp");
+  get createdAtTimestamp(): BigInt {
+    let value = this.get("createdAtTimestamp");
     if (!value || value.kind == ValueKind.NULL) {
       throw new Error("Cannot return null for a required field.");
     } else {
@@ -1691,8 +1665,8 @@ export class CollectionWhitelist extends Entity {
     }
   }
 
-  set whitelistedAtTimestamp(value: BigInt) {
-    this.set("whitelistedAtTimestamp", Value.fromBigInt(value));
+  set createdAtTimestamp(value: BigInt) {
+    this.set("createdAtTimestamp", Value.fromBigInt(value));
   }
 
   get removedAtBlock(): BigInt | null {
@@ -2267,8 +2241,8 @@ export class Collection extends Entity {
     );
   }
 
-  get registeredAtBlock(): BigInt {
-    let value = this.get("registeredAtBlock");
+  get createdAtBlock(): BigInt {
+    let value = this.get("createdAtBlock");
     if (!value || value.kind == ValueKind.NULL) {
       throw new Error("Cannot return null for a required field.");
     } else {
@@ -2276,12 +2250,12 @@ export class Collection extends Entity {
     }
   }
 
-  set registeredAtBlock(value: BigInt) {
-    this.set("registeredAtBlock", Value.fromBigInt(value));
+  set createdAtBlock(value: BigInt) {
+    this.set("createdAtBlock", Value.fromBigInt(value));
   }
 
-  get registeredAtTimestamp(): BigInt {
-    let value = this.get("registeredAtTimestamp");
+  get createdAtTimestamp(): BigInt {
+    let value = this.get("createdAtTimestamp");
     if (!value || value.kind == ValueKind.NULL) {
       throw new Error("Cannot return null for a required field.");
     } else {
@@ -2289,8 +2263,8 @@ export class Collection extends Entity {
     }
   }
 
-  set registeredAtTimestamp(value: BigInt) {
-    this.set("registeredAtTimestamp", Value.fromBigInt(value));
+  set createdAtTimestamp(value: BigInt) {
+    this.set("createdAtTimestamp", Value.fromBigInt(value));
   }
 
   get updatedAtBlock(): BigInt {
@@ -2549,19 +2523,6 @@ export class Epoch extends Entity {
     this.set("totalParticipatingCollections", Value.fromBigInt(value));
   }
 
-  get participantCount(): BigInt {
-    let value = this.get("participantCount");
-    if (!value || value.kind == ValueKind.NULL) {
-      throw new Error("Cannot return null for a required field.");
-    } else {
-      return value.toBigInt();
-    }
-  }
-
-  set participantCount(value: BigInt) {
-    this.set("participantCount", Value.fromBigInt(value));
-  }
-
   get processingTimeMs(): BigInt | null {
     let value = this.get("processingTimeMs");
     if (!value || value.kind == ValueKind.NULL) {
@@ -2576,23 +2537,6 @@ export class Epoch extends Entity {
       this.unset("processingTimeMs");
     } else {
       this.set("processingTimeMs", Value.fromBigInt(<BigInt>value));
-    }
-  }
-
-  get estimatedProcessingTime(): BigInt | null {
-    let value = this.get("estimatedProcessingTime");
-    if (!value || value.kind == ValueKind.NULL) {
-      return null;
-    } else {
-      return value.toBigInt();
-    }
-  }
-
-  set estimatedProcessingTime(value: BigInt | null) {
-    if (!value) {
-      this.unset("estimatedProcessingTime");
-    } else {
-      this.set("estimatedProcessingTime", Value.fromBigInt(<BigInt>value));
     }
   }
 
@@ -2967,19 +2911,6 @@ export class CollectionParticipation extends Entity {
 
   set totalSubsidiesClaimed(value: BigInt) {
     this.set("totalSubsidiesClaimed", Value.fromBigInt(value));
-  }
-
-  get averageAPY(): BigInt {
-    let value = this.get("averageAPY");
-    if (!value || value.kind == ValueKind.NULL) {
-      throw new Error("Cannot return null for a required field.");
-    } else {
-      return value.toBigInt();
-    }
-  }
-
-  set averageAPY(value: BigInt) {
-    this.set("averageAPY", Value.fromBigInt(value));
   }
 
   get totalParticipants(): BigInt {
@@ -3523,8 +3454,8 @@ export class Account extends Entity {
     );
   }
 
-  get firstInteractionBlock(): BigInt {
-    let value = this.get("firstInteractionBlock");
+  get createdAtBlock(): BigInt {
+    let value = this.get("createdAtBlock");
     if (!value || value.kind == ValueKind.NULL) {
       throw new Error("Cannot return null for a required field.");
     } else {
@@ -3532,12 +3463,12 @@ export class Account extends Entity {
     }
   }
 
-  set firstInteractionBlock(value: BigInt) {
-    this.set("firstInteractionBlock", Value.fromBigInt(value));
+  set createdAtBlock(value: BigInt) {
+    this.set("createdAtBlock", Value.fromBigInt(value));
   }
 
-  get firstInteractionTimestamp(): BigInt {
-    let value = this.get("firstInteractionTimestamp");
+  get createdAtTimestamp(): BigInt {
+    let value = this.get("createdAtTimestamp");
     if (!value || value.kind == ValueKind.NULL) {
       throw new Error("Cannot return null for a required field.");
     } else {
@@ -3545,8 +3476,8 @@ export class Account extends Entity {
     }
   }
 
-  set firstInteractionTimestamp(value: BigInt) {
-    this.set("firstInteractionTimestamp", Value.fromBigInt(value));
+  set createdAtTimestamp(value: BigInt) {
+    this.set("createdAtTimestamp", Value.fromBigInt(value));
   }
 
   get updatedAtBlock(): BigInt {
@@ -3716,8 +3647,8 @@ export class AccountMarket extends Entity {
     );
   }
 
-  get enteredMarketBlock(): BigInt {
-    let value = this.get("enteredMarketBlock");
+  get createdAtBlock(): BigInt {
+    let value = this.get("createdAtBlock");
     if (!value || value.kind == ValueKind.NULL) {
       throw new Error("Cannot return null for a required field.");
     } else {
@@ -3725,12 +3656,12 @@ export class AccountMarket extends Entity {
     }
   }
 
-  set enteredMarketBlock(value: BigInt) {
-    this.set("enteredMarketBlock", Value.fromBigInt(value));
+  set createdAtBlock(value: BigInt) {
+    this.set("createdAtBlock", Value.fromBigInt(value));
   }
 
-  get enteredMarketTimestamp(): BigInt {
-    let value = this.get("enteredMarketTimestamp");
+  get createdAtTimestamp(): BigInt {
+    let value = this.get("createdAtTimestamp");
     if (!value || value.kind == ValueKind.NULL) {
       throw new Error("Cannot return null for a required field.");
     } else {
@@ -3738,8 +3669,8 @@ export class AccountMarket extends Entity {
     }
   }
 
-  set enteredMarketTimestamp(value: BigInt) {
-    this.set("enteredMarketTimestamp", Value.fromBigInt(value));
+  set createdAtTimestamp(value: BigInt) {
+    this.set("createdAtTimestamp", Value.fromBigInt(value));
   }
 
   get updatedAtBlock(): BigInt {
@@ -4845,8 +4776,8 @@ export class UserEpochEligibility extends Entity {
     this.set("bonusMultiplier", Value.fromBigInt(value));
   }
 
-  get calculatedAtBlock(): BigInt {
-    let value = this.get("calculatedAtBlock");
+  get createdAtBlock(): BigInt {
+    let value = this.get("createdAtBlock");
     if (!value || value.kind == ValueKind.NULL) {
       throw new Error("Cannot return null for a required field.");
     } else {
@@ -4854,12 +4785,12 @@ export class UserEpochEligibility extends Entity {
     }
   }
 
-  set calculatedAtBlock(value: BigInt) {
-    this.set("calculatedAtBlock", Value.fromBigInt(value));
+  set createdAtBlock(value: BigInt) {
+    this.set("createdAtBlock", Value.fromBigInt(value));
   }
 
-  get calculatedAtTimestamp(): BigInt {
-    let value = this.get("calculatedAtTimestamp");
+  get createdAtTimestamp(): BigInt {
+    let value = this.get("createdAtTimestamp");
     if (!value || value.kind == ValueKind.NULL) {
       throw new Error("Cannot return null for a required field.");
     } else {
@@ -4867,8 +4798,8 @@ export class UserEpochEligibility extends Entity {
     }
   }
 
-  set calculatedAtTimestamp(value: BigInt) {
-    this.set("calculatedAtTimestamp", Value.fromBigInt(value));
+  set createdAtTimestamp(value: BigInt) {
+    this.set("createdAtTimestamp", Value.fromBigInt(value));
   }
 }
 
@@ -5241,20 +5172,20 @@ export class SystemState extends Entity {
     this.set("id", Value.fromString(value));
   }
 
-  get activeEpochId(): string | null {
+  get activeEpochId(): BigInt | null {
     let value = this.get("activeEpochId");
     if (!value || value.kind == ValueKind.NULL) {
       return null;
     } else {
-      return value.toString();
+      return value.toBigInt();
     }
   }
 
-  set activeEpochId(value: string | null) {
+  set activeEpochId(value: BigInt | null) {
     if (!value) {
       this.unset("activeEpochId");
     } else {
-      this.set("activeEpochId", Value.fromString(<string>value));
+      this.set("activeEpochId", Value.fromBigInt(<BigInt>value));
     }
   }
 
@@ -5321,19 +5252,6 @@ export class SystemState extends Entity {
 
   set systemUtilizationRate(value: BigInt) {
     this.set("systemUtilizationRate", Value.fromBigInt(value));
-  }
-
-  get averageAPY(): BigInt {
-    let value = this.get("averageAPY");
-    if (!value || value.kind == ValueKind.NULL) {
-      throw new Error("Cannot return null for a required field.");
-    } else {
-      return value.toBigInt();
-    }
-  }
-
-  set averageAPY(value: BigInt) {
-    this.set("averageAPY", Value.fromBigInt(value));
   }
 
   get lastUpdatedBlock(): BigInt {

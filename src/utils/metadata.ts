@@ -31,8 +31,8 @@ export class MetadataHelper {
     blockNumber: BigInt, 
     timestamp: BigInt
   ): void {
-    entity.registeredAtBlock = blockNumber;
-    entity.registeredAtTimestamp = timestamp;
+    entity.createdAtBlock = blockNumber;
+    entity.createdAtTimestamp = timestamp;
     entity.updatedAtBlock = blockNumber;
     entity.updatedAtTimestamp = timestamp;
   }
@@ -43,8 +43,8 @@ export class MetadataHelper {
     blockNumber: BigInt, 
     timestamp: BigInt
   ): void {
-    entity.firstInteractionBlock = blockNumber;
-    entity.firstInteractionTimestamp = timestamp;
+    entity.createdAtBlock = blockNumber;
+    entity.createdAtTimestamp = timestamp;
     entity.updatedAtBlock = blockNumber;
     entity.updatedAtTimestamp = timestamp;
   }

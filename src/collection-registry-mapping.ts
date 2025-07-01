@@ -51,8 +51,8 @@ export function handleCollectionRegistered(event: CollectionRegistered): void {
     collection.vaults = [];
     collection.minBorrowAmount = ZERO_BI;
     collection.maxBorrowAmount = ZERO_BI;
-    collection.registeredAtBlock = event.block.number;
-    collection.registeredAtTimestamp = event.block.timestamp;
+    collection.createdAtBlock = event.block.number;
+    collection.createdAtTimestamp = event.block.timestamp;
   }
 
   // Set registry-managed fields
