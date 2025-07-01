@@ -128,6 +128,8 @@ export function getOrCreateCollection(collectionAddress: Address): Collection {
     collection.maxBorrowAmount = ZERO_BI;
     // Core collection statistics (non-duplicate)
     collection.totalNFTsDeposited = ZERO_BI;
+    // Vault associations (managed by CollectionRegistry)
+    collection.vaults = [];
     // Metadata
     collection.registeredAtBlock = ZERO_BI;
     collection.registeredAtTimestamp = ZERO_BI;
@@ -192,9 +194,6 @@ export function getOrCreateCollectionVault(
     cv.totalYieldGenerated = ZERO_BI;
     cv.isBorrowBased = true;
     cv.rewardSharePercentage = ZERO_BI;
-    cv.weightFunctionType = "LINEAR";
-    cv.weightFunctionP1 = ZERO_BI;
-    cv.weightFunctionP2 = ZERO_BI;
     cv.secondsAccumulated = ZERO_BI;
     cv.secondsClaimed = ZERO_BI;
     cv.totalSubsidies = ZERO_BI;
@@ -380,6 +379,7 @@ export function getOrCreateSystemState(): SystemState {
     systemState = new SystemState(SYSTEM_STATE_ID);
     systemState.totalVaults = ZERO_BI;
     systemState.totalUsers = ZERO_BI;
+    systemState.totalCollections = ZERO_BI;
     systemState.totalValueLocked = ZERO_BI;
     systemState.systemUtilizationRate = ZERO_BI;
     systemState.averageAPY = ZERO_BI;

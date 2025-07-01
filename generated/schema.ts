@@ -2238,6 +2238,19 @@ export class Collection extends Entity {
     this.set("totalNFTsDeposited", Value.fromBigInt(value));
   }
 
+  get vaults(): Array<Bytes> {
+    let value = this.get("vaults");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toBytesArray();
+    }
+  }
+
+  set vaults(value: Array<Bytes>) {
+    this.set("vaults", Value.fromBytesArray(value));
+  }
+
   get participations(): CollectionParticipationLoader {
     return new CollectionParticipationLoader(
       "Collection",
@@ -2902,45 +2915,6 @@ export class CollectionParticipation extends Entity {
 
   set rewardSharePercentage(value: BigInt) {
     this.set("rewardSharePercentage", Value.fromBigInt(value));
-  }
-
-  get weightFunctionType(): string {
-    let value = this.get("weightFunctionType");
-    if (!value || value.kind == ValueKind.NULL) {
-      throw new Error("Cannot return null for a required field.");
-    } else {
-      return value.toString();
-    }
-  }
-
-  set weightFunctionType(value: string) {
-    this.set("weightFunctionType", Value.fromString(value));
-  }
-
-  get weightFunctionP1(): BigInt {
-    let value = this.get("weightFunctionP1");
-    if (!value || value.kind == ValueKind.NULL) {
-      throw new Error("Cannot return null for a required field.");
-    } else {
-      return value.toBigInt();
-    }
-  }
-
-  set weightFunctionP1(value: BigInt) {
-    this.set("weightFunctionP1", Value.fromBigInt(value));
-  }
-
-  get weightFunctionP2(): BigInt {
-    let value = this.get("weightFunctionP2");
-    if (!value || value.kind == ValueKind.NULL) {
-      throw new Error("Cannot return null for a required field.");
-    } else {
-      return value.toBigInt();
-    }
-  }
-
-  set weightFunctionP2(value: BigInt) {
-    this.set("weightFunctionP2", Value.fromBigInt(value));
   }
 
   get secondsAccumulated(): BigInt {
@@ -5308,6 +5282,19 @@ export class SystemState extends Entity {
 
   set totalUsers(value: BigInt) {
     this.set("totalUsers", Value.fromBigInt(value));
+  }
+
+  get totalCollections(): BigInt {
+    let value = this.get("totalCollections");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toBigInt();
+    }
+  }
+
+  set totalCollections(value: BigInt) {
+    this.set("totalCollections", Value.fromBigInt(value));
   }
 
   get totalValueLocked(): BigInt {

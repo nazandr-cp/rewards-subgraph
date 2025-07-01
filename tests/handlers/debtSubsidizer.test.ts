@@ -14,6 +14,7 @@ beforeEach(() => {
   state.activeEpochId = "1";
   state.totalVaults = BigInt.fromI32(0);
   state.totalUsers = BigInt.fromI32(0);
+  state.totalCollections = BigInt.fromI32(0);
   state.totalValueLocked = BigInt.fromI32(0);
   state.systemUtilizationRate = BigInt.fromI32(0);
   state.averageAPY = BigInt.fromI32(0);

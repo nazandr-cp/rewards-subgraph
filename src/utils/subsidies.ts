@@ -3,6 +3,7 @@ import {
   Account,
   CollectionsVault,
   CollectionParticipation,
+  Collection,
   AccountSubsidy,
 } from "../../generated/schema";
 import { cToken } from "../../generated/templates/cToken/cToken";
@@ -87,11 +88,11 @@ export function exponentialWeight(nftCount: BigInt, A: BigInt, k: BigInt): BigIn
   return A.times(approxExponentialTerm(kn_scaled)).div(EXP_SCALE);
 }
 
-export function weight(nftCount: BigInt, cv: CollectionParticipation): BigInt {
-  if (cv.weightFunctionType == "LINEAR") {
-    return linearWeight(nftCount, cv.weightFunctionP1, cv.weightFunctionP2);
-  } else if (cv.weightFunctionType == "EXPONENTIAL") {
-    return exponentialWeight(nftCount, cv.weightFunctionP1, cv.weightFunctionP2);
+export function weight(nftCount: BigInt, collection: Collection): BigInt {
+  if (collection.weightFunctionType == "LINEAR") {
+    return linearWeight(nftCount, collection.weightFunctionP1, collection.weightFunctionP2);
+  } else if (collection.weightFunctionType == "EXPONENTIAL") {
+    return exponentialWeight(nftCount, collection.weightFunctionP1, collection.weightFunctionP2);
   } else {
     return ZERO_BI;
   }
@@ -131,7 +132,16 @@ export function accrueSeconds(
 
   basePrincipalForSubsidy = currentBorrowU(accountAddress, cTokenMarketAddress);
 
-  const nftHoldingWeight = weight(accountSubsidy.balanceNFT, cv);
+  const collection = Collection.load(cv.collection);
+  if (!collection) {
+    log.error(
+      "accrueSeconds: Collection entity with ID {} not found for CollectionParticipation {}. Cannot calculate weight.",
+      [cv.collection, cv.id]
+    );
+    return;
+  }
+
+  const nftHoldingWeight = weight(accountSubsidy.balanceNFT, collection);
   const effectiveValue = basePrincipalForSubsidy.plus(nftHoldingWeight);
 
   log.info("accrueSeconds: Account {}, basePrincipalForSubsidy = {}, nftHoldingWeight = {}, effectiveValue = {}, balanceNFT = {}", [

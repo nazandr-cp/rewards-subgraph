@@ -70,6 +70,7 @@ test("handleEpochFinalized: updates epoch and clears system state", () => {
   sys.activeEpochId = "3";
   sys.totalVaults = BigInt.fromI32(0);
   sys.totalUsers = BigInt.fromI32(0);
+  sys.totalCollections = BigInt.fromI32(0);
   sys.totalValueLocked = BigInt.fromI32(0);
   sys.systemUtilizationRate = BigInt.fromI32(0);
   sys.averageAPY = BigInt.fromI32(0);

@@ -23,6 +23,10 @@
     "CollectionsVault": {
       "address": "0x4A4be724F522946296a51d8c82c7C2e8e5a62655",
       "startBlock": 19549350
+    },
+    "CollectionRegistry": {
+      "address": "0xF9fF756360fD6Aea39db9Ab2E998235Dc1F6322F",
+      "startBlock": 19549350
     }
   }
 }

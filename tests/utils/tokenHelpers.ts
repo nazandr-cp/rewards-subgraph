@@ -125,6 +125,81 @@ export function newSubsidyClaimedEvent(vault: Address, recipient: Address, amoun
   return event;
 }
 
+// CollectionRegistry Event Helpers
+
+export function newCollectionRegisteredEvent(
+  collection: Address,
+  collectionType: i32,
+  weightFunctionType: i32,
+  p1: BigInt,
+  p2: BigInt,
+  yieldSharePercentage: i32
+): ethereum.Event {
+  const event = newMockEvent();
+  event.parameters = [];
+  event.parameters.push(new ethereum.EventParam("collection", ethereum.Value.fromAddress(collection)));
+  event.parameters.push(new ethereum.EventParam("collectionType", ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(collectionType))));
+  event.parameters.push(new ethereum.EventParam("weightFunctionType", ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(weightFunctionType))));
+  event.parameters.push(new ethereum.EventParam("p1", ethereum.Value.fromSignedBigInt(p1)));
+  event.parameters.push(new ethereum.EventParam("p2", ethereum.Value.fromSignedBigInt(p2)));
+  event.parameters.push(new ethereum.EventParam("yieldSharePercentage", ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(yieldSharePercentage))));
+  return event;
+}
+
+export function newYieldShareUpdatedEvent(collection: Address, oldShare: i32, newShare: i32): ethereum.Event {
+  const event = newMockEvent();
+  event.parameters = [];
+  event.parameters.push(new ethereum.EventParam("collection", ethereum.Value.fromAddress(collection)));
+  event.parameters.push(new ethereum.EventParam("oldShare", ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(oldShare))));
+  event.parameters.push(new ethereum.EventParam("newShare", ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(newShare))));
+  return event;
+}
+
+export function newWeightFunctionUpdatedEvent(
+  collection: Address,
+  weightFunctionType: i32,
+  p1: BigInt,
+  p2: BigInt
+): ethereum.Event {
+  const event = newMockEvent();
+  event.parameters = [];
+  event.parameters.push(new ethereum.EventParam("collection", ethereum.Value.fromAddress(collection)));
+  event.parameters.push(new ethereum.EventParam("weightFunctionType", ethereum.Value.fromUnsignedBigInt(BigInt.fromI32(weightFunctionType))));
+  event.parameters.push(new ethereum.EventParam("p1", ethereum.Value.fromSignedBigInt(p1)));
+  event.parameters.push(new ethereum.EventParam("p2", ethereum.Value.fromSignedBigInt(p2)));
+  return event;
+}
+
+export function newVaultAddedToCollectionEvent(collection: Address, vault: Address): ethereum.Event {
+  const event = newMockEvent();
+  event.parameters = [];
+  event.parameters.push(new ethereum.EventParam("collection", ethereum.Value.fromAddress(collection)));
+  event.parameters.push(new ethereum.EventParam("vault", ethereum.Value.fromAddress(vault)));
+  return event;
+}
+
+export function newVaultRemovedFromCollectionEvent(collection: Address, vault: Address): ethereum.Event {
+  const event = newMockEvent();
+  event.parameters = [];
+  event.parameters.push(new ethereum.EventParam("collection", ethereum.Value.fromAddress(collection)));
+  event.parameters.push(new ethereum.EventParam("vault", ethereum.Value.fromAddress(vault)));
+  return event;
+}
+
+export function newCollectionRemovedEvent(collection: Address): ethereum.Event {
+  const event = newMockEvent();
+  event.parameters = [];
+  event.parameters.push(new ethereum.EventParam("collection", ethereum.Value.fromAddress(collection)));
+  return event;
+}
+
+export function newCollectionReactivatedEvent(collection: Address): ethereum.Event {
+  const event = newMockEvent();
+  event.parameters = [];
+  event.parameters.push(new ethereum.EventParam("collection", ethereum.Value.fromAddress(collection)));
+  return event;
+}
+
 export function newERC721TransferEvent(from: Address, to: Address, tokenId: BigInt): ethereum.Event {
   const event = newMockEvent();
   event.parameters = [];

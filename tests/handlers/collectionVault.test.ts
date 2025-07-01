@@ -56,6 +56,7 @@ function createMockCollection(collectionAddress: Address): void {
   collection.minBorrowAmount = BigInt.fromI32(0);
   collection.maxBorrowAmount = BigInt.fromI32(0);
   collection.totalNFTsDeposited = BigInt.fromI32(0);
+  collection.vaults = [];
   collection.registeredAtBlock = BigInt.fromI32(1);
   collection.registeredAtTimestamp = BigInt.fromI32(1678886400);
   collection.updatedAtBlock = BigInt.fromI32(1);
@@ -137,9 +138,6 @@ function createMockCollectionParticipation(
   collectionParticipation.totalYieldGenerated = BigInt.fromI32(0);
   collectionParticipation.isBorrowBased = false;
   collectionParticipation.rewardSharePercentage = BigInt.fromI32(0);
-  collectionParticipation.weightFunctionType = "LINEAR";
-  collectionParticipation.weightFunctionP1 = BigInt.fromI32(0);
-  collectionParticipation.weightFunctionP2 = BigInt.fromI32(0);
   collectionParticipation.secondsAccumulated = BigInt.fromI32(0);
   collectionParticipation.secondsClaimed = BigInt.fromI32(0);
   collectionParticipation.totalSubsidies = BigInt.fromI32(0);
@@ -722,9 +720,6 @@ test("handleCollectionWithdraw: zero exchangeRate (edge case)", () => {
   collectionParticipation.totalYieldGenerated = BigInt.fromI32(0);
   collectionParticipation.isBorrowBased = false;
   collectionParticipation.rewardSharePercentage = BigInt.fromI32(0);
-  collectionParticipation.weightFunctionType = "LINEAR";
-  collectionParticipation.weightFunctionP1 = BigInt.fromI32(0);
-  collectionParticipation.weightFunctionP2 = BigInt.fromI32(0);
   collectionParticipation.secondsAccumulated = BigInt.fromI32(0);
   collectionParticipation.secondsClaimed = BigInt.fromI32(0);
   collectionParticipation.totalSubsidies = BigInt.fromI32(0);
@@ -815,6 +810,7 @@ test("handleCollectionDeposit: retrospective AccountSubsidy creation for first d
   collection.minBorrowAmount = BigInt.fromI32(0);
   collection.maxBorrowAmount = BigInt.fromI32(0);
   collection.totalNFTsDeposited = BigInt.fromI32(0);
+  collection.vaults = [];
   collection.registeredAtBlock = BigInt.fromI32(1);
   collection.registeredAtTimestamp = BigInt.fromI32(1678886400);
   collection.updatedAtBlock = BigInt.fromI32(1);
@@ -967,6 +963,7 @@ test("handleCollectionDeposit: retrospective processing with zero total supply c
   collection.minBorrowAmount = BigInt.fromI32(0);
   collection.maxBorrowAmount = BigInt.fromI32(0);
   collection.totalNFTsDeposited = BigInt.fromI32(0);
+  collection.vaults = [];
   collection.registeredAtBlock = BigInt.fromI32(1);
   collection.registeredAtTimestamp = BigInt.fromI32(1678886400);
   collection.updatedAtBlock = BigInt.fromI32(1);
@@ -1046,6 +1043,7 @@ test("handleCollectionDeposit: retrospective processing creates AccountSubsidy f
   collection.minBorrowAmount = BigInt.fromI32(0);
   collection.maxBorrowAmount = BigInt.fromI32(0);
   collection.totalNFTsDeposited = BigInt.fromI32(0);
+  collection.vaults = [];
   collection.registeredAtBlock = BigInt.fromI32(1);
   collection.registeredAtTimestamp = BigInt.fromI32(1678886400);
   collection.updatedAtBlock = BigInt.fromI32(1);

@@ -25,6 +25,14 @@ function createMockCollection(address: Address): Collection {
 function createMockSystemState(): SystemState {
   const systemState = new SystemState(SYSTEM_STATE_ID);
   systemState.activeEpochId = "1"; // Mock an active epoch
+  systemState.totalVaults = BigInt.fromI32(0);
+  systemState.totalUsers = BigInt.fromI32(0);
+  systemState.totalCollections = BigInt.fromI32(0);
+  systemState.totalValueLocked = BigInt.fromI32(0);
+  systemState.systemUtilizationRate = BigInt.fromI32(0);
+  systemState.averageAPY = BigInt.fromI32(0);
+  systemState.lastUpdatedBlock = BigInt.fromI32(0);
+  systemState.lastUpdatedTimestamp = BigInt.fromI32(0);
   systemState.save();
   return systemState;
 }

@@ -325,6 +325,9 @@ type Collection @entity(immutable: false) {
   # Core collection statistics (non-duplicate)
   totalNFTsDeposited: BigInt!
 
+  # Vault associations (managed by CollectionRegistry)
+  vaults: [Bytes!]!
+
   # Derived relationships
   participations: [CollectionParticipation!]! @derivedFrom(field: "collection")
   yieldAccruals: [CollectionYieldAccrual!]! @derivedFrom(field: "collection")
@@ -409,9 +412,6 @@ type CollectionParticipation @entity(immutable: false) {
   # Subsidy configuration
   isBorrowBased: Boolean!
   rewardSharePercentage: BigInt!
-  weightFunctionType: WeightFunctionType!
-  weightFunctionP1: BigInt!
-  weightFunctionP2: BigInt!
 
   # Subsidy tracking
   secondsAccumulated: BigInt!
@@ -723,9 +723,10 @@ type SystemState @entity(immutable: false) {
   id: ID!
 
   # Current system state
-  activeEpochId: String
+  activeEpochId: BigInt
   totalVaults: BigInt!
   totalUsers: BigInt!
+  totalCollections: BigInt!
 
   # Core system metrics (non-duplicate)
   totalValueLocked: BigInt!

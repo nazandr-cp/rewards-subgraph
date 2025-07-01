@@ -73,6 +73,7 @@ function createMockCollection(collectionAddress: Address): void {
   collection.minBorrowAmount = BigInt.fromI32(0);
   collection.maxBorrowAmount = BigInt.fromI32(0);
   collection.totalNFTsDeposited = BigInt.fromI32(0);
+  collection.vaults = [];
   collection.registeredAtBlock = BigInt.fromI32(1);
   collection.registeredAtTimestamp = BigInt.fromI32(1678886400);
   collection.updatedAtBlock = BigInt.fromI32(1);

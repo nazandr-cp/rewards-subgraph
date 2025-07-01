@@ -151,6 +151,42 @@ dataSources:
         - event: Transfer(indexed address,indexed address,indexed uint256)
           handler: handleTransfer
       file: ./src/erc721-mapping.ts
+  - kind: ethereum
+    name: CollectionRegistry
+    network: apechain-curtis
+    source:
+      abi: CollectionRegistry
+      address: "0xF9fF756360fD6Aea39db9Ab2E998235Dc1F6322F"
+      startBlock: 19549350
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - CollectionRegistry
+        - Collection
+        - Account
+        - Role
+        - AccountRoleAssignment
+      abis:
+        - name: CollectionRegistry
+          file: ./abis/CollectionRegistry.json
+      eventHandlers:
+        - event: CollectionRegistered(indexed address,uint8,uint8,int256,int256,uint16)
+          handler: handleCollectionRegistered
+        - event: YieldShareUpdated(indexed address,uint16,uint16)
+          handler: handleYieldShareUpdated
+        - event: WeightFunctionUpdated(indexed address,uint8,int256,int256)
+          handler: handleWeightFunctionUpdated
+        - event: VaultAddedToCollection(indexed address,indexed address)
+          handler: handleVaultAddedToCollection
+        - event: VaultRemovedFromCollection(indexed address,indexed address)
+          handler: handleVaultRemovedFromCollection
+        - event: CollectionRemoved(indexed address)
+          handler: handleCollectionRemoved
+        - event: CollectionReactivated(indexed address)
+          handler: handleCollectionReactivated
+      file: ./src/collection-registry-mapping.ts
 templates:
   - kind: ethereum/contract
     name: cToken
