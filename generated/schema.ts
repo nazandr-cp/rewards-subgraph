@@ -9,6 +9,7 @@ import {
   Bytes,
   BigInt,
   BigDecimal,
+  Int8,
 } from "@graphprotocol/graph-ts";
 
 export class CollectionsVault extends Entity {
@@ -3989,6 +3990,111 @@ export class AccountSubsidy extends Entity {
 
   set totalRewardsEarned(value: BigInt) {
     this.set("totalRewardsEarned", Value.fromBigInt(value));
+  }
+
+  get updatedAtBlock(): BigInt {
+    let value = this.get("updatedAtBlock");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toBigInt();
+    }
+  }
+
+  set updatedAtBlock(value: BigInt) {
+    this.set("updatedAtBlock", Value.fromBigInt(value));
+  }
+
+  get updatedAtTimestamp(): BigInt {
+    let value = this.get("updatedAtTimestamp");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toBigInt();
+    }
+  }
+
+  set updatedAtTimestamp(value: BigInt) {
+    this.set("updatedAtTimestamp", Value.fromBigInt(value));
+  }
+}
+
+export class NFTHolding extends Entity {
+  constructor(id: string) {
+    super();
+    this.set("id", Value.fromString(id));
+  }
+
+  save(): void {
+    let id = this.get("id");
+    assert(id != null, "Cannot save NFTHolding entity without an ID");
+    if (id) {
+      assert(
+        id.kind == ValueKind.STRING,
+        `Entities of type NFTHolding must have an ID of type String but the id '${id.displayData()}' is of type ${id.displayKind()}`,
+      );
+      store.set("NFTHolding", id.toString(), this);
+    }
+  }
+
+  static loadInBlock(id: string): NFTHolding | null {
+    return changetype<NFTHolding | null>(store.get_in_block("NFTHolding", id));
+  }
+
+  static load(id: string): NFTHolding | null {
+    return changetype<NFTHolding | null>(store.get("NFTHolding", id));
+  }
+
+  get id(): string {
+    let value = this.get("id");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toString();
+    }
+  }
+
+  set id(value: string) {
+    this.set("id", Value.fromString(value));
+  }
+
+  get account(): string {
+    let value = this.get("account");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toString();
+    }
+  }
+
+  set account(value: string) {
+    this.set("account", Value.fromString(value));
+  }
+
+  get collection(): string {
+    let value = this.get("collection");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toString();
+    }
+  }
+
+  set collection(value: string) {
+    this.set("collection", Value.fromString(value));
+  }
+
+  get balance(): BigInt {
+    let value = this.get("balance");
+    if (!value || value.kind == ValueKind.NULL) {
+      throw new Error("Cannot return null for a required field.");
+    } else {
+      return value.toBigInt();
+    }
+  }
+
+  set balance(value: BigInt) {
+    this.set("balance", Value.fromBigInt(value));
   }
 
   get updatedAtBlock(): BigInt {

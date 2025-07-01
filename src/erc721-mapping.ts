@@ -1,13 +1,13 @@
 import { BigInt, log } from "@graphprotocol/graph-ts";
 import { Transfer as TransferEvent } from "../generated/ERC721Collection/ERC721";
 import { IERC721Metadata } from "../generated/ERC721Collection/IERC721Metadata";
-import { ADDRESS_ZERO_STR } from "./utils/const";
+import { ADDRESS_ZERO_STR, ZERO_BI } from "./utils/const";
 import {
   getOrCreateCollection,
   getOrCreateAccount,
   getOrCreateAccountSubsidy,
 } from "./utils/getters";
-import { Collection } from "../generated/schema";
+import { Collection, NFTHolding } from "../generated/schema";
 import { accrueSeconds } from "./utils/subsidies";
 
 export function handleTransfer(event: TransferEvent): void {
@@ -49,9 +49,24 @@ export function handleTransfer(event: TransferEvent): void {
     fromAccount.updatedAtTimestamp = timestamp;
     fromAccount.save();
 
-    log.info("Updated FROM account {} NFT balance to {}", [
+    // Update NFTHolding for sender
+    const fromHoldingId = fromAddress.toHexString() + "-" + collectionAddress.toHexString();
+    let fromHolding = NFTHolding.load(fromHoldingId);
+    if (fromHolding == null) {
+      fromHolding = new NFTHolding(fromHoldingId);
+      fromHolding.account = fromAccount.id;
+      fromHolding.collection = collectionAddress.toHexString();
+      fromHolding.balance = ZERO_BI;
+    }
+    fromHolding.balance = fromHolding.balance.minus(BigInt.fromI32(1));
+    fromHolding.updatedAtBlock = blockNumber;
+    fromHolding.updatedAtTimestamp = timestamp;
+    fromHolding.save();
+
+    log.info("Updated FROM account {} NFT balance to {} (collection holding: {})", [
       fromAddress.toHexString(),
-      fromAccount.totalNFTsOwned.toString()
+      fromAccount.totalNFTsOwned.toString(),
+      fromHolding.balance.toString()
     ]);
   }
 
@@ -62,9 +77,24 @@ export function handleTransfer(event: TransferEvent): void {
     toAccount.updatedAtTimestamp = timestamp;
     toAccount.save();
 
-    log.info("Updated TO account {} NFT balance to {}", [
+    // Update NFTHolding for receiver
+    const toHoldingId = toAddress.toHexString() + "-" + collectionAddress.toHexString();
+    let toHolding = NFTHolding.load(toHoldingId);
+    if (toHolding == null) {
+      toHolding = new NFTHolding(toHoldingId);
+      toHolding.account = toAccount.id;
+      toHolding.collection = collectionAddress.toHexString();
+      toHolding.balance = ZERO_BI;
+    }
+    toHolding.balance = toHolding.balance.plus(BigInt.fromI32(1));
+    toHolding.updatedAtBlock = blockNumber;
+    toHolding.updatedAtTimestamp = timestamp;
+    toHolding.save();
+
+    log.info("Updated TO account {} NFT balance to {} (collection holding: {})", [
       toAddress.toHexString(),
-      toAccount.totalNFTsOwned.toString()
+      toAccount.totalNFTsOwned.toString(),
+      toHolding.balance.toString()
     ]);
   }
 

@@ -562,6 +562,20 @@ type AccountSubsidy @entity(immutable: false) {
   updatedAtTimestamp: BigInt!
 }
 
+"""
+Tracks NFT holdings per account per collection
+"""
+type NFTHolding @entity(immutable: false) {
+  id: ID! # account-collection
+  account: Account!
+  collection: Collection!
+  balance: BigInt!
+  
+  # Metadata
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: BigInt!
+}
+
 # Distribution and yield tracking entities
 
 """

@@ -8,8 +8,8 @@ dataSources:
     name: Comptroller
     network: apechain-curtis
     source:
-      address: "0x7E81fAaF1132A17DCc0C76b1280E0C0e598D5635"
       abi: Comptroller
+      address: "0x7E81fAaF1132A17DCc0C76b1280E0C0e598D5635"
       startBlock: 19549350
     mapping:
       kind: ethereum/events
@@ -30,13 +30,12 @@ dataSources:
         - event: MarketEntered(address,address)
           handler: handleMarketEntered
       file: ./src/comptroller-mapping.ts
-
   - kind: ethereum
     name: EpochManager
     network: apechain-curtis
     source:
-      address: "0x5B6dD10DD0fa3454a2749dec1dcBc9e0983620DA"
       abi: EpochManager
+      address: "0x5B6dD10DD0fa3454a2749dec1dcBc9e0983620DA"
       startBlock: 19549350
     mapping:
       kind: ethereum/events
@@ -66,13 +65,12 @@ dataSources:
         - event: EpochFailed(indexed uint256,string)
           handler: handleEpochFailed
       file: ./src/epoch-manager-mapping.ts
-
   - kind: ethereum
     name: DebtSubsidizer
     network: apechain-curtis
     source:
-      address: "0xf45CfbC6553BA36328Aba23A4473D4b4a3F569aF"
       abi: DebtSubsidizer
+      address: "0xf45CfbC6553BA36328Aba23A4473D4b4a3F569aF"
       startBlock: 19549350
     mapping:
       kind: ethereum/events
@@ -100,13 +98,12 @@ dataSources:
         - event: VaultAdded(indexed address,indexed address,indexed address)
           handler: handleVaultAdded
       file: ./src/debt-subsidizer-mapping.ts
-
   - kind: ethereum
     name: LendingManager
     network: apechain-curtis
     source:
-      address: "0xb493bEE4C9E0C7d0eC57c38751c9A1c08fAfE434"
       abi: LendingManager
+      address: "0xb493bEE4C9E0C7d0eC57c38751c9A1c08fAfE434"
       startBlock: 19549350
     mapping:
       kind: ethereum/events
@@ -128,13 +125,12 @@ dataSources:
         - event: PrincipalReset(uint256,indexed address)
           handler: handlePrincipalReset
       file: ./src/lending-manager-mapping.ts
-
   - kind: ethereum
     name: ERC721Collection
     network: apechain-curtis
     source:
-      address: "0xc7CfdB8290571cAA6DF7d4693059aB9E853e22EB"
       abi: ERC721
+      address: "0xc7CfdB8290571cAA6DF7d4693059aB9E853e22EB"
       startBlock: 19549350
     mapping:
       kind: ethereum/events
@@ -155,7 +151,6 @@ dataSources:
         - event: Transfer(indexed address,indexed address,indexed uint256)
           handler: handleTransfer
       file: ./src/erc721-mapping.ts
-
 templates:
   - kind: ethereum/contract
     name: cToken
@@ -223,15 +218,18 @@ templates:
         - name: cToken
           file: ./abis/cToken.json
       eventHandlers:
-        - event: CollectionDeposit(indexed address,indexed address,indexed address,uint256,uint256,uint256)
+        - event: CollectionDeposit(indexed address,indexed address,indexed
+            address,uint256,uint256,uint256)
           handler: handleCollectionDeposit
-        - event: CollectionWithdraw(indexed address,indexed address,indexed address,uint256,uint256,uint256)
+        - event: CollectionWithdraw(indexed address,indexed address,indexed
+            address,uint256,uint256,uint256)
           handler: handleCollectionWithdraw
         - event: VaultYieldAllocatedToEpoch(indexed uint256,uint256)
           handler: handleVaultYieldAllocatedToEpoch
         - event: CollectionYieldAccrued(indexed address,uint256,uint256,uint256,uint256)
           handler: handleCollectionYieldAccrued
-        - event: CollectionYieldAppliedForEpoch(indexed uint256,indexed address,uint16,uint256,uint256)
+        - event: CollectionYieldAppliedForEpoch(indexed uint256,indexed
+            address,uint16,uint256,uint256)
           handler: handleCollectionYieldAppliedForEpoch
         - event: YieldBatchRepaid(uint256,indexed address)
           handler: handleYieldBatchRepaid

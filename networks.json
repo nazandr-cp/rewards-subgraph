@@ -1,0 +1,28 @@
+{
+  "apechain-curtis": {
+    "Comptroller": {
+      "address": "0x7E81fAaF1132A17DCc0C76b1280E0C0e598D5635",
+      "startBlock": 19549350
+    },
+    "EpochManager": {
+      "address": "0x5B6dD10DD0fa3454a2749dec1dcBc9e0983620DA",
+      "startBlock": 19549350
+    },
+    "DebtSubsidizer": {
+      "address": "0xf45CfbC6553BA36328Aba23A4473D4b4a3F569aF",
+      "startBlock": 19549350
+    },
+    "LendingManager": {
+      "address": "0xb493bEE4C9E0C7d0eC57c38751c9A1c08fAfE434",
+      "startBlock": 19549350
+    },
+    "ERC721Collection": {
+      "address": "0xc7CfdB8290571cAA6DF7d4693059aB9E853e22EB",
+      "startBlock": 19549350
+    },
+    "CollectionsVault": {
+      "address": "0x4A4be724F522946296a51d8c82c7C2e8e5a62655",
+      "startBlock": 19549350
+    }
+  }
+}

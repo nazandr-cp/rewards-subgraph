@@ -206,6 +206,14 @@ export function getOrCreateCollectionVault(
     cv.updatedAtBlock = ZERO_BI;
     cv.updatedAtTimestamp = ZERO_BI;
     cv.save();
+    
+    // Log that this is the first time this collection participates in a vault
+    // This indicates that existing NFT holders might need AccountSubsidy entities created
+    log.info(
+      "NEW COLLECTION PARTICIPATION: Collection {} now participates in vault {}. " +
+      "Check for existing NFT holders who need AccountSubsidy entities retroactively created.",
+      [collection.id, vault.id]
+    );
   }
   return cv;
 }

@@ -13,7 +13,7 @@ import { Address, BigInt, Bytes, ethereum } from "@graphprotocol/graph-ts";
 import { handleCollectionDeposit, handleCollectionWithdraw } from "../../src/collection-vault-mapping";
 import { newCollectionDepositEvent, newCollectionWithdrawEvent } from "../utils/collectionsHelpers";
 import { CollectionDeposit, CollectionWithdraw } from "../../generated/templates/CollectionVault/CollectionVault"; // Import the specific event types
-import { CollectionsVault, CTokenMarket, CollectionParticipation, Collection, CollectionRegistry } from "../../generated/schema"; // Added CollectionRegistry
+import { CollectionsVault, CTokenMarket, CollectionParticipation, Collection, CollectionRegistry, NFTHolding } from "../../generated/schema"; // Added CollectionRegistry
 import { expectConsistentVault, expectConsistentCollectionParticipation } from "../utils/consistency"; // Import consistency helpers
 import { IdGenerator } from "../../src/utils/id-generation";
 
@@ -777,6 +777,347 @@ test("handleCollectionWithdraw: zero exchangeRate (edge case)", () => {
   // Assert that cTokenAmount from event was used as fallback
   assert.fieldEquals("CollectionsVault", vaultId, "totalCTokens", initialTotalCTokens.minus(cTokenAmount).toString());
   assert.fieldEquals("CollectionParticipation", collectionVaultId, "totalCTokens", initialTotalCTokens.minus(cTokenAmount).toString());
+
+  expectConsistentVault(vaultId);
+  expectConsistentCollectionParticipation(collectionVaultId);
+});
+
+test("handleCollectionDeposit: retrospective AccountSubsidy creation for first deposit", () => {
+  // Mock event parameters for first deposit
+  const caller = MOCK_CALLER_ADDRESS;
+  const receiver = MOCK_RECEIVER_ADDRESS;
+  const assets = BigInt.fromI32(1000);
+  const shares = BigInt.fromI32(1000);
+  const cTokenAmount = BigInt.fromI32(1000);
+  const collectionAddress = MOCK_COLLECTION_ADDRESS;
+  const vaultAddress = MOCK_VAULT_ADDRESS;
+  const cTokenMarketAddress = MOCK_CTOKEN_MARKET_ADDRESS;
+  const exchangeRate = MOCK_EXCHANGE_RATE;
+
+  // Create mock entities
+  createMockCollectionRegistry(MOCK_REGISTRY_ADDRESS);
+  createMockCollectionsVault(vaultAddress, cTokenMarketAddress);
+  createMockCTokenMarket(cTokenMarketAddress, exchangeRate);
+
+  // Create a collection with non-zero total supply to trigger retrospective processing
+  const collection = new Collection(collectionAddress.toHexString());
+  collection.contractAddress = Bytes.fromHexString(collectionAddress.toHexString()) as Bytes;
+  collection.name = "Mock Collection";
+  collection.symbol = "MOCK";
+  collection.totalSupply = BigInt.fromI32(100); // Non-zero total supply
+  collection.collectionType = "ERC721";
+  collection.registry = MOCK_REGISTRY_ADDRESS.toHexString();
+  collection.isActive = true;
+  collection.yieldSharePercentage = BigInt.fromI32(0);
+  collection.weightFunctionType = "LINEAR";
+  collection.weightFunctionP1 = BigInt.fromI32(0);
+  collection.weightFunctionP2 = BigInt.fromI32(0);
+  collection.minBorrowAmount = BigInt.fromI32(0);
+  collection.maxBorrowAmount = BigInt.fromI32(0);
+  collection.totalNFTsDeposited = BigInt.fromI32(0);
+  collection.registeredAtBlock = BigInt.fromI32(1);
+  collection.registeredAtTimestamp = BigInt.fromI32(1678886400);
+  collection.updatedAtBlock = BigInt.fromI32(1);
+  collection.updatedAtTimestamp = BigInt.fromI32(1678886400);
+  collection.save();
+
+  // Create mock event
+  const depositEvent = newCollectionDepositEvent(
+    caller,
+    receiver,
+    assets,
+    shares,
+    cTokenAmount,
+    collectionAddress
+  );
+  depositEvent.address = vaultAddress;
+
+  // Mock the exchangeRate function call
+  createMockedFunction(
+    cTokenMarketAddress,
+    "exchangeRateStored",
+    "exchangeRateStored():(uint256)"
+  ).returns([ethereum.Value.fromUnsignedBigInt(exchangeRate)]);
+
+  // Call the handler - this should trigger retrospective processing
+  handleCollectionDeposit(changetype<CollectionDeposit>(depositEvent));
+
+  // Assertions
+  const vaultId = vaultAddress.toHex();
+  const collectionVaultId = IdGenerator.collectionVaultId(vaultAddress, collectionAddress);
+
+  // Verify that the CollectionParticipation was created successfully
+  assert.fieldEquals("CollectionParticipation", collectionVaultId, "principalShares", shares.toString());
+  assert.fieldEquals("CollectionParticipation", collectionVaultId, "principalDeposited", assets.toString());
+  assert.fieldEquals("CollectionParticipation", collectionVaultId, "totalCTokens", assets.times(BigInt.fromString("1000000000000000000")).div(exchangeRate).toString());
+
+  // Verify that the vault was updated correctly
+  assert.fieldEquals("CollectionsVault", vaultId, "totalShares", shares.toString());
+  assert.fieldEquals("CollectionsVault", vaultId, "totalDeposits", assets.toString());
+  assert.fieldEquals("CollectionsVault", vaultId, "totalCTokens", assets.times(BigInt.fromString("1000000000000000000")).div(exchangeRate).toString());
+
+  // Verify that the collection exists with the expected total supply
+  assert.fieldEquals("Collection", collectionAddress.toHexString(), "totalSupply", "100");
+
+  expectConsistentVault(vaultId);
+  expectConsistentCollectionParticipation(collectionVaultId);
+});
+
+test("handleCollectionDeposit: no retrospective processing for subsequent deposits", () => {
+  // Mock event parameters
+  const caller = MOCK_CALLER_ADDRESS;
+  const receiver = MOCK_RECEIVER_ADDRESS;
+  const assets = BigInt.fromI32(500);
+  const shares = BigInt.fromI32(500);
+  const cTokenAmount = BigInt.fromI32(500);
+  const collectionAddress = MOCK_COLLECTION_ADDRESS;
+  const vaultAddress = MOCK_VAULT_ADDRESS;
+  const cTokenMarketAddress = MOCK_CTOKEN_MARKET_ADDRESS;
+  const exchangeRate = MOCK_EXCHANGE_RATE;
+
+  // Create mock entities
+  createMockCollectionRegistry(MOCK_REGISTRY_ADDRESS);
+  createMockCollectionsVault(vaultAddress, cTokenMarketAddress);
+  createMockCTokenMarket(cTokenMarketAddress, exchangeRate);
+  createMockCollection(collectionAddress);
+
+  // Create an existing CollectionParticipation with non-zero principalDeposited
+  // This simulates that this is NOT the first deposit for this collection
+  createMockCollectionParticipation(
+    vaultAddress,
+    collectionAddress,
+    BigInt.fromI32(1000), // initialShares - non-zero to indicate previous deposits
+    BigInt.fromI32(1000), // initialAssets - non-zero to indicate previous deposits
+    exchangeRate
+  );
+
+  // Update vault to have initial funds
+  const vaultEntity = CollectionsVault.load(vaultAddress.toHex())!;
+  vaultEntity.totalShares = BigInt.fromI32(1000);
+  vaultEntity.totalDeposits = BigInt.fromI32(1000);
+  vaultEntity.totalCTokens = BigInt.fromI32(1000).times(BigInt.fromString("1000000000000000000")).div(exchangeRate);
+  vaultEntity.save();
+
+  // Create mock event
+  const depositEvent = newCollectionDepositEvent(
+    caller,
+    receiver,
+    assets,
+    shares,
+    cTokenAmount,
+    collectionAddress
+  );
+  depositEvent.address = vaultAddress;
+
+  // Mock the exchangeRate function call
+  createMockedFunction(
+    cTokenMarketAddress,
+    "exchangeRateStored",
+    "exchangeRateStored():(uint256)"
+  ).returns([ethereum.Value.fromUnsignedBigInt(exchangeRate)]);
+
+  // Call the handler - this should NOT trigger retrospective processing
+  handleCollectionDeposit(changetype<CollectionDeposit>(depositEvent));
+
+  // Assertions - verify amounts were added correctly
+  const vaultId = vaultAddress.toHex();
+  const collectionVaultId = IdGenerator.collectionVaultId(vaultAddress, collectionAddress);
+
+  // Verify that values were correctly added to existing amounts
+  assert.fieldEquals("CollectionParticipation", collectionVaultId, "principalShares", BigInt.fromI32(1500).toString()); // 1000 + 500
+  assert.fieldEquals("CollectionParticipation", collectionVaultId, "principalDeposited", BigInt.fromI32(1500).toString()); // 1000 + 500
+
+  assert.fieldEquals("CollectionsVault", vaultId, "totalShares", BigInt.fromI32(1500).toString()); // 1000 + 500
+  assert.fieldEquals("CollectionsVault", vaultId, "totalDeposits", BigInt.fromI32(1500).toString()); // 1000 + 500
+
+  expectConsistentVault(vaultId);
+  expectConsistentCollectionParticipation(collectionVaultId);
+});
+
+test("handleCollectionDeposit: retrospective processing with zero total supply collection", () => {
+  // Mock event parameters for first deposit
+  const caller = MOCK_CALLER_ADDRESS;
+  const receiver = MOCK_RECEIVER_ADDRESS;
+  const assets = BigInt.fromI32(1000);
+  const shares = BigInt.fromI32(1000);
+  const cTokenAmount = BigInt.fromI32(1000);
+  const collectionAddress = MOCK_COLLECTION_ADDRESS;
+  const vaultAddress = MOCK_VAULT_ADDRESS;
+  const cTokenMarketAddress = MOCK_CTOKEN_MARKET_ADDRESS;
+  const exchangeRate = MOCK_EXCHANGE_RATE;
+
+  // Create mock entities
+  createMockCollectionRegistry(MOCK_REGISTRY_ADDRESS);
+  createMockCollectionsVault(vaultAddress, cTokenMarketAddress);
+  createMockCTokenMarket(cTokenMarketAddress, exchangeRate);
+
+  // Create a collection with zero total supply - should not trigger retrospective processing
+  const collection = new Collection(collectionAddress.toHexString());
+  collection.contractAddress = Bytes.fromHexString(collectionAddress.toHexString()) as Bytes;
+  collection.name = "Empty Collection";
+  collection.symbol = "EMPTY";
+  collection.totalSupply = BigInt.fromI32(0); // Zero total supply
+  collection.collectionType = "ERC721";
+  collection.registry = MOCK_REGISTRY_ADDRESS.toHexString();
+  collection.isActive = true;
+  collection.yieldSharePercentage = BigInt.fromI32(0);
+  collection.weightFunctionType = "LINEAR";
+  collection.weightFunctionP1 = BigInt.fromI32(0);
+  collection.weightFunctionP2 = BigInt.fromI32(0);
+  collection.minBorrowAmount = BigInt.fromI32(0);
+  collection.maxBorrowAmount = BigInt.fromI32(0);
+  collection.totalNFTsDeposited = BigInt.fromI32(0);
+  collection.registeredAtBlock = BigInt.fromI32(1);
+  collection.registeredAtTimestamp = BigInt.fromI32(1678886400);
+  collection.updatedAtBlock = BigInt.fromI32(1);
+  collection.updatedAtTimestamp = BigInt.fromI32(1678886400);
+  collection.save();
+
+  // Create mock event
+  const depositEvent = newCollectionDepositEvent(
+    caller,
+    receiver,
+    assets,
+    shares,
+    cTokenAmount,
+    collectionAddress
+  );
+  depositEvent.address = vaultAddress;
+
+  // Mock the exchangeRate function call
+  createMockedFunction(
+    cTokenMarketAddress,
+    "exchangeRateStored",
+    "exchangeRateStored():(uint256)"
+  ).returns([ethereum.Value.fromUnsignedBigInt(exchangeRate)]);
+
+  // Call the handler - should work normally but not trigger retrospective processing
+  handleCollectionDeposit(changetype<CollectionDeposit>(depositEvent));
+
+  // Assertions
+  const vaultId = vaultAddress.toHex();
+  const collectionVaultId = IdGenerator.collectionVaultId(vaultAddress, collectionAddress);
+
+  // Verify that the CollectionParticipation was created successfully
+  assert.fieldEquals("CollectionParticipation", collectionVaultId, "principalShares", shares.toString());
+  assert.fieldEquals("CollectionParticipation", collectionVaultId, "principalDeposited", assets.toString());
+
+  // Verify that the vault was updated correctly
+  assert.fieldEquals("CollectionsVault", vaultId, "totalShares", shares.toString());
+  assert.fieldEquals("CollectionsVault", vaultId, "totalDeposits", assets.toString());
+
+  // Verify that the collection exists with zero total supply
+  assert.fieldEquals("Collection", collectionAddress.toHexString(), "totalSupply", "0");
+
+  expectConsistentVault(vaultId);
+  expectConsistentCollectionParticipation(collectionVaultId);
+});
+
+test("handleCollectionDeposit: retrospective processing creates AccountSubsidy for existing NFT holders", () => {
+  // Mock event parameters for first deposit
+  const caller = MOCK_CALLER_ADDRESS;
+  const receiver = MOCK_RECEIVER_ADDRESS;
+  const assets = BigInt.fromI32(1000);
+  const shares = BigInt.fromI32(1000);
+  const cTokenAmount = BigInt.fromI32(1000);
+  const collectionAddress = MOCK_COLLECTION_ADDRESS;
+  const vaultAddress = MOCK_VAULT_ADDRESS;
+  const cTokenMarketAddress = MOCK_CTOKEN_MARKET_ADDRESS;
+  const exchangeRate = MOCK_EXCHANGE_RATE;
+
+  // Create mock entities
+  createMockCollectionRegistry(MOCK_REGISTRY_ADDRESS);
+  createMockCollectionsVault(vaultAddress, cTokenMarketAddress);
+  createMockCTokenMarket(cTokenMarketAddress, exchangeRate);
+
+  // Create a collection with non-zero total supply
+  const collection = new Collection(collectionAddress.toHexString());
+  collection.contractAddress = Bytes.fromHexString(collectionAddress.toHexString()) as Bytes;
+  collection.name = "Mock Collection";
+  collection.symbol = "MOCK";
+  collection.totalSupply = BigInt.fromI32(100); // Non-zero total supply
+  collection.collectionType = "ERC721";
+  collection.registry = MOCK_REGISTRY_ADDRESS.toHexString();
+  collection.isActive = true;
+  collection.yieldSharePercentage = BigInt.fromI32(0);
+  collection.weightFunctionType = "LINEAR";
+  collection.weightFunctionP1 = BigInt.fromI32(0);
+  collection.weightFunctionP2 = BigInt.fromI32(0);
+  collection.minBorrowAmount = BigInt.fromI32(0);
+  collection.maxBorrowAmount = BigInt.fromI32(0);
+  collection.totalNFTsDeposited = BigInt.fromI32(0);
+  collection.registeredAtBlock = BigInt.fromI32(1);
+  collection.registeredAtTimestamp = BigInt.fromI32(1678886400);
+  collection.updatedAtBlock = BigInt.fromI32(1);
+  collection.updatedAtTimestamp = BigInt.fromI32(1678886400);
+  collection.save();
+
+  // Create existing NFT holdings for some accounts - this simulates existing NFT holders
+  // These are the same addresses that the retrospective processing will check
+  const existingHolderAddress1 = "0x0000000000000000000000000000000000000001";
+  const existingHolderAddress2 = "0x0000000000000000000000000000000000000002";
+
+  // Create NFTHolding entities for existing holders
+  const nftHolding1 = new NFTHolding(existingHolderAddress1 + "-" + collectionAddress.toHexString());
+  nftHolding1.account = existingHolderAddress1;
+  nftHolding1.collection = collectionAddress.toHexString();
+  nftHolding1.balance = BigInt.fromI32(5); // Holder has 5 NFTs
+  nftHolding1.updatedAtBlock = BigInt.fromI32(1);
+  nftHolding1.updatedAtTimestamp = BigInt.fromI32(1678886400);
+  nftHolding1.save();
+
+  const nftHolding2 = new NFTHolding(existingHolderAddress2 + "-" + collectionAddress.toHexString());
+  nftHolding2.account = existingHolderAddress2;
+  nftHolding2.collection = collectionAddress.toHexString();
+  nftHolding2.balance = BigInt.fromI32(3); // Holder has 3 NFTs
+  nftHolding2.updatedAtBlock = BigInt.fromI32(1);
+  nftHolding2.updatedAtTimestamp = BigInt.fromI32(1678886400);
+  nftHolding2.save();
+
+  // Create mock event
+  const depositEvent = newCollectionDepositEvent(
+    caller,
+    receiver,
+    assets,
+    shares,
+    cTokenAmount,
+    collectionAddress
+  );
+  depositEvent.address = vaultAddress;
+
+  // Mock the exchangeRate function call
+  createMockedFunction(
+    cTokenMarketAddress,
+    "exchangeRateStored",
+    "exchangeRateStored():(uint256)"
+  ).returns([ethereum.Value.fromUnsignedBigInt(exchangeRate)]);
+
+  // Call the handler - this should trigger retrospective processing and create AccountSubsidy entities
+  handleCollectionDeposit(changetype<CollectionDeposit>(depositEvent));
+
+  // Assertions
+  const vaultId = vaultAddress.toHex();
+  const collectionVaultId = IdGenerator.collectionVaultId(vaultAddress, collectionAddress);
+
+  // Verify that the CollectionParticipation was created successfully
+  assert.fieldEquals("CollectionParticipation", collectionVaultId, "principalShares", shares.toString());
+  assert.fieldEquals("CollectionParticipation", collectionVaultId, "principalDeposited", assets.toString());
+
+  // Verify that AccountSubsidy entities were created for existing NFT holders
+  const accountSubsidyId1 = IdGenerator.accountSubsidiesPerCollectionId(Address.fromString(existingHolderAddress1), collectionVaultId);
+  const accountSubsidyId2 = IdGenerator.accountSubsidiesPerCollectionId(Address.fromString(existingHolderAddress2), collectionVaultId);
+
+  // Check that AccountSubsidy entities exist and have correct NFT balances
+  assert.fieldEquals("AccountSubsidy", accountSubsidyId1, "balanceNFT", "5");
+  assert.fieldEquals("AccountSubsidy", accountSubsidyId2, "balanceNFT", "3");
+
+  // Verify that the account references are correct
+  assert.fieldEquals("AccountSubsidy", accountSubsidyId1, "account", existingHolderAddress1);
+  assert.fieldEquals("AccountSubsidy", accountSubsidyId2, "account", existingHolderAddress2);
+
+  // Verify that the collection participation reference is correct
+  assert.fieldEquals("AccountSubsidy", accountSubsidyId1, "collectionParticipation", collectionVaultId);
+  assert.fieldEquals("AccountSubsidy", accountSubsidyId2, "collectionParticipation", collectionVaultId);
 
   expectConsistentVault(vaultId);
   expectConsistentCollectionParticipation(collectionVaultId);
