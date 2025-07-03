@@ -9,7 +9,6 @@ import {
   Bytes,
   BigInt,
   BigDecimal,
-  Int8,
 } from "@graphprotocol/graph-ts";
 
 export class CollectionsVault extends Entity {
@@ -3791,19 +3790,6 @@ export class AccountSubsidy extends Entity {
 
   set balanceNFT(value: BigInt) {
     this.set("balanceNFT", Value.fromBigInt(value));
-  }
-
-  get weightedBalance(): BigInt {
-    let value = this.get("weightedBalance");
-    if (!value || value.kind == ValueKind.NULL) {
-      throw new Error("Cannot return null for a required field.");
-    } else {
-      return value.toBigInt();
-    }
-  }
-
-  set weightedBalance(value: BigInt) {
-    this.set("weightedBalance", Value.fromBigInt(value));
   }
 
   get lastEffectiveValue(): BigInt {

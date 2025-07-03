@@ -12,7 +12,6 @@ enum CollectionType {
 
 enum EpochStatus {
   ACTIVE
-  PROCESSING
   COMPLETED
   FAILED
 }
@@ -577,7 +576,6 @@ type AccountSubsidy @entity(immutable: false) {
 
   # NFT holding state
   balanceNFT: BigInt!
-  weightedBalance: BigInt!
   lastEffectiveValue: BigInt!
 
   # Subsidy accrual

@@ -7,7 +7,6 @@ export const BIGINT_1E18 = BigInt.fromString("1000000000000000000");
 
 // Epoch Statuses (matching schema.graphql enum and EpochManager.sol enum order/meaning)
 export const EPOCH_STATUS_ACTIVE = "ACTIVE";
-export const EPOCH_STATUS_PROCESSING = "PROCESSING";
 export const EPOCH_STATUS_COMPLETED = "COMPLETED";
 export const EPOCH_STATUS_FAILED = "FAILED";
 

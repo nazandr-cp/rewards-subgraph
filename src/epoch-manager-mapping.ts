@@ -1,14 +1,12 @@
 import {
   EpochStarted,
   EpochFinalized,
-  EpochProcessingStarted,
   EpochFailed,
   VaultYieldAllocated as EpochManagerVaultYieldAllocatedEvent,
-  EpochDurationUpdated,
   AutomatedSystemUpdated,
 } from "../generated/EpochManager/EpochManager";
 import { Epoch, CollectionsVault } from "../generated/schema";
-import { EPOCH_STATUS_ACTIVE, EPOCH_STATUS_PROCESSING, EPOCH_STATUS_COMPLETED, EPOCH_STATUS_FAILED, ZERO_BI } from "./utils/const";
+import { EPOCH_STATUS_ACTIVE, EPOCH_STATUS_COMPLETED, EPOCH_STATUS_FAILED, ZERO_BI } from "./utils/const";
 import { log } from "@graphprotocol/graph-ts";
 import { getOrCreateSystemState, getOrCreateEpochVaultAllocation } from "./utils/getters";
 
@@ -51,36 +49,6 @@ export function handleEpochStarted(event: EpochStarted): void {
   log.info("E2E_TEST_DATA: EPOCH - {}", [testData]);
 }
 
-export function handleEpochProcessingStarted(event: EpochProcessingStarted): void {
-  const epochId = event.params.epochId.toString();
-  let epoch = Epoch.load(epochId);
-
-  if (epoch == null) {
-    log.warning(
-      "handleEpochProcessingStarted: Epoch {} not found. Creating stub.",
-      [epochId]
-    );
-    epoch = new Epoch(epochId);
-    epoch.epochNumber = event.params.epochId;
-    epoch.startTimestamp = ZERO_BI;
-    epoch.endTimestamp = ZERO_BI;
-    epoch.totalYieldAvailable = ZERO_BI;
-    epoch.totalYieldAllocated = ZERO_BI;
-    epoch.totalYieldDistributed = ZERO_BI;
-    epoch.remainingYield = ZERO_BI;
-    epoch.totalSubsidiesDistributed = ZERO_BI;
-    epoch.totalParticipatingCollections = ZERO_BI;
-    epoch.createdAtBlock = event.block.number;
-    epoch.createdAtTimestamp = event.block.timestamp;
-    epoch.updatedAtBlock = event.block.number;
-    epoch.updatedAtTimestamp = event.block.timestamp;
-    epoch.epochManager = event.address.toHexString();
-  }
-
-  epoch.status = EPOCH_STATUS_PROCESSING;
-  epoch.processingStartedTimestamp = event.block.timestamp;
-  epoch.save();
-}
 
 export function handleEpochFinalized(event: EpochFinalized): void {
   const epochId = event.params.epochId.toString();
@@ -187,9 +155,6 @@ export function handleEpochManagerVaultYieldAllocated(event: EpochManagerVaultYi
   epochVaultAllocation.save();
 }
 
-export function handleEpochDurationUpdated(event: EpochDurationUpdated): void {
-  log.info("Epoch duration updated to: {}", [event.params.newDuration.toString()]);
-}
 
 export function handleAutomatedSystemUpdated(event: AutomatedSystemUpdated): void {
   log.info("Automated system updated to: {}", [event.params.newAutomatedSystem.toHexString()]);

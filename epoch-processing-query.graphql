@@ -170,7 +170,6 @@ query GetEpochProcessingData($epochId: ID!) {
           borrowIndex
         }
         balanceNFT
-        weightedBalance
         secondsAccumulated
         secondsClaimed
         subsidiesAccrued

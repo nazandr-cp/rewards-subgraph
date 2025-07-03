@@ -263,7 +263,6 @@ export function getOrCreateAccountSubsidy(
     accountSubsidy.accountMarket = accountMarket.id;
     accountSubsidy.collectionParticipation = collectionVault.id;
     accountSubsidy.balanceNFT = ZERO_BI;
-    accountSubsidy.weightedBalance = ZERO_BI;
     accountSubsidy.secondsAccumulated = ZERO_BI;
     accountSubsidy.secondsClaimed = ZERO_BI;
     accountSubsidy.subsidiesAccrued = ZERO_BI;

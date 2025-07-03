@@ -21,7 +21,6 @@ query GetCurrentUserSubsidiesForMerkleTree($vaultId: ID!) {
       symbol
     }
     balanceNFT
-    weightedBalance
     secondsAccumulated
     secondsClaimed
     subsidiesAccrued
