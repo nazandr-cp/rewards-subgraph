@@ -87,13 +87,21 @@ export function handleMerkleRootUpdated(event: MerkleRootUpdated): void {
   }
 
   const epochIdString = systemState.activeEpochId!.toString();
-  const epoch = Epoch.load(epochIdString);
+  let epoch = Epoch.load(epochIdString);
   if (epoch === null) {
     log.critical(
       "handleMerkleRootUpdated: Active Epoch with id {} not found for event {}. Cannot process.",
       [epochIdString, eventIdBase]
     );
     return;
+  }
+
+  // If the epoch is already completed, this merkle root update is part of the finalization process
+  if (epoch.status === "COMPLETED") {
+    log.info(
+      "handleMerkleRootUpdated: Processing merkle root update for already completed epoch {}. This is normal during finalization.",
+      [epochIdString]
+    );
   }
 
   const vaultEntity = CollectionsVault.load(event.params.vaultAddress.toHexString());

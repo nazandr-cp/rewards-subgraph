@@ -33,18 +33,31 @@ export function handleEpochStarted(event: EpochStarted): void {
     epoch.updatedAtTimestamp = event.block.timestamp;
     epoch.epochManager = event.address.toHexString();
     epoch.save();
+
+    log.info("handleEpochStarted: Created new epoch {} with startTime={}, endTime={}", [
+      epochId,
+      event.params.startTime.toString(),
+      event.params.endTime.toString()
+    ]);
   } else {
     log.info("handleEpochStarted: Epoch {} already exists. Ensuring it is active and timestamps are current.", [epochId]);
     epoch.status = EPOCH_STATUS_ACTIVE;
     epoch.startTimestamp = event.params.startTime;
     epoch.endTimestamp = event.params.endTime;
+    epoch.updatedAtBlock = event.block.number;
+    epoch.updatedAtTimestamp = event.block.timestamp;
     epoch.epochManager = event.address.toHexString();
     epoch.save();
   }
 
+  // Update system state with new active epoch
   const systemState = getOrCreateSystemState();
   systemState.activeEpochId = event.params.epochId;
+  systemState.lastUpdatedBlock = event.block.number;
+  systemState.lastUpdatedTimestamp = event.block.timestamp;
   systemState.save();
+
+  log.info("handleEpochStarted: System state updated - activeEpochId set to {}", [epochId]);
 
   const testData = `{"epochId": "${epochId}", "eventType": "STARTED", "startTime": "${event.params.startTime.toString()}", "endTime": "${event.params.endTime.toString()}"}`;
   log.info("E2E_TEST_DATA: EPOCH - {}", [testData]);
@@ -59,19 +72,31 @@ export function handleEpochFinalized(event: EpochFinalized): void {
     epoch.totalYieldAvailable = event.params.totalYieldAvailable;
     epoch.totalSubsidiesDistributed = event.params.totalSubsidiesDistributed;
     epoch.status = EPOCH_STATUS_COMPLETED;
+    epoch.updatedAtBlock = event.block.number;
+    epoch.updatedAtTimestamp = event.block.timestamp;
+    epoch.processingCompletedTimestamp = event.block.timestamp;
     if (!epoch.epochManager) {
       epoch.epochManager = event.address.toHexString();
     }
     epoch.save();
 
+    // Update system state - keep the active epoch ID until a new epoch is started
+    // This prevents merkle distributions from being rejected due to missing active epoch
     const systemState = getOrCreateSystemState();
-    if (systemState.activeEpochId !== null && systemState.activeEpochId!.equals(event.params.epochId)) {
-      systemState.activeEpochId = null;
-      systemState.save();
-    }
+    systemState.lastUpdatedBlock = event.block.number;
+    systemState.lastUpdatedTimestamp = event.block.timestamp;
+    systemState.save();
+
+    log.info("handleEpochFinalized: Epoch {} finalized with totalYieldAvailable={}, totalSubsidiesDistributed={}", [
+      epochId,
+      event.params.totalYieldAvailable.toString(),
+      event.params.totalSubsidiesDistributed.toString()
+    ]);
 
     const testData = `{"epochId": "${epochId}", "eventType": "FINALIZED", "totalYieldAvailable": "${event.params.totalYieldAvailable.toString()}", "totalSubsidiesDistributed": "${event.params.totalSubsidiesDistributed.toString()}"}`;
     log.info("E2E_TEST_DATA: EPOCH - {}", [testData]);
+  } else {
+    log.error("handleEpochFinalized: Epoch {} not found. Cannot finalize.", [epochId]);
   }
 }
 
