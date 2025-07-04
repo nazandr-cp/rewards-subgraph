@@ -29,12 +29,6 @@ class IdGenerator {
     return hash.toHexString();
   }
 
-  // Generate user epoch eligibility ID
-  static userEpochEligibilityId(accountId: string, epochId: string, collectionId: string): string {
-    const input = accountId + epochId + collectionId;
-    const hash = crypto.keccak256(Bytes.fromUTF8(input));
-    return hash.toHexString();
-  }
 
   // Generate merkle distribution ID
   static merkleDistributionId(epochId: string, vaultId: string, merkleRoot: Bytes): string {

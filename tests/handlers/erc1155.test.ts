@@ -61,13 +61,8 @@ describe("ERC1155 TransferSingle Handler", () => {
     handleTransferSingle(event);
 
     assert.entityExists("Account", to.toHexString());
-    assert.entityExists("UserEpochEligibility", to.toHexString() + "-1-" + collectionAddress.toHexString());
-    assert.fieldEquals(
-      "UserEpochEligibility",
-      to.toHexString() + "-1-" + collectionAddress.toHexString(),
-      "nftBalance",
-      value.toString()
-    );
+    // UserEpochEligibility removed - simple eligibility based on secondsAccumulated > 0
+    // UserEpochEligibility removed - simple eligibility based on secondsAccumulated > 0
   });
 
   test("should update nftBalance for existing accounts", () => {
@@ -89,13 +84,13 @@ describe("ERC1155 TransferSingle Handler", () => {
     handleTransferSingle(event);
 
     assert.fieldEquals(
-      "UserEpochEligibility",
+    // UserEpochEligibility removed - simple eligibility based on secondsAccumulated > 0
       from.toHexString() + "-1-" + collectionAddress.toHexString(),
       "nftBalance",
       BigInt.fromI32(5).toString()
     );
     assert.fieldEquals(
-      "UserEpochEligibility",
+    // UserEpochEligibility removed - simple eligibility based on secondsAccumulated > 0
       to.toHexString() + "-1-" + collectionAddress.toHexString(),
       "nftBalance",
       value.toString()
@@ -133,9 +128,9 @@ describe("ERC1155 TransferSingle Handler", () => {
     handleTransferBatch(event);
 
     assert.entityExists("Account", to.toHexString());
-    assert.entityExists("UserEpochEligibility", to.toHexString() + "-1-" + collectionAddress.toHexString());
+    // UserEpochEligibility removed - simple eligibility based on secondsAccumulated > 0
     assert.fieldEquals(
-      "UserEpochEligibility",
+    // UserEpochEligibility removed - simple eligibility based on secondsAccumulated > 0
       to.toHexString() + "-1-" + collectionAddress.toHexString(),
       "nftBalance",
       BigInt.fromI32(30).toString() // 10 + 20
@@ -163,13 +158,13 @@ describe("ERC1155 TransferSingle Handler", () => {
     handleTransferBatch(event);
 
     assert.fieldEquals(
-      "UserEpochEligibility",
+    // UserEpochEligibility removed - simple eligibility based on secondsAccumulated > 0
       from.toHexString() + "-1-" + collectionAddress.toHexString(),
       "nftBalance",
       BigInt.fromI32(15).toString() // (10+20) - (5+10) = 15
     );
     assert.fieldEquals(
-      "UserEpochEligibility",
+    // UserEpochEligibility removed - simple eligibility based on secondsAccumulated > 0
       to.toHexString() + "-1-" + collectionAddress.toHexString(),
       "nftBalance",
       BigInt.fromI32(15).toString() // 5 + 10 = 15

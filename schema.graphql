@@ -315,22 +315,6 @@ type SubsidyPoolEvent @entity(immutable: true) {
   transactionHash: Bytes!
 }
 
-"""
-Tracks eligible user management
-"""
-type EligibleUserEvent @entity(immutable: true) {
-  id: ID!
-  debtSubsidizer: DebtSubsidizer!
-  user: Account!
-  added: Boolean! # true for addition, false for removal
-  totalEligibleUsersAfter: BigInt!
-
-  # Metadata
-  blockNumber: BigInt!
-  timestamp: BigInt!
-  transactionHash: Bytes!
-}
-
 # Enhanced entities with registry integration
 
 """
@@ -413,7 +397,6 @@ type Epoch @entity(immutable: false) {
   vaultAllocations: [EpochVaultAllocation!]! @derivedFrom(field: "epoch")
   subsidyDistributions: [SubsidyDistribution!]! @derivedFrom(field: "epoch")
   merkleDistributions: [MerkleDistribution!]! @derivedFrom(field: "epoch")
-  userEligibilities: [UserEpochEligibility!]! @derivedFrom(field: "epoch")
 
   # Metadata
   createdAtBlock: BigInt!
@@ -525,10 +508,8 @@ type Account @entity(immutable: false) {
 
   # Derived relationships
   markets: [AccountMarket!]! @derivedFrom(field: "account")
-  accountSubsidies: [AccountSubsidy!]!
-    @derivedFrom(field: "account")
+  accountSubsidies: [AccountSubsidy!]! @derivedFrom(field: "account")
   roleAssignments: [AccountRoleAssignment!]! @derivedFrom(field: "account")
-  userEligibilities: [UserEpochEligibility!]! @derivedFrom(field: "user")
 
   # Metadata
   createdAtBlock: BigInt!
@@ -555,8 +536,7 @@ type AccountMarket @entity(immutable: false) {
   borrowIndex: BigInt!
 
   # Derived relationships
-  accountSubsidies: [AccountSubsidy!]!
-    @derivedFrom(field: "accountMarket")
+  accountSubsidies: [AccountSubsidy!]! @derivedFrom(field: "accountMarket")
 
   # Metadata
   createdAtBlock: BigInt!
@@ -601,7 +581,7 @@ type NFTHolding @entity(immutable: false) {
   account: Account!
   collection: Collection!
   balance: BigInt!
-  
+
   # Metadata
   updatedAtBlock: BigInt!
   updatedAtTimestamp: BigInt!
@@ -676,31 +656,6 @@ type MerkleDistribution @entity(immutable: true) {
   blockNumber: BigInt!
   timestamp: BigInt!
   transactionHash: Bytes!
-}
-
-"""
-User eligibility for epoch rewards
-"""
-type UserEpochEligibility @entity(immutable: false) {
-  id: ID!
-  user: Account!
-  epoch: Epoch!
-  collection: Collection!
-
-  # Eligibility criteria
-  nftBalance: BigInt!
-  borrowBalance: BigInt!
-  holdingDuration: BigInt!
-  isEligible: Boolean!
-
-  # Reward details
-  subsidyReceived: BigInt!
-  yieldShare: BigInt!
-  bonusMultiplier: BigInt!
-
-  # Metadata
-  createdAtBlock: BigInt!
-  createdAtTimestamp: BigInt!
 }
 
 """

@@ -60,42 +60,6 @@ query GetEpochProcessingData($epochId: ID!) {
       averageSubsidyPerUser
       utilizationRate
     }
-    userEligibilities {
-      id
-      user {
-        id
-        totalSecondsClaimed
-        totalSubsidiesReceived
-        totalYieldEarned
-        totalBorrowVolume
-        totalNFTsOwned
-        totalCollectionsParticipated
-      }
-      collection {
-        id
-        contractAddress
-        name
-        symbol
-        isActive
-        yieldSharePercentage
-        weightFunctionType
-        weightFunctionP1
-        weightFunctionP2
-        minBorrowAmount
-        maxBorrowAmount
-        totalNFTsDeposited
-        totalBorrowVolume
-        totalYieldGenerated
-        totalSubsidiesReceived
-      }
-      nftBalance
-      borrowBalance
-      holdingDuration
-      isEligible
-      subsidyReceived
-      yieldShare
-      bonusMultiplier
-    }
   }
 
   # All active collections and their participations

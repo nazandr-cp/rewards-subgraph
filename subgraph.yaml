@@ -35,7 +35,7 @@ dataSources:
     network: apechain-curtis
     source:
       abi: EpochManager
-      address: "0x5B6dD10DD0fa3454a2749dec1dcBc9e0983620DA"
+      address: "0x10BCdc7fFdEc4D6ec2613A6218403Ad3E17124ba"
       startBlock: 19549350
     mapping:
       kind: ethereum/events
@@ -78,7 +78,6 @@ dataSources:
         - Account
         - Collection
         - CollectionsVault
-        - UserEpochEligibility
         - VaultAddition
         - CollectionWhitelist
       abis:
@@ -135,7 +134,6 @@ dataSources:
       entities:
         - Collection
         - Account
-        - UserEpochEligibility
       abis:
         - name: ERC721
           file: ./abis/IERC721.json

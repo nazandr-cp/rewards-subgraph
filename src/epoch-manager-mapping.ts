@@ -24,6 +24,7 @@ export function handleEpochStarted(event: EpochStarted): void {
     epoch.totalYieldDistributed = ZERO_BI;
     epoch.remainingYield = ZERO_BI;
     epoch.totalSubsidiesDistributed = ZERO_BI;
+    epoch.totalEligibleUsers = ZERO_BI;
     epoch.totalParticipatingCollections = ZERO_BI;
     epoch.status = EPOCH_STATUS_ACTIVE;
     epoch.createdAtBlock = event.block.number;

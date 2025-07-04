@@ -125,38 +125,12 @@ query GetUserSubsidiesForMerkleTree($epochId: ID!, $vaultId: ID!) {
     transactionHash
   }
 
-  # Get cumulative subsidies per user across all collections for this epoch
-  userEligibilities(
-    where: { epoch: $epochId, isEligible: true }
-    orderBy: user
-    orderDirection: asc
-    first: 1000
-  ) {
-    id
-    user {
-      id
-      totalSubsidiesReceived
-      totalYieldEarned
-      totalSecondsClaimed
-    }
-    collection {
-      id
-      contractAddress
-      name
-    }
-    subsidyReceived
-    yieldShare
-    nftBalance
-    borrowBalance
-    holdingDuration
-    bonusMultiplier
-  }
 }
 
 # Query to get aggregated user subsidies for Merkle tree (simplified format)
 query GetAggregatedUserSubsidies($epochId: ID!, $vaultId: ID!) {
-  userEligibilities(
-    where: { epoch: $epochId, isEligible: true, subsidyReceived_gt: "0" }
+  subsidyDistributions(
+    where: { epoch: $epochId, vault: $vaultId, subsidyAmount_gt: "0" }
     orderBy: user
     orderDirection: asc
     first: 1000
@@ -164,7 +138,7 @@ query GetAggregatedUserSubsidies($epochId: ID!, $vaultId: ID!) {
     user {
       id
     }
-    subsidyReceived
+    subsidyAmount
     collection {
       id
     }

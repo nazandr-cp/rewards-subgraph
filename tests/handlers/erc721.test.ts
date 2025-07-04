@@ -71,7 +71,7 @@ test("handleTransfer creates eligibility", () => {
   event.address = COLLECTION;
   handleTransfer(event);
   // const id = TO.toHexString() + "-" + "0" + "-" + COLLECTION.toHexString();
-  assert.notInStore("UserEpochEligibility", "nonexistent"); // placeholder: entityExists not available
+  // UserEpochEligibility removed - simple eligibility based on secondsAccumulated > 0
 });
 
 test("handleTransfer with non-existent collection uses getOrCreateCollection", () => {

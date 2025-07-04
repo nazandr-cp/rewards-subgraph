@@ -8,7 +8,6 @@ import {
   AccountSubsidy,
   CTokenMarket,
   AccountMarket,
-  UserEpochEligibility,
   Epoch,
   SystemState,
   EpochVaultAllocation,
@@ -305,69 +304,6 @@ export function getOrCreateAccountMarket(
   return accountMarket;
 }
 
-export function getOrCreateUserEpochEligibility(
-  accountId: string,
-  epochId: string,
-  collectionId: string
-): UserEpochEligibility {
-  const id = accountId + "-" + epochId + "-" + collectionId;
-  let userEpochEligibility = UserEpochEligibility.load(id);
-
-  if (userEpochEligibility == null) {
-    // Ensure Account, Epoch, and Collection exist.
-    // Account should be created by the caller (e.g., in handleTransfer)
-    // Epoch should be created by EpochManager handlers
-    // Collection should be created by Collection-related handlers or dynamically
-    const account = Account.load(accountId);
-    if (account == null) {
-      log.critical(
-        "getOrCreateUserEpochEligibility: Account {} not found. Cannot create UserEpochEligibility {}.",
-        [accountId, id]
-      );
-      // throw new Error(
-      //   `Account ${accountId} not found when trying to create UserEpochEligibility ${id}`
-      // );
-    }
-
-    const epoch = Epoch.load(epochId);
-    if (epoch == null) {
-      log.critical(
-        "getOrCreateUserEpochEligibility: Epoch {} not found. Cannot create UserEpochEligibility {}.",
-        [epochId, id]
-      );
-      // throw new Error(
-      //   `Epoch ${epochId} not found when trying to create UserEpochEligibility ${id}`
-      // );
-    }
-
-    const collection = Collection.load(collectionId);
-    if (collection == null) {
-      log.critical(
-        "getOrCreateUserEpochEligibility: Collection {} not found. Cannot create UserEpochEligibility {}.",
-        [collectionId, id]
-      );
-      // throw new Error(
-      //   `Collection ${collectionId} not found when trying to create UserEpochEligibility ${id}`
-      // );
-    }
-
-    userEpochEligibility = new UserEpochEligibility(id);
-    userEpochEligibility.user = accountId;
-    userEpochEligibility.epoch = epochId;
-    userEpochEligibility.collection = collectionId;
-    userEpochEligibility.nftBalance = ZERO_BI;
-    userEpochEligibility.borrowBalance = ZERO_BI;
-    userEpochEligibility.holdingDuration = ZERO_BI;
-    userEpochEligibility.isEligible = false;
-    userEpochEligibility.subsidyReceived = ZERO_BI;
-    userEpochEligibility.yieldShare = ZERO_BI;
-    userEpochEligibility.bonusMultiplier = ZERO_BI;
-    userEpochEligibility.createdAtBlock = ZERO_BI;
-    userEpochEligibility.createdAtTimestamp = ZERO_BI;
-    userEpochEligibility.save();
-  }
-  return userEpochEligibility;
-}
 // Get or create SystemState singleton
 export function getOrCreateSystemState(): SystemState {
   let systemState = SystemState.load(SYSTEM_STATE_ID);
