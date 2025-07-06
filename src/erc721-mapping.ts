@@ -8,7 +8,7 @@ import {
   getOrCreateAccountSubsidy,
 } from "./utils/getters";
 import { Collection, NFTHolding } from "../generated/schema";
-import { accrueSeconds } from "./utils/subsidies";
+import { accrueSeconds, updateAverageHoldingPeriod } from "./utils/subsidies";
 
 export function handleTransfer(event: TransferEvent): void {
   const collectionAddress = event.address;
@@ -151,7 +151,7 @@ export function handleTransfer(event: TransferEvent): void {
         const collectionParticipation = loadedCollectionParticipations[i];
         if (collectionParticipation == null) continue;
 
-        // Update FROM account subsidies (decrease NFT balance)
+        // Update FROM account subsidies (sync with actual NFT balance)
         if (!isMint) {
           const fromAccSubsidies = getOrCreateAccountSubsidy(
             fromAddress,
@@ -161,19 +161,30 @@ export function handleTransfer(event: TransferEvent): void {
           );
 
           accrueSeconds(fromAccSubsidies, collectionParticipation, timestamp);
-          fromAccSubsidies.balanceNFT = fromAccSubsidies.balanceNFT.minus(BigInt.fromI32(1));
+          
+          // Sync with actual NFT holding balance instead of using deltas
+          const fromHoldingId = fromAddress.toHexString() + "-" + collectionAddress.toHexString();
+          const fromHolding = NFTHolding.load(fromHoldingId);
+          const actualFromBalance = fromHolding ? fromHolding.balance : ZERO_BI;
+          
+          // CRITICAL: Update average holding period before changing balance
+          const oldFromBalance = fromAccSubsidies.balanceNFT;
+          updateAverageHoldingPeriod(fromAccSubsidies, timestamp, actualFromBalance, oldFromBalance);
+          
+          fromAccSubsidies.balanceNFT = actualFromBalance;
           fromAccSubsidies.updatedAtBlock = blockNumber;
           fromAccSubsidies.updatedAtTimestamp = timestamp;
           fromAccSubsidies.save();
 
-          log.info("Updated FROM account {} subsidies for collection participation {}, new NFT balance: {}", [
+          log.info("Updated FROM account {} subsidies for collection participation {}, synced NFT balance: {} (actual holding: {})", [
             fromAddress.toHexString(),
             collectionParticipation.id,
-            fromAccSubsidies.balanceNFT.toString()
+            fromAccSubsidies.balanceNFT.toString(),
+            actualFromBalance.toString()
           ]);
         }
 
-        // Update TO account subsidies (increase NFT balance)
+        // Update TO account subsidies (sync with actual NFT balance)
         if (!isBurn) {
           const toAccSubsidies = getOrCreateAccountSubsidy(
             toAddress,
@@ -183,15 +194,26 @@ export function handleTransfer(event: TransferEvent): void {
           );
 
           accrueSeconds(toAccSubsidies, collectionParticipation, timestamp);
-          toAccSubsidies.balanceNFT = toAccSubsidies.balanceNFT.plus(BigInt.fromI32(1));
+          
+          // Sync with actual NFT holding balance instead of using deltas
+          const toHoldingId = toAddress.toHexString() + "-" + collectionAddress.toHexString();
+          const toHolding = NFTHolding.load(toHoldingId);
+          const actualToBalance = toHolding ? toHolding.balance : ZERO_BI;
+          
+          // CRITICAL: Update average holding period before changing balance
+          const oldToBalance = toAccSubsidies.balanceNFT;
+          updateAverageHoldingPeriod(toAccSubsidies, timestamp, actualToBalance, oldToBalance);
+          
+          toAccSubsidies.balanceNFT = actualToBalance;
           toAccSubsidies.updatedAtBlock = blockNumber;
           toAccSubsidies.updatedAtTimestamp = timestamp;
           toAccSubsidies.save();
 
-          log.info("Updated TO account {} subsidies for collection participation {}, new NFT balance: {}", [
+          log.info("Updated TO account {} subsidies for collection participation {}, synced NFT balance: {} (actual holding: {})", [
             toAddress.toHexString(),
             collectionParticipation.id,
-            toAccSubsidies.balanceNFT.toString()
+            toAccSubsidies.balanceNFT.toString(),
+            actualToBalance.toString()
           ]);
         }
       }

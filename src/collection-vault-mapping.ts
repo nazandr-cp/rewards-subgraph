@@ -16,9 +16,10 @@ import {
   CollectionDeposit,
 } from "../generated/schema";
 
-import { getOrCreateCollectionVault, getOrCreateEpochVaultAllocation, getOrCreateAccount, getOrCreateAccountSubsidy } from "./utils/getters";
+import { getOrCreateCollectionVault, getOrCreateEpochVaultAllocation, getOrCreateAccount, getOrCreateAccountSubsidy, reconstructHistoricalBalances } from "./utils/getters";
 import { ZERO_BI, BIGINT_1E18 } from "./utils/const";
 import { Collection, CollectionParticipation, NFTHolding } from "../generated/schema";
+import { accrueSubsidiesForAllCollectionHolders } from "./utils/subsidies";
 
 function getAddressFromParameter(param: ethereum.EventParam): Address {
   return param.value.toAddress();
@@ -41,6 +42,14 @@ export function handleCollectionDeposit(event: CollectionDepositEvent): void {
     ]);
     return;
   }
+  
+  if (!vaultEntity.cTokenMarket || vaultEntity.cTokenMarket == "") {
+    log.error("handleCollectionDeposit: Vault {} has empty cTokenMarket. Cannot proceed.", [
+      vaultAddress.toHex(),
+    ]);
+    return;
+  }
+  
   const cTokenMarketAddress = Address.fromString(vaultEntity.cTokenMarket);
   const cTokenMarket = CTokenMarket.load(cTokenMarketAddress.toHexString());
 
@@ -146,7 +155,41 @@ export function handleCollectionDeposit(event: CollectionDepositEvent): void {
         collectionAddress.toHexString()
       ]);
     }
+
+    // CRITICAL: Fix any existing balance inconsistencies
+    // This is especially important for the first deposit when we're setting up the participation
+    log.info("Reconstructing historical balances for collection {} to fix any inconsistencies", [
+      collectionAddress.toHexString()
+    ]);
+    
+    reconstructHistoricalBalances(
+      collectionAddress,
+      collVault.id,
+      event.block.number,
+      event.block.timestamp
+    );
+    
+    log.info("Historical balance reconstruction completed for collection {}", [
+      collectionAddress.toHexString()
+    ]);
   }
+
+  // CRITICAL: Trigger comprehensive subsidy recalculation for ALL collection holders
+  // Collection deposits change the yield rates, affecting all NFT holders' subsidies
+  log.info("Triggering comprehensive subsidy recalculation for all holders of collection {} due to deposit", [
+    collectionAddress.toHexString()
+  ]);
+  
+  accrueSubsidiesForAllCollectionHolders(
+    collectionAddress,
+    collVault.id,
+    event.block.number,
+    event.block.timestamp
+  );
+  
+  log.info("Comprehensive subsidy recalculation completed for collection {}", [
+    collectionAddress.toHexString()
+  ]);
 }
 
 export function handleDepositForCollection(event: CollectionDepositEvent): void {
@@ -226,6 +269,23 @@ export function handleCollectionWithdraw(event: CollectionWithdrawEvent): void {
       collVault.principalDeposited.toString(),
     ]
   );
+
+  // CRITICAL: Trigger comprehensive subsidy recalculation for ALL collection holders
+  // Collection withdrawals change the yield rates, affecting all NFT holders' subsidies
+  log.info("Triggering comprehensive subsidy recalculation for all holders of collection {} due to withdrawal", [
+    collectionAddress.toHexString()
+  ]);
+  
+  accrueSubsidiesForAllCollectionHolders(
+    collectionAddress,
+    collVault.id,
+    event.block.number,
+    event.block.timestamp
+  );
+  
+  log.info("Comprehensive subsidy recalculation completed for collection {} after withdrawal", [
+    collectionAddress.toHexString()
+  ]);
 }
 
 export function handleVaultYieldAllocatedToEpoch(event: VaultYieldAllocatedToEpochEvent): void {

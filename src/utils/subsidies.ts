@@ -5,8 +5,10 @@ import {
   CollectionParticipation,
   Collection,
   AccountSubsidy,
+  NFTHolding,
 } from "../../generated/schema";
 import { cToken } from "../../generated/templates/cToken/cToken";
+import { getOrCreateAccountSubsidy } from "./getters";
 
 import { ZERO_BI } from "./const";
 
@@ -180,6 +182,10 @@ export function accrueSeconds(
   }
 
   accountSubsidy.secondsAccumulated = accountSubsidy.secondsAccumulated.plus(finalAccrual);
+  
+  // Update average holding period when accruing seconds
+  updateAverageHoldingPeriod(accountSubsidy, now, accountSubsidy.balanceNFT, accountSubsidy.balanceNFT);
+  
   accountSubsidy.updatedAtTimestamp = now;
 
   log.info("accrueSeconds: Account {}, new secondsAccumulated = {}", [
@@ -236,4 +242,292 @@ export function accrueAccountSubsidies(
       accountSubsidy.save();
     }
   }
+}
+
+/**
+ * Recalculate subsidies for all NFT holders of a specific collection
+ * This is triggered when collection yield rates change (deposits/withdrawals)
+ */
+export function accrueSubsidiesForAllCollectionHolders(
+  collectionAddress: Address,
+  participationId: string,
+  blockNumber: BigInt,
+  timestamp: BigInt
+): void {
+  log.info("accrueSubsidiesForAllCollectionHolders: Starting comprehensive subsidy recalculation for collection {}, participation {}", [
+    collectionAddress.toHexString(),
+    participationId
+  ]);
+
+  // Load the collection participation to ensure it exists
+  const collectionParticipation = CollectionParticipation.load(participationId);
+  if (!collectionParticipation) {
+    log.warning("accrueSubsidiesForAllCollectionHolders: CollectionParticipation {} not found. Cannot proceed.", [
+      participationId
+    ]);
+    return;
+  }
+
+  let updatedCount = 0;
+
+  // Use the derived relationship to get all AccountSubsidy entities for this participation
+  const accountSubsidies = collectionParticipation.accountSubsidies.load();
+  
+  log.info("accrueSubsidiesForAllCollectionHolders: Found {} AccountSubsidy entities for participation {}", [
+    BigInt.fromI32(accountSubsidies.length).toString(),
+    participationId
+  ]);
+
+  for (let i = 0; i < accountSubsidies.length; i++) {
+    const accountSubsidy = accountSubsidies[i];
+    if (!accountSubsidy) continue;
+
+    const accountAddress = Address.fromString(accountSubsidy.account);
+    const holdingId = accountSubsidy.account + "-" + collectionAddress.toHexString();
+    
+    // Check if this account actually holds NFTs for this collection
+    const nftHolding = NFTHolding.load(holdingId);
+    if (nftHolding && nftHolding.balance.gt(ZERO_BI)) {
+      // Update average holding period before changing balance
+      const oldBalance = accountSubsidy.balanceNFT;
+      updateAverageHoldingPeriod(accountSubsidy, timestamp, nftHolding.balance, oldBalance);
+      
+      // Sync NFT balance with actual holding
+      accountSubsidy.balanceNFT = nftHolding.balance;
+
+      // Accrue subsidies with updated yield rates
+      accrueSeconds(accountSubsidy, collectionParticipation, timestamp);
+      accountSubsidy.updatedAtBlock = blockNumber;
+      accountSubsidy.updatedAtTimestamp = timestamp;
+      accountSubsidy.save();
+
+      updatedCount++;
+
+      log.info("Updated subsidies for holder {} with {} NFTs for collection {}", [
+        accountAddress.toHexString(),
+        nftHolding.balance.toString(),
+        collectionAddress.toHexString()
+      ]);
+    }
+  }
+
+  log.info("accrueSubsidiesForAllCollectionHolders: Completed for collection {}. Updated {} subsidies", [
+    collectionAddress.toHexString(),
+    BigInt.fromI32(updatedCount).toString()
+  ]);
+}
+
+
+/**
+ * Calculate subsidy rate for an epoch based on total yield available and total accumulated seconds
+ * Rate = total yield / total accumulated seconds (with scaling)
+ */
+export function calculateSubsidyRate(
+  totalYieldAvailable: BigInt,
+  totalAccumulatedSeconds: BigInt
+): BigInt {
+  if (totalAccumulatedSeconds.equals(ZERO_BI)) {
+    log.warning("calculateSubsidyRate: Total accumulated seconds is zero, returning zero rate", []);
+    return ZERO_BI;
+  }
+
+  if (totalYieldAvailable.equals(ZERO_BI)) {
+    log.warning("calculateSubsidyRate: Total yield available is zero, returning zero rate", []);
+    return ZERO_BI;
+  }
+
+  // Rate = totalYield * EXP_SCALE / totalSeconds
+  // This gives us subsidies per second with 18 decimal precision
+  const rate = totalYieldAvailable.times(EXP_SCALE).div(totalAccumulatedSeconds);
+  
+  log.info("calculateSubsidyRate: totalYield={}, totalSeconds={}, rate={}", [
+    totalYieldAvailable.toString(),
+    totalAccumulatedSeconds.toString(),
+    rate.toString()
+  ]);
+
+  return rate;
+}
+
+/**
+ * Calculate subsidy amount for an account based on accumulated seconds and subsidy rate
+ */
+export function calculateSubsidyAmount(
+  accumulatedSeconds: BigInt,
+  subsidyRate: BigInt
+): BigInt {
+  if (accumulatedSeconds.equals(ZERO_BI) || subsidyRate.equals(ZERO_BI)) {
+    return ZERO_BI;
+  }
+
+  // subsidyAmount = accumulatedSeconds * rate / EXP_SCALE
+  const subsidyAmount = accumulatedSeconds.times(subsidyRate).div(EXP_SCALE);
+  
+  log.info("calculateSubsidyAmount: seconds={}, rate={}, amount={}", [
+    accumulatedSeconds.toString(),
+    subsidyRate.toString(),
+    subsidyAmount.toString()
+  ]);
+
+  return subsidyAmount;
+}
+
+/**
+ * Update subsidiesAccrued for all participants in a collection participation
+ * This should be called during epoch processing to convert accumulated seconds to claimable subsidies
+ */
+export function updateSubsidiesAccruedForParticipation(
+  participationId: string,
+  subsidyRate: BigInt,
+  blockNumber: BigInt,
+  timestamp: BigInt
+): void {
+  log.info("updateSubsidiesAccruedForParticipation: Starting subsidy accrual updates for participation {}, rate={}", [
+    participationId,
+    subsidyRate.toString()
+  ]);
+
+  const participation = CollectionParticipation.load(participationId);
+  if (!participation) {
+    log.error("updateSubsidiesAccruedForParticipation: Participation {} not found", [participationId]);
+    return;
+  }
+
+  let updatedCount = 0;
+  let totalSubsidiesCalculated = ZERO_BI;
+
+  // Use the derived relationship to get all AccountSubsidy entities for this participation
+  const accountSubsidies = participation.accountSubsidies.load();
+  
+  log.info("updateSubsidiesAccruedForParticipation: Found {} AccountSubsidy entities for participation {}", [
+    BigInt.fromI32(accountSubsidies.length).toString(),
+    participationId
+  ]);
+  
+  for (let i = 0; i < accountSubsidies.length; i++) {
+    const accountSubsidy = accountSubsidies[i];
+    
+    if (accountSubsidy && accountSubsidy.secondsAccumulated.gt(ZERO_BI)) {
+      // Calculate new subsidies accrued based on accumulated seconds
+      const newSubsidyAmount = calculateSubsidyAmount(
+        accountSubsidy.secondsAccumulated,
+        subsidyRate
+      );
+      
+      if (newSubsidyAmount.gt(ZERO_BI)) {
+        // Update average holding period during subsidy calculation
+        updateAverageHoldingPeriod(accountSubsidy, timestamp, accountSubsidy.balanceNFT, accountSubsidy.balanceNFT);
+        
+        // Update subsidiesAccrued (this is the key missing piece!)
+        accountSubsidy.subsidiesAccrued = accountSubsidy.subsidiesAccrued.plus(newSubsidyAmount);
+        accountSubsidy.updatedAtBlock = blockNumber;
+        accountSubsidy.updatedAtTimestamp = timestamp;
+        accountSubsidy.save();
+        
+        updatedCount++;
+        totalSubsidiesCalculated = totalSubsidiesCalculated.plus(newSubsidyAmount);
+        
+        log.info("Updated subsidiesAccrued for account {}: seconds={}, subsidy={}, total={}", [
+          accountSubsidy.account,
+          accountSubsidy.secondsAccumulated.toString(),
+          newSubsidyAmount.toString(),
+          accountSubsidy.subsidiesAccrued.toString()
+        ]);
+      }
+    } else if (accountSubsidy) {
+      log.info("Skipping account {} - no accumulated seconds ({})", [
+        accountSubsidy.account,
+        accountSubsidy.secondsAccumulated.toString()
+      ]);
+    }
+  }
+
+  log.info("updateSubsidiesAccruedForParticipation: Completed for participation {}. Updated {} accounts, total subsidies calculated: {}", [
+    participationId,
+    BigInt.fromI32(updatedCount).toString(),
+    totalSubsidiesCalculated.toString()
+  ]);
+}
+
+/**
+ * Generate AccountSubsidy ID using the same logic as in getters.ts
+ */
+function generateAccountSubsidyId(
+  accountAddress: Address,
+  collectionVaultId: string
+): string {
+  return accountAddress.toHexString() + "-" + collectionVaultId;
+}
+
+/**
+ * Calculate and update average holding period for an account
+ * averageHoldingPeriod = total time holding NFTs / number of periods held
+ */
+export function updateAverageHoldingPeriod(
+  accountSubsidy: AccountSubsidy,
+  currentTimestamp: BigInt,
+  newBalance: BigInt,
+  oldBalance: BigInt
+): void {
+  // Only calculate if the account has had NFTs for some time
+  if (accountSubsidy.updatedAtTimestamp.equals(ZERO_BI)) {
+    // First time setting up, just initialize
+    accountSubsidy.averageHoldingPeriod = ZERO_BI;
+    log.info("updateAverageHoldingPeriod: Initializing for account {}", [
+      accountSubsidy.account
+    ]);
+    return;
+  }
+
+  const timeDelta = currentTimestamp.minus(accountSubsidy.updatedAtTimestamp);
+  
+  // If account was holding NFTs, add to the holding period
+  if (oldBalance.gt(ZERO_BI)) {
+    // Weight the period by the balance held
+    const weightedPeriod = timeDelta.times(oldBalance);
+    
+    // Update cumulative holding period (stored in averageHoldingPeriod for now)
+    accountSubsidy.averageHoldingPeriod = accountSubsidy.averageHoldingPeriod.plus(weightedPeriod);
+    
+    log.info("updateAverageHoldingPeriod: Account {} held {} NFTs for {} seconds, cumulative weighted period: {}", [
+      accountSubsidy.account,
+      oldBalance.toString(),
+      timeDelta.toString(),
+      accountSubsidy.averageHoldingPeriod.toString()
+    ]);
+  }
+  
+  // Log current status
+  log.info("updateAverageHoldingPeriod: Account {} balance change: {} -> {}, total weighted holding time: {}", [
+    accountSubsidy.account,
+    oldBalance.toString(),
+    newBalance.toString(),
+    accountSubsidy.averageHoldingPeriod.toString()
+  ]);
+}
+
+/**
+ * Calculate the actual average holding period based on cumulative data
+ * This converts the cumulative weighted time into an average
+ */
+export function calculateActualAverageHoldingPeriod(
+  cumulativeWeightedTime: BigInt,
+  totalHoldingEvents: BigInt,
+  currentBalance: BigInt
+): BigInt {
+  if (totalHoldingEvents.equals(ZERO_BI)) {
+    return ZERO_BI;
+  }
+
+  // For now, use a simple approach: cumulative time / total events
+  // In a more sophisticated system, we'd track the exact periods and balances
+  const averagePeriod = cumulativeWeightedTime.div(totalHoldingEvents);
+  
+  log.info("calculateActualAverageHoldingPeriod: cumulative={}, events={}, average={}", [
+    cumulativeWeightedTime.toString(),
+    totalHoldingEvents.toString(),
+    averagePeriod.toString()
+  ]);
+  
+  return averagePeriod;
 }

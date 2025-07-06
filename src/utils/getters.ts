@@ -12,6 +12,7 @@ import {
   SystemState,
   EpochVaultAllocation,
   MerkleDistribution,
+  NFTHolding,
 } from "../../generated/schema";
 
 import { IdGenerator } from "./id-generation";
@@ -361,3 +362,114 @@ export function getOrCreateMerkleDistribution(id: string, epochId: string, vault
   }
   return distribution;
 }
+
+/**
+ * Sync AccountSubsidy NFT balance with actual NFTHolding balance
+ * This fixes historical inconsistencies where deltas were used instead of actual balances
+ */
+export function syncAccountSubsidyBalance(
+  accountAddress: Address,
+  collectionAddress: Address,
+  participationId: string,
+  blockNumber: BigInt,
+  timestamp: BigInt
+): AccountSubsidy | null {
+  const holdingId = accountAddress.toHexString() + "-" + collectionAddress.toHexString();
+  const nftHolding = NFTHolding.load(holdingId);
+  
+  if (!nftHolding) {
+    log.info("syncAccountSubsidyBalance: No NFTHolding found for account {} and collection {}", [
+      accountAddress.toHexString(),
+      collectionAddress.toHexString()
+    ]);
+    return null;
+  }
+
+  const accountSubsidy = getOrCreateAccountSubsidy(
+    accountAddress,
+    participationId,
+    blockNumber,
+    timestamp
+  );
+
+  const oldBalance = accountSubsidy.balanceNFT;
+  accountSubsidy.balanceNFT = nftHolding.balance;
+  accountSubsidy.updatedAtBlock = blockNumber;
+  accountSubsidy.updatedAtTimestamp = timestamp;
+  accountSubsidy.save();
+
+  log.info("syncAccountSubsidyBalance: Synced balance for account {} from {} to {} for collection {}", [
+    accountAddress.toHexString(),
+    oldBalance.toString(),
+    nftHolding.balance.toString(),
+    collectionAddress.toHexString()
+  ]);
+
+  return accountSubsidy;
+}
+
+/**
+ * Reconstruct historical balances for all existing AccountSubsidy entities
+ * This should be called when the system detects balance inconsistencies
+ */
+export function reconstructHistoricalBalances(
+  collectionAddress: Address,
+  participationId: string,
+  blockNumber: BigInt,
+  timestamp: BigInt
+): void {
+  log.info("reconstructHistoricalBalances: Starting balance reconstruction for collection {} and participation {}", [
+    collectionAddress.toHexString(),
+    participationId
+  ]);
+
+  let fixedCount = 0;
+  let totalProcessed = 0;
+
+  // Use the derived relationship to get all AccountSubsidy entities for this participation
+  const participation = CollectionParticipation.load(participationId);
+  if (!participation) {
+    log.warning("reconstructHistoricalBalances: CollectionParticipation {} not found", [participationId]);
+    return;
+  }
+
+  const accountSubsidies = participation.accountSubsidies.load();
+  
+  for (let i = 0; i < accountSubsidies.length; i++) {
+    const existingSubsidy = accountSubsidies[i];
+    if (!existingSubsidy) continue;
+
+    totalProcessed++;
+    
+    // Check if balance needs fixing
+    const holdingId = existingSubsidy.account + "-" + collectionAddress.toHexString();
+    const nftHolding = NFTHolding.load(holdingId);
+    
+    if (nftHolding) {
+      const actualBalance = nftHolding.balance;
+      
+      if (!existingSubsidy.balanceNFT.equals(actualBalance)) {
+        log.info("reconstructHistoricalBalances: Found balance mismatch for account {}. AccountSubsidy: {}, NFTHolding: {}", [
+          existingSubsidy.account,
+          existingSubsidy.balanceNFT.toString(),
+          actualBalance.toString()
+        ]);
+
+        // Fix the balance
+        existingSubsidy.balanceNFT = actualBalance;
+        existingSubsidy.updatedAtBlock = blockNumber;
+        existingSubsidy.updatedAtTimestamp = timestamp;
+        existingSubsidy.save();
+        
+        fixedCount++;
+      }
+    }
+  }
+
+  log.info("reconstructHistoricalBalances: Completed for collection {}. Processed {} entities, fixed {} balance mismatches", [
+    collectionAddress.toHexString(),
+    BigInt.fromI32(totalProcessed).toString(),
+    BigInt.fromI32(fixedCount).toString()
+  ]);
+}
+
