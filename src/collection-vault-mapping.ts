@@ -166,6 +166,14 @@ export function handleCollectionWithdraw(event: CollectionWithdrawEvent): void {
     ]);
     return;
   }
+  
+  if (!vaultEntityWithdraw.cTokenMarket || vaultEntityWithdraw.cTokenMarket == "") {
+    log.error("handleCollectionWithdraw: Vault {} has empty cTokenMarket. Cannot proceed.", [
+      vaultAddress.toHex(),
+    ]);
+    return;
+  }
+  
   const cTokenMarketAddressWithdraw = Address.fromString(
     vaultEntityWithdraw.cTokenMarket
   );

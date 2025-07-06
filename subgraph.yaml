@@ -35,7 +35,7 @@ dataSources:
     network: apechain-curtis
     source:
       abi: EpochManager
-      address: "0xa75103e59ced5c25d871a870a1584ff6772e343c"
+      address: "0xED0Ba50298Da73bfa24dBDFd9849A6190904aC25"
       startBlock: 19549350
     mapping:
       kind: ethereum/events
@@ -66,7 +66,7 @@ dataSources:
     network: apechain-curtis
     source:
       abi: DebtSubsidizer
-      address: "0xc1fe1a63fae123795be2ee4af4b12dab947c2e00"
+      address: "0x606075FFA5428ef7FB496C1e0B9753B21D957fB5"
       startBlock: 19549350
     mapping:
       kind: ethereum/events
@@ -98,7 +98,7 @@ dataSources:
     network: apechain-curtis
     source:
       abi: LendingManager
-      address: "0x64bd8c3294956e039edf1a4058b6588de3731248"
+      address: "0xF0b17257A5c2Caa0e96dd3B9B94f1e7D8B563c61"
       startBlock: 19549350
     mapping:
       kind: ethereum/events
@@ -150,7 +150,7 @@ dataSources:
     network: apechain-curtis
     source:
       abi: CollectionRegistry
-      address: "0xfbbd2da1e36354c39d4849a1ba6934dd4f8ad5ff"
+      address: "0x5db9E8e3Eb9aa8269C441c9722d645Fc74eB4E95"
       startBlock: 19549350
     mapping:
       kind: ethereum/events
