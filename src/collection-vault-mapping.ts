@@ -13,7 +13,6 @@ import {
   SubsidyDistribution,
   CTokenMarket,
   EpochVaultAllocation,
-  CollectionDeposit,
 } from "../generated/schema";
 
 import { getOrCreateCollectionVault, getOrCreateEpochVaultAllocation, getOrCreateAccount, getOrCreateAccountSubsidy, reconstructHistoricalBalances } from "./utils/getters";
@@ -112,22 +111,6 @@ export function handleCollectionDeposit(event: CollectionDepositEvent): void {
     ]
   );
 
-  // Create CollectionDeposit entity for E2E testing
-  const depositId = event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
-  const deposit = new CollectionDeposit(depositId);
-  deposit.depositor = event.params.caller;
-  deposit.collection = collectionAddress;
-  deposit.vault = vaultAddress;
-  deposit.amount = assets;
-  deposit.shares = shares;
-  deposit.timestamp = event.block.timestamp;
-  deposit.blockNumber = event.block.number;
-  deposit.transactionHash = event.transaction.hash;
-  deposit.save();
-
-  // Export test data for E2E integration
-  const testData = `{"depositor": "${event.params.caller.toHexString()}", "collection": "${collectionAddress.toHexString()}", "vault": "${vaultAddress.toHexString()}", "amount": "${assets.toString()}", "shares": "${shares.toString()}"}`;
-  log.info("E2E_TEST_DATA: DEPOSIT - {}", [testData]);
 
   // Retrospective AccountSubsidy creation for existing NFT holders
   if (isFirstDeposit) {

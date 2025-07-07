@@ -244,6 +244,4 @@ export function handleSubsidyClaimed(event: SubsidyClaimed): void {
     ]
   );
 
-  const testData = `{"user": "${event.params.recipient.toHexString()}", "vault": "${event.params.vaultAddress.toHexString()}", "amount": "${event.params.amount.toString()}", "epoch": "${epoch.id}"}`;
-  log.info("E2E_TEST_DATA: SUBSIDY_CLAIM - {}", [testData]);
 }

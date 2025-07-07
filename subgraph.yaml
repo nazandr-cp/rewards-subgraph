@@ -17,7 +17,6 @@ dataSources:
       language: wasm/assemblyscript
       entities:
         - CTokenMarket
-        - Borrow
         - Account
       abis:
         - name: Comptroller
@@ -160,8 +159,6 @@ dataSources:
         - CollectionRegistry
         - Collection
         - Account
-        - Role
-        - AccountRoleAssignment
       abis:
         - name: CollectionRegistry
           file: ./abis/CollectionRegistry.json
@@ -200,7 +197,6 @@ templates:
         - AccountSubsidiesPerCollection
         - Account
         - CTokenMarket
-        - Borrow
       abis:
         - name: cToken
           file: ./abis/cToken.json

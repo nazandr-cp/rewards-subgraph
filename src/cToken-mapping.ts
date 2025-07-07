@@ -18,9 +18,6 @@ import { CTokenValidationCache } from "./utils/ctoken-cache";
 import { BatchContext } from "./utils/batch-operations";
 import { IdGenerator } from "./utils/id-generation";
 import { accrueAccountSubsidies } from "./utils/subsidies";
-import {
-  Borrow,
-} from "../generated/schema";
 
 const EXP_SCALE = BigInt.fromI32(10).pow(18);
 const PROTOCOL_SEIZE_SHARE_MANTISSA = BigInt.fromString("28000000000000000");
@@ -114,26 +111,12 @@ export function handleBorrow(event: BorrowEvent): void {
   market.updatedAtBlock = event.block.number;
   market.updatedAtTimestamp = event.block.timestamp;
 
-  // Create Borrow entity for E2E testing (conditionally)
-  const borrowId = IdGenerator.transactionEventId(event.transaction.hash, event.logIndex);
-  const borrowEntity = new Borrow(borrowId);
-  borrowEntity.borrower = borrower;
-  borrowEntity.cToken = event.address;
-  borrowEntity.amount = borrowAmount;
-  borrowEntity.accountBorrows = accountBorrows;
-  borrowEntity.totalBorrows = totalBorrows;
-  borrowEntity.timestamp = event.block.timestamp;
-  borrowEntity.blockNumber = event.block.number;
-  borrowEntity.transactionHash = event.transaction.hash;
-  borrowEntity.save();
 
   // Save all batched entities
   batchContext.saveAll();
 
   accrueAccountSubsidies(borrower, event.block.number, event.block.timestamp);
 
-  const testData = `{"borrower": "${borrower.toHexString()}", "cToken": "${event.address.toHexString()}", "amount": "${borrowAmount.toString()}", "accountBorrows": "${accountBorrows.toString()}", "totalBorrows": "${totalBorrows.toString()}"}`;
-  log.info("E2E_TEST_DATA: BORROW - {}", [testData]);
 }
 
 export function handleLiquidateBorrow(event: LiquidateBorrowEvent): void {

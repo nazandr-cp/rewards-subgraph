@@ -98,6 +98,4 @@ export function handleMarketEntered(event: MarketEntered): void {
     cToken.toHexString()
   ]);
 
-  const testData = `{"user": "${user.toHexString()}", "cToken": "${cToken.toHexString()}", "eventType": "MARKET_ENTERED"}`;
-  log.info("E2E_TEST_DATA: MARKET_ENTRY - {}", [testData]);
 }

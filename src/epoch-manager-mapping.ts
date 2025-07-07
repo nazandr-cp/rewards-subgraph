@@ -60,8 +60,6 @@ export function handleEpochStarted(event: EpochStarted): void {
 
   log.info("handleEpochStarted: System state updated - activeEpochId set to {}", [epochId]);
 
-  const testData = `{"epochId": "${epochId}", "eventType": "STARTED", "startTime": "${event.params.startTime.toString()}", "endTime": "${event.params.endTime.toString()}"}`;
-  log.info("E2E_TEST_DATA: EPOCH - {}", [testData]);
 }
 
 
@@ -103,8 +101,6 @@ export function handleEpochFinalized(event: EpochFinalized): void {
       event.params.totalSubsidiesDistributed.toString()
     ]);
 
-    const testData = `{"epochId": "${epochId}", "eventType": "FINALIZED", "totalYieldAvailable": "${event.params.totalYieldAvailable.toString()}", "totalSubsidiesDistributed": "${event.params.totalSubsidiesDistributed.toString()}"}`;
-    log.info("E2E_TEST_DATA: EPOCH - {}", [testData]);
   } else {
     log.error("handleEpochFinalized: Epoch {} not found. Cannot finalize.", [epochId]);
   }

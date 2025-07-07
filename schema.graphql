@@ -16,14 +16,6 @@ enum EpochStatus {
   FAILED
 }
 
-enum RoleType {
-  ADMIN
-  EPOCH_MANAGER
-  COLLECTION_MANAGER
-  SUBSIDY_MANAGER
-  LENDING_MANAGER
-}
-
 enum EventType {
   INITIALIZED
   UPDATED
@@ -102,7 +94,6 @@ type CollectionRegistry @entity(immutable: false) {
 
   # Access control
   owner: Bytes!
-  roles: [AccountRoleAssignment!]! @derivedFrom(field: "registry")
 
   # Managed collections
   collections: [Collection!]! @derivedFrom(field: "registry")
@@ -134,7 +125,6 @@ type EpochManager @entity(immutable: false) {
 
   # Access control
   owner: Bytes!
-  roles: [AccountRoleAssignment!]! @derivedFrom(field: "epochManager")
 
   # Managed epochs
   epochs: [Epoch!]! @derivedFrom(field: "epochManager")
@@ -170,7 +160,6 @@ type LendingManager @entity(immutable: false) {
 
   # Access control
   owner: Bytes!
-  roles: [AccountRoleAssignment!]! @derivedFrom(field: "lendingManager")
 
   # Vault integration
   vault: CollectionsVault!
@@ -200,7 +189,6 @@ type DebtSubsidizer @entity(immutable: false) {
 
   # Access control
   owner: Bytes!
-  roles: [AccountRoleAssignment!]! @derivedFrom(field: "debtSubsidizer")
 
   # Managed subsidies
   subsidyDistributions: [SubsidyDistribution!]!
@@ -219,51 +207,7 @@ type DebtSubsidizer @entity(immutable: false) {
   updatedAtTimestamp: BigInt!
 }
 
-# Access control system
-
-"""
-Role definitions for access control
-"""
-type Role @entity(immutable: true) {
-  id: ID!
-  roleType: RoleType!
-  name: String!
-  description: String!
-
-  # Role assignments
-  assignments: [AccountRoleAssignment!]! @derivedFrom(field: "role")
-
-  # Metadata
-  createdAtBlock: BigInt!
-  createdAtTimestamp: BigInt!
-}
-
-"""
-Account role assignments for access control
-"""
-type AccountRoleAssignment @entity(immutable: false) {
-  id: ID!
-  account: Account!
-  role: Role!
-
-  # Assignment context
-  registry: CollectionRegistry
-  epochManager: EpochManager
-  lendingManager: LendingManager
-  debtSubsidizer: DebtSubsidizer
-
-  # Assignment state
-  isActive: Boolean!
-  grantedBy: Bytes!
-
-  # Metadata
-  createdAtBlock: BigInt!
-  createdAtTimestamp: BigInt!
-  revokedAtBlock: BigInt
-  revokedAtTimestamp: BigInt
-}
-
-# New entities for enhanced debt subsidizer functionality
+# Enhanced debt subsidizer functionality
 
 """
 Tracks vault additions to the debt subsidizer
@@ -299,21 +243,6 @@ type CollectionWhitelist @entity(immutable: false) {
   transactionHash: Bytes!
 }
 
-"""
-Tracks subsidy pool management events
-"""
-type SubsidyPoolEvent @entity(immutable: true) {
-  id: ID!
-  debtSubsidizer: DebtSubsidizer!
-  eventType: EventType!
-  oldAmount: BigInt
-  newAmount: BigInt!
-
-  # Metadata
-  blockNumber: BigInt!
-  timestamp: BigInt!
-  transactionHash: Bytes!
-}
 
 # Enhanced entities with registry integration
 
@@ -509,7 +438,6 @@ type Account @entity(immutable: false) {
   # Derived relationships
   markets: [AccountMarket!]! @derivedFrom(field: "account")
   accountSubsidies: [AccountSubsidy!]! @derivedFrom(field: "account")
-  roleAssignments: [AccountRoleAssignment!]! @derivedFrom(field: "account")
 
   # Metadata
   createdAtBlock: BigInt!
@@ -723,60 +651,4 @@ type SystemState @entity(immutable: false) {
   lastUpdatedTimestamp: BigInt!
 }
 
-"""
-Daily system metrics for analytics
-"""
-type DailyMetrics @entity(immutable: true) {
-  id: ID!
-  date: String!
 
-  # Volume metrics
-  dailyVolumeUSD: BigInt!
-  dailyTransactionCount: BigInt!
-  dailyActiveUsers: BigInt!
-
-  # Yield metrics
-  dailyYieldDistributed: BigInt!
-  dailySubsidiesDistributed: BigInt!
-
-  # Performance metrics
-  averageAPY: BigInt!
-  utilizationRate: BigInt!
-
-  # Metadata
-  timestamp: BigInt!
-}
-
-# E2E Testing specific entities (conditionally included via feature flag)
-# These entities can be included/excluded based on deployment environment
-# to keep production schema clean while supporting testing requirements
-
-"""
-Collection deposit events for E2E testing
-"""
-type CollectionDeposit @entity(immutable: true) {
-  id: ID!
-  depositor: Bytes!
-  collection: Bytes!
-  vault: Bytes!
-  amount: BigInt!
-  shares: BigInt!
-  timestamp: BigInt!
-  blockNumber: BigInt!
-  transactionHash: Bytes!
-}
-
-"""
-Borrow events from Compound protocol for E2E testing
-"""
-type Borrow @entity(immutable: true) {
-  id: ID!
-  borrower: Bytes!
-  cToken: Bytes!
-  amount: BigInt!
-  accountBorrows: BigInt!
-  totalBorrows: BigInt!
-  timestamp: BigInt!
-  blockNumber: BigInt!
-  transactionHash: Bytes!
-}
