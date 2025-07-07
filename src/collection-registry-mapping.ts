@@ -11,8 +11,6 @@ import {
   CollectionRegistry,
   Collection,
   Account,
-  Role,
-  AccountRoleAssignment,
 } from "../generated/schema";
 import { log, Address, BigInt } from "@graphprotocol/graph-ts";
 

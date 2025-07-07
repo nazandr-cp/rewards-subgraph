@@ -14,7 +14,6 @@
     "test:perf:sync": "hyperfine --warmup 1 'echo Placeholder for graph-node sync command'",
     "test:perf:query": "k6 run tests/performance/query_load.k6.js",
     "test:perf:profile": "graphman profile --gql-url http://localhost:8000/subgraphs/name/subsidies-subgraph --queries tests/performance/example_profile_queries.gql",
-    "backfill": "npx ts-node scripts/backfill-account-subsidies.ts",
     "update-addresses": "node scripts/update-addresses.js"
   },
   "dependencies": {
