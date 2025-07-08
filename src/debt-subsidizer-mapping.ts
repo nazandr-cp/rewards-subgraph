@@ -87,7 +87,7 @@ export function handleMerkleRootUpdated(event: MerkleRootUpdated): void {
   }
 
   const epochIdString = systemState.activeEpochId!.toString();
-  let epoch = Epoch.load(epochIdString);
+  const epoch = Epoch.load(epochIdString);
   if (epoch === null) {
     log.critical(
       "handleMerkleRootUpdated: Active Epoch with id {} not found for event {}. Cannot process.",
