@@ -177,10 +177,8 @@ Contract managing debt subsidization logic and distributions
 type DebtSubsidizer @entity(immutable: false) {
   id: ID!
 
-  # Subsidy pool management
-  totalSubsidyPool: BigInt!
+  # Subsidy tracking (cumulative approach)
   totalSubsidiesDistributed: BigInt!
-  totalSubsidiesRemaining: BigInt!
 
   # Legacy fields (kept for compatibility)
   subsidyRate: BigInt!

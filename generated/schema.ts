@@ -867,19 +867,6 @@ export class DebtSubsidizer extends Entity {
     this.set("id", Value.fromString(value));
   }
 
-  get totalSubsidyPool(): BigInt {
-    let value = this.get("totalSubsidyPool");
-    if (!value || value.kind == ValueKind.NULL) {
-      throw new Error("Cannot return null for a required field.");
-    } else {
-      return value.toBigInt();
-    }
-  }
-
-  set totalSubsidyPool(value: BigInt) {
-    this.set("totalSubsidyPool", Value.fromBigInt(value));
-  }
-
   get totalSubsidiesDistributed(): BigInt {
     let value = this.get("totalSubsidiesDistributed");
     if (!value || value.kind == ValueKind.NULL) {
@@ -891,19 +878,6 @@ export class DebtSubsidizer extends Entity {
 
   set totalSubsidiesDistributed(value: BigInt) {
     this.set("totalSubsidiesDistributed", Value.fromBigInt(value));
-  }
-
-  get totalSubsidiesRemaining(): BigInt {
-    let value = this.get("totalSubsidiesRemaining");
-    if (!value || value.kind == ValueKind.NULL) {
-      throw new Error("Cannot return null for a required field.");
-    } else {
-      return value.toBigInt();
-    }
-  }
-
-  set totalSubsidiesRemaining(value: BigInt) {
-    this.set("totalSubsidiesRemaining", Value.fromBigInt(value));
   }
 
   get subsidyRate(): BigInt {

@@ -34,7 +34,7 @@ dataSources:
     network: apechain-curtis
     source:
       abi: EpochManager
-      address: "0xFD72EDDD71FfCa955Fe7cDd70515C528dEB8f67c"
+      address: "0x8Df0EB8ceEa368776AaEe8C6C42339227c1b0040"
       startBlock: 19549350
     mapping:
       kind: ethereum/events
@@ -65,7 +65,7 @@ dataSources:
     network: apechain-curtis
     source:
       abi: DebtSubsidizer
-      address: "0x5c64Ff35d4B28b40A90B58A3Ba88B7c02aB49E31"
+      address: "0x3cDCff7B7566449Bb7Fa97bFc4b5a0361EB8Fe72"
       startBlock: 19549350
     mapping:
       kind: ethereum/events
@@ -85,7 +85,7 @@ dataSources:
         - name: cToken
           file: ./abis/cToken.json
       eventHandlers:
-        - event: MerkleRootUpdated(indexed address,bytes32,indexed address)
+        - event: MerkleRootUpdated(indexed address,bytes32,indexed address,uint256)
           handler: handleMerkleRootUpdated
         - event: SubsidyClaimed(indexed address,indexed address,uint256)
           handler: handleSubsidyClaimed
@@ -97,7 +97,7 @@ dataSources:
     network: apechain-curtis
     source:
       abi: LendingManager
-      address: "0x80dC480B207e71142d29aEB2721e0BBc2A455B68"
+      address: "0xaF3a27243E5E0aB14830dB2B52572DD83FD47fd4"
       startBlock: 19549350
     mapping:
       kind: ethereum/events
@@ -149,7 +149,7 @@ dataSources:
     network: apechain-curtis
     source:
       abi: CollectionRegistry
-      address: "0x9cBAA7e381415e8a09AEE30E599BB02d5E700DF0"
+      address: "0xdD67B997fE013cB13B7bD06856E8B5522ab049E3"
       startBlock: 19549350
     mapping:
       kind: ethereum/events

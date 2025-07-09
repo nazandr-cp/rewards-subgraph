@@ -28,9 +28,7 @@ export function handleVaultAdded(event: VaultAdded): void {
   let debtSubsidizer = DebtSubsidizer.load(event.address.toHexString());
   if (debtSubsidizer == null) {
     debtSubsidizer = new DebtSubsidizer(event.address.toHexString());
-    debtSubsidizer.totalSubsidyPool = ZERO_BI;
     debtSubsidizer.totalSubsidiesDistributed = ZERO_BI;
-    debtSubsidizer.totalSubsidiesRemaining = ZERO_BI;
     debtSubsidizer.subsidyRate = ZERO_BI;
     debtSubsidizer.maxSubsidyPerUser = ZERO_BI;
     debtSubsidizer.subsidyDuration = ZERO_BI;
@@ -123,18 +121,34 @@ export function handleMerkleRootUpdated(event: MerkleRootUpdated): void {
   const merkleDistribution = getOrCreateMerkleDistribution(merkleDistributionId, epoch.id, vault.id);
 
   merkleDistribution.merkleRoot = event.params.merkleRoot;
+  merkleDistribution.totalAmount = event.params.totalSubsidiesForEpoch;
   merkleDistribution.blockNumber = event.block.number;
   merkleDistribution.timestamp = event.block.timestamp;
   merkleDistribution.transactionHash = event.transaction.hash;
   merkleDistribution.save();
 
+  // Update cumulative subsidy tracking for the vault
+  // Find all collection participations for this vault and update their totalSubsidies
+  const vaultForSubsidies = CollectionsVault.load(event.params.vaultAddress.toHexString());
+  if (vaultForSubsidies !== null) {
+    const collectionParticipations = vaultForSubsidies.collectionParticipations.load();
+    for (let i = 0; i < collectionParticipations.length; i++) {
+      const participation = collectionParticipations[i];
+      participation.totalSubsidies = participation.totalSubsidies.plus(event.params.totalSubsidiesForEpoch);
+      participation.updatedAtBlock = event.block.number;
+      participation.updatedAtTimestamp = event.block.timestamp;
+      participation.save();
+    }
+  }
+
   log.info(
-    "MerkleRootUpdated: Updated MerkleDistribution {} for epoch {} and vault {} with root {}",
+    "MerkleRootUpdated: Updated MerkleDistribution {} for epoch {} and vault {} with root {} and totalSubsidies {}",
     [
       merkleDistributionId,
       epoch.id,
       vault.id,
       event.params.merkleRoot.toHexString(),
+      event.params.totalSubsidiesForEpoch.toString(),
     ]
   );
 }
@@ -207,6 +221,11 @@ export function handleSubsidyClaimed(event: SubsidyClaimed): void {
       const newTotal = subsidy.secondsClaimed.plus(event.params.amount);
       subsidy.secondsClaimed = newTotal;
       subsidy.subsidiesClaimed = subsidy.subsidiesClaimed.plus(event.params.amount);
+      
+      // Reset secondsAccumulated to zero after claim since the accumulated seconds
+      // have been converted to subsidies. Future accruals will start from zero.
+      subsidy.secondsAccumulated = ZERO_BI;
+      
       subsidy.updatedAtBlock = event.block.number;
       subsidy.updatedAtTimestamp = event.block.timestamp;
       subsidy.save();
@@ -233,7 +252,7 @@ export function handleSubsidyClaimed(event: SubsidyClaimed): void {
   vaultAllocation.save();
 
   log.info(
-    "SubsidyClaimed: Created SubsidyDistribution {} for user {} in vault {} with amount {}. Epoch total subsidies: {}, VaultAllocation subsidies: {}",
+    "SubsidyClaimed: Created SubsidyDistribution {} for user {} in vault {} with amount {}. Epoch total subsidies: {}, VaultAllocation subsidies: {}. Reset secondsAccumulated to zero for claimed accounts.",
     [
       subsidyTxId,
       event.params.recipient.toHexString(),
