@@ -1,0 +1,14 @@
+{
+    "mcpServers": {
+        "mcp-graphql": {
+            "command": "npx",
+            "args": [
+                "mcp-graphql"
+            ],
+            "env": {
+                "ENDPOINT": "https://subgraph.satsuma-prod.com/63265bbf8342/analog-renaissances-team--450535/subsidiz/version/v0.0.4/api",
+                "SCHEMA": "/Users/andrey/projects/lend.fam MVP/rewards-subgraph/schema.graphql"
+            }
+        }
+    }
+}
