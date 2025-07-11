@@ -345,21 +345,25 @@ export function getOrCreateEpochVaultAllocation(epochId: string, vaultId: string
   return allocation;
 }
 
-// Get or create MerkleDistribution by id, epoch, and vault
-export function getOrCreateMerkleDistribution(id: string, epochId: string, vaultId: string): MerkleDistribution {
+// Create MerkleDistribution (immutable entity, can only insert)
+export function createMerkleDistribution(id: string, epochId: string, vaultId: string): MerkleDistribution {
   let distribution = MerkleDistribution.load(id);
-  if (distribution == null) {
-    distribution = new MerkleDistribution(id);
-    distribution.epoch = epochId;
-    distribution.vault = vaultId;
-    distribution.totalAmount = ZERO_BI;
-    distribution.totalClaims = ZERO_BI;
-    distribution.merkleRoot = Bytes.empty();
-    distribution.blockNumber = ZERO_BI;
-    distribution.timestamp = ZERO_BI;
-    distribution.transactionHash = Bytes.empty();
-    distribution.save();
+  if (distribution != null) {
+    log.warning("createMerkleDistribution: MerkleDistribution {} already exists. Skipping creation.", [id]);
+    return distribution;
   }
+  
+  distribution = new MerkleDistribution(id);
+  distribution.epoch = epochId;
+  distribution.vault = vaultId;
+  distribution.totalAmount = ZERO_BI;
+  distribution.totalClaims = ZERO_BI;
+  distribution.merkleRoot = Bytes.empty();
+  distribution.blockNumber = ZERO_BI;
+  distribution.timestamp = ZERO_BI;
+  distribution.transactionHash = Bytes.empty();
+  distribution.save();
+  
   return distribution;
 }
 

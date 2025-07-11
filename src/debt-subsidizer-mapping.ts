@@ -10,11 +10,12 @@ import {
   VaultAddition,
   CollectionsVault,
   CollectionParticipation,
+  MerkleDistribution,
 } from "../generated/schema";
 import { log, Address } from "@graphprotocol/graph-ts";
 import { CollectionVault } from "../generated/templates";
 
-import { getOrCreateVault, getOrCreateAccount, getOrCreateSystemState, getOrCreateEpochVaultAllocation, getOrCreateMerkleDistribution } from "./utils/getters";
+import { getOrCreateVault, getOrCreateAccount, getOrCreateSystemState, getOrCreateEpochVaultAllocation, createMerkleDistribution } from "./utils/getters";
 import { ZERO_BI } from "./utils/const";
 
 export function handleVaultAdded(event: VaultAdded): void {
@@ -118,10 +119,24 @@ export function handleMerkleRootUpdated(event: MerkleRootUpdated): void {
   );
 
   const merkleDistributionId = epoch.id + "-" + vault.id;
-  const merkleDistribution = getOrCreateMerkleDistribution(merkleDistributionId, epoch.id, vault.id);
+  
+  // Check if MerkleDistribution already exists
+  let existingDistribution = MerkleDistribution.load(merkleDistributionId);
+  if (existingDistribution != null) {
+    log.warning(
+      "handleMerkleRootUpdated: MerkleDistribution {} already exists. This should not happen as merkle roots should only be set once per epoch-vault combination.",
+      [merkleDistributionId]
+    );
+    return;
+  }
 
+  // Create new MerkleDistribution with all data at once
+  const merkleDistribution = new MerkleDistribution(merkleDistributionId);
+  merkleDistribution.epoch = epoch.id;
+  merkleDistribution.vault = vault.id;
   merkleDistribution.merkleRoot = event.params.merkleRoot;
   merkleDistribution.totalAmount = event.params.totalSubsidiesForEpoch;
+  merkleDistribution.totalClaims = ZERO_BI;
   merkleDistribution.blockNumber = event.block.number;
   merkleDistribution.timestamp = event.block.timestamp;
   merkleDistribution.transactionHash = event.transaction.hash;
